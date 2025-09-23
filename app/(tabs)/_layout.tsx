@@ -1,22 +1,25 @@
 import { View, Text } from 'react-native'
 import React from 'react'
 import { Tabs } from 'expo-router'
-import AntDesign from '@expo/vector-icons/AntDesign';
-import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 const _layout = () => {
   return (
     <Tabs screenOptions={{
-      tabBarActiveTintColor: 'orange', 
-      tabBarInactiveTintColor: 'gray',  
+      tabBarActiveTintColor: 'orange',
+      tabBarInactiveTintColor: 'gray',
     }}>
         <Tabs.Screen 
           name="index" 
           options={{ 
             headerShown: false, 
             title: 'Home',
-            tabBarIcon: ({color, size}) => (
-              <AntDesign name="home" size={size} color={color} />
+            tabBarIcon: ({color, focused}) => (
+              <MaterialCommunityIcons 
+                name={focused ? "home" : "home-outline"} 
+                size={24} 
+                color={color} 
+              />
             )
           }} 
         />
@@ -26,8 +29,12 @@ const _layout = () => {
           options={{ 
             headerShown: false, 
             title: 'Alerts',
-            tabBarIcon: ({color, size}) => (
-              <AntDesign name="bell" size={size} color={color} />
+            tabBarIcon: ({color, focused}) => (
+              <MaterialCommunityIcons 
+                name={focused ? "bell" : "bell-outline"} 
+                size={24} 
+                color={color} 
+              />
             )
           }} 
         />
@@ -37,8 +44,12 @@ const _layout = () => {
           options={{ 
             headerShown: false, 
             title: 'Profile',
-            tabBarIcon: ({color, size}) => (
-              <AntDesign name="user" size={size} color={color} />
+            tabBarIcon: ({color, focused}) => (
+              <MaterialCommunityIcons 
+                name={focused ? "account" : "account-outline"} 
+                size={24} 
+                color={color} 
+              />
             )
           }} 
         />
@@ -48,8 +59,12 @@ const _layout = () => {
           options={{ 
             headerShown: false, 
             title: 'Settings',
-            tabBarIcon: ({color, size}) => (
-              <Feather name="settings" size={size} color={color} />
+            tabBarIcon: ({color, focused}) => (
+              <MaterialCommunityIcons 
+                name={focused ? "cog" : "cog-outline"} 
+                size={24} 
+                color={color} 
+              />
             )
           }} 
         />
