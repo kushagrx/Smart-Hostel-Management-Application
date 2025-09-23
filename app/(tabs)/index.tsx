@@ -1,8 +1,10 @@
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native";
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from "expo-router";
 
 export default function Index() {
+  const router = useRouter();
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -35,23 +37,30 @@ export default function Index() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+
         <View style={styles.quickActionsGrid}>
-          <Pressable style={styles.actionButton}>
+          <Pressable style={styles.actionButton} onPress={()=>{
+            router.push('/(tabs)/alerts');
+          }} >
             <MaterialIcons name="announcement" size={24} color="#4A90E2" />
             <Text style={styles.actionText}>Imp Notices</Text>
           </Pressable>
+
           <Pressable style={styles.actionButton}>
             <MaterialIcons name="report-problem" size={24} color="#4A90E2" />
             <Text style={styles.actionText}>File Complaint</Text>
           </Pressable>
+
           <Pressable style={styles.actionButton}>
-            <MaterialIcons name="room-service" size={24} color="#4A90E2" />
+            <MaterialIcons name="cleaning-services" size={24} color="#4A90E2" />
             <Text style={styles.actionText}>Room Service</Text>
           </Pressable>
+
           <Pressable style={styles.actionButton}>
             <MaterialIcons name="directions-bus" size={24} color="#4A90E2" />
             <Text style={styles.actionText}>Bus Timings</Text>
           </Pressable>
+
         </View>
       </View>
     </View>
