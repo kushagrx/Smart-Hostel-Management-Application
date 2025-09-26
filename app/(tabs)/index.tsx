@@ -1,76 +1,86 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, ScrollView } from "react-native";
 import { StyleSheet } from "react-native";
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Index() {
   const router = useRouter();
   return (
-    <View style={styles.container}>
-      <View style={styles.headerContainer}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <LinearGradient
+        colors={['#FF8C00', '#FFA500']} // Changed gradient to stay in orange family
+        style={styles.headerContainer}
+      >
         <Text style={styles.title}>Smart Hostel ⚡</Text>
         <View style={styles.headerRight}>
-          <Text style={styles.userInitial}>S</Text>
-          <Ionicons name="notifications-outline" size={24} color="black" />
+          <Pressable onPress={() => router.push('/(tabs)/profile')}>
+            <View style={styles.userInitialContainer}>
+              <Text style={styles.userInitial}>S</Text>
+            </View>
+          </Pressable>
         </View>
-      </View>
+      </LinearGradient>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>DAILY ALERTS</Text>
-        <View style={styles.alertsContainer}>
-          <View style={styles.alertCard}>
-            <MaterialIcons name="restaurant" size={24} color="#4A90E2" />
-            <View>
-              <Text style={styles.alertTitle}>Mess Food:</Text>
-              <Text style={styles.alertContent}>Chicken Biryani Tonight!</Text>
+      <View style={styles.mainContent}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>DAILY ALERTS</Text>
+          <View style={styles.alertsContainer}>
+            <View style={[styles.alertCard, styles.shadowProp]}>
+              <View style={styles.iconContainer}>
+                <MaterialIcons name="restaurant" size={24} color="#FF8C00" />
+              </View>
+              <View>
+                <Text style={styles.alertTitle}>Mess Food:</Text>
+                <Text style={styles.alertContent}>Chicken Biryani Tonight!</Text>
+              </View>
+            </View>
+            <View style={[styles.alertCard, styles.shadowProp]}>
+              <View style={styles.iconContainer}>
+                <MaterialIcons name="local-laundry-service" size={24} color="#FF8C00" />
+              </View>
+              <View>
+                <Text style={styles.alertTitle}>Laundry:</Text>
+                <Text style={styles.alertContent}>Pickup today @5:00 PM</Text>
+              </View>
             </View>
           </View>
-          <View style={styles.alertCard}>
-            <MaterialIcons name="local-laundry-service" size={24} color="#4A90E2" />
-            <View>
-              <Text style={styles.alertTitle}>Laundry:</Text>
-              <Text style={styles.alertContent}>Pickup today @5:00 PM</Text>
-            </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+          <View style={styles.quickActionsGrid}>
+            {([
+              { icon: "announcement", text: "Imp Notices", onPress: () => router.push('/(tabs)/alerts') },
+              { icon: "report-problem", text: "File Complaint" },
+              { icon: "cleaning-services", text: "Room Service" },
+              { icon: "directions-bus", text: "Bus Timings" },
+            ] as { icon: React.ComponentProps<typeof MaterialIcons>["name"], text: string, onPress?: () => void }[]).map((item, index) => (
+              <Pressable 
+                key={index}
+                style={[styles.actionButton, styles.shadowProp]} 
+                onPress={item.onPress}
+              >
+                <View style={styles.actionIconContainer}>
+                  <MaterialIcons name={item.icon} size={24} color="#FF8C00" />
+                </View>
+                <Text style={styles.actionText}>{item.text}</Text>
+              </Pressable>
+            ))}
           </View>
         </View>
       </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-
-        <View style={styles.quickActionsGrid}>
-          <Pressable style={styles.actionButton} onPress={()=>{
-            router.push('/(tabs)/alerts');
-          }} >
-            <MaterialIcons name="announcement" size={24} color="#4A90E2" />
-            <Text style={styles.actionText}>Imp Notices</Text>
-          </Pressable>
-
-          <Pressable style={styles.actionButton}>
-            <MaterialIcons name="report-problem" size={24} color="#4A90E2" />
-            <Text style={styles.actionText}>File Complaint</Text>
-          </Pressable>
-
-          <Pressable style={styles.actionButton}>
-            <MaterialIcons name="cleaning-services" size={24} color="#4A90E2" />
-            <Text style={styles.actionText}>Room Service</Text>
-          </Pressable>
-
-          <Pressable style={styles.actionButton}>
-            <MaterialIcons name="directions-bus" size={24} color="#4A90E2" />
-            <Text style={styles.actionText}>Bus Timings</Text>
-          </Pressable>
-
-        </View>
-      </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
+  },
+  mainContent: {
+    padding: 20,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -79,50 +89,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: 'white',
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+    marginBottom: 10, 
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 15,
   },
+  userInitialContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    width: 55,  
+    height: 55, 
+    borderRadius: 28, 
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2, // Added border
+    borderColor: 'rgba(255, 255, 255, 0.5)', // Semi-transparent white border
+  },
   userInitial: {
-    backgroundColor: '#E8F0FE',
-    padding: 8,
-    borderRadius: 20,
-    color: '#4A90E2',
+    color: 'white',
+    fontSize: 28, // Increased font size
+    fontWeight: '600',
   },
   title: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 26,
+    fontWeight: "700",
+    color: "white",
   },
   section: {
-    padding: 20,
+    marginBottom: 25,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 15,
-    color: '#666',
+    color: '#2d3436',
+    letterSpacing: 1,
   },
   alertsContainer: {
-    backgroundColor: '#E8F0FE',
-    borderRadius: 12,
-    padding: 15,
     gap: 15,
   },
   alertCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 15,
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 16,
+  },
+  iconContainer: {
+    backgroundColor: '#FFF5E6',
+    padding: 10,
+    borderRadius: 12,
+  },
+  actionIconContainer: {
+    backgroundColor: '#FFF5E6',
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 8,
   },
   alertTitle: {
     fontWeight: '600',
-    color: '#333',
+    color: '#2d3436',
+    fontSize: 16,
   },
   alertContent: {
-    color: '#666',
+    color: '#636e72',
+    fontSize: 14,
   },
   quickActionsGrid: {
     flexDirection: 'row',
@@ -132,21 +167,23 @@ const styles = StyleSheet.create({
   actionButton: {
     backgroundColor: 'white',
     padding: 15,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
     width: '47%',
+  },
+  actionText: {
+    color: '#2d3436',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  shadowProp: {
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  actionText: {
-    marginTop: 8,
-    color: '#333',
-    fontWeight: '500',
+    shadowRadius: 12,
+    elevation: 5,
   },
 });
