@@ -3,23 +3,25 @@ import { StyleSheet } from "react-native";
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
+import { getInitial, userData } from '../../utils/nameUtils';
 
 export default function Index() {
   const router = useRouter();
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <LinearGradient
-        colors={['#FF8C00', '#FFA500']} // Changed gradient to stay in orange family
+        colors={['#FF8C00', '#FFA500']} 
         style={styles.headerContainer}
       >
-        <Text style={styles.title}>Smart Hostel ⚡</Text>
-        <View style={styles.headerRight}>
-          <Pressable onPress={() => router.push('/(tabs)/profile')}>
-            <View style={styles.userInitialContainer}>
-              <Text style={styles.userInitial}>S</Text>
-            </View>
-          </Pressable>
+        <View style={styles.headerLeft}>
+          <Text style={styles.title}>Smart Hostel ⚡</Text>
+          <Text style={styles.hostelName}>Aashiyana Grand Hostel for Boys</Text>
         </View>
+        <Pressable onPress={() => router.push('/(tabs)/profile')}>
+          <View style={styles.userInitialContainer}>
+            <Text style={styles.userInitial}>{getInitial(userData.fullName)}</Text>
+          </View>
+        </Pressable>
       </LinearGradient>
 
       <View style={styles.mainContent}>
@@ -93,10 +95,8 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 25,
     marginBottom: 10, 
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
+  headerLeft: {
+    flex: 1,
   },
   userInitialContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
@@ -105,18 +105,25 @@ const styles = StyleSheet.create({
     borderRadius: 28, 
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2, // Added border
-    borderColor: 'rgba(255, 255, 255, 0.5)', // Semi-transparent white border
+    borderWidth: 2, 
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   userInitial: {
     color: 'white',
-    fontSize: 28, // Increased font size
+    fontSize: 28,
     fontWeight: '600',
   },
   title: {
     fontSize: 26,
     fontWeight: "700",
     color: "white",
+    marginBottom: 4,
+  },
+  hostelName: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginTop: 0,
   },
   section: {
     marginBottom: 25,
