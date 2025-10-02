@@ -47,13 +47,13 @@ export const currentWeekMenu: Record<string, MealType> = {
       { dish: 'Desi Ghee Roti, Chutney, Achaar', type: 'veg' },
     ],
     snacks: [
-      { dish: 'Potli Samosa/Samosa', type: 'veg', highlight: true },
+      { dish: 'Potli Samosa/Samosa', type: 'veg'},
       { dish: 'Tea', type: 'veg' },
     ],
     dinner: [
       { dish: 'Mix Dal, Seasonal Veg', type: 'veg' },
       { dish: 'Butter Roti, Rice', type: 'veg' },
-      { dish: 'Salad, Imarti Rabri', type: 'veg', highlight: true },
+      { dish: 'Imarti Rabri', type: 'veg', highlight: true },
       { dish: 'Milk', type: 'veg' },
     ]
   },
@@ -67,8 +67,7 @@ export const currentWeekMenu: Record<string, MealType> = {
     lunch: [
       { dish: 'Dal Makhni', type: 'veg', highlight: true },
       { dish: 'Seasonal Veg, Mixed Raita', type: 'veg' },
-      { dish: 'Desi Ghee Roti', type: 'veg' },
-      { dish: 'Macaroni Salad, Achaar', type: 'veg' },
+      { dish: 'Desi Ghee Roti', type: 'veg' }
     ],
     snacks: [
       { dish: 'Maggie', type: 'veg' },
@@ -92,64 +91,58 @@ export const currentWeekMenu: Record<string, MealType> = {
       { dish: 'Chole', type: 'veg' },
       { dish: 'Kaddu, Poori', type: 'veg' },
       { dish: 'Boondi Raita, Salad', type: 'veg' },
-      { dish: 'Chutney, Achaar', type: 'veg' },
     ],
     snacks: [
       { dish: 'Spring Roll/Kath Rolli', type: 'veg' },
-      { dish: 'Cold Drinks', type: 'veg' },
+      { dish: 'Cold Drink', type: 'veg' },
     ],
     dinner: [
       { dish: 'Urad Chana Dal', type: 'veg' },
       { dish: 'Seasonal Veg', type: 'veg' },
       { dish: 'Rice, Butter Roti, Salad', type: 'veg' },
-      { dish: 'Boondi Laddoo/Fruit Item', type: 'veg', highlight: true },
+      { dish: 'Boondi Laddoo', type: 'veg', highlight: true },
     ]
   },
   'Friday': {
     breakfast: [
       { dish: 'Stuffed Veg Chilla', type: 'veg' },
-      { dish: 'Tomato Chutney', type: 'veg' },
       { dish: 'Bread, Butter, Jam', type: 'veg' },
       { dish: 'Kele Chane Chaat', type: 'veg' },
     ],
     lunch: [
       { dish: 'Rajma', type: 'veg', highlight: true },
       { dish: 'Baigan Bharta', type: 'veg' },
-      { dish: 'Plain Rice, Desi Ghee Roti', type: 'veg' },
-      { dish: 'Kachumbar Salad', type: 'veg' },
+      { dish: 'Plain Rice, Desi Ghee Roti', type: 'veg' }
     ],
     snacks: [
-      { dish: 'Bun Tikki/Burger', type: 'veg', highlight: true },
+      { dish: 'Bun Tikki/Burger', type: 'veg'},
       { dish: 'Lahori Jeera', type: 'veg' },
     ],
     dinner: [
       { dish: 'Fried Rice/Noodles', type: 'veg' },
-      { dish: 'Veg/Chicken Manchurian', type: 'non-veg', highlight: true },
-      { dish: 'Chilli Paneer, Chicken', type: 'non-veg' },
-      { dish: 'Cold Drink', type: 'veg' },
+      { dish: 'Veg / Chicken Manchurian', type: 'non-veg', highlight: true },
+      { dish: 'Chilli Paneer / Chicken', type: 'non-veg' },
     ]
   },
   'Saturday': {
     breakfast: [
       { dish: 'Paneer Paratha', type: 'veg', highlight: true },
-      { dish: 'Dahi', type: 'veg' },
       { dish: 'Bread, Butter, Jam', type: 'veg' },
       { dish: 'Tea/Milk, Sandwich', type: 'veg' },
     ],
     lunch: [
       { dish: 'Arhar Dal', type: 'veg' },
-      { dish: 'Seasonal Veg, Rice', type: 'veg' },
-      { dish: 'Desi Ghee Roti', type: 'veg' },
-      { dish: 'Kheera Raita, Salad', type: 'veg' },
+      { dish: 'Seasonal Veg', type: 'veg' },
+      { dish: 'Desi Ghee Roti and Rice', type: 'veg' },
     ],
     snacks: [
       { dish: 'Pav Bhaji/Vada Pav', type: 'veg', highlight: true },
       { dish: 'Tea', type: 'veg' },
     ],
     dinner: [
-      { dish: 'Dal Makhni', type: 'veg' },
+      { dish: 'Dal Makhni', type: 'veg', highlight: true },
       { dish: 'Seasonal Veg', type: 'veg' },
-      { dish: 'Macaroni Salad, Rice, Roti', type: 'veg' },
+      { dish: 'Desi Ghee Roti and Rice', type: 'veg' },
       { dish: 'Moong Dal Halwa', type: 'veg', highlight: true },
     ]
   },
@@ -164,7 +157,6 @@ export const currentWeekMenu: Record<string, MealType> = {
       { dish: 'Chole Bhature/Kulche', type: 'veg', highlight: true },
       { dish: 'Sweet Lassi', type: 'veg' },
       { dish: 'Sirka Pyaaz', type: 'veg' },
-      { dish: 'Green Chutney, Rice', type: 'veg' },
     ],
     snacks: [
       { dish: 'Paneer/Chicken Noodles', type: 'non-veg' },
