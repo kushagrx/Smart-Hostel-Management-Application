@@ -65,14 +65,14 @@ export default function Index() {
           <View style={styles.quickActionsGrid}>
             {([
               { icon: "announcement", text: "Imp Notices", onPress: () => router.push('/(tabs)/alerts') },
-              { icon: "report-problem", text: "File Complaint" },
+              { icon: "report-problem", text: "File Complaint", onPress: () => router.push('/complaints') },
               { icon: "cleaning-services", text: "Room Service" },
               { icon: "directions-bus", text: "Bus Timings" },
-            ] as { icon: React.ComponentProps<typeof MaterialIcons>["name"], text: string, onPress?: () => void }[]).map((item, index) => (
+            ] as const).map((item, index) => (
               <Pressable 
                 key={index}
                 style={[styles.actionButton, styles.shadowProp]} 
-                onPress={item.onPress}
+                onPress={item.onPress ? item.onPress : undefined}
               >
                 <View style={styles.actionIconContainer}>
                   <MaterialIcons name={item.icon} size={24} color="#FF8C00" />
