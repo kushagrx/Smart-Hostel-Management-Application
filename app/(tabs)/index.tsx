@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
 import { getInitial, userData } from '../../utils/nameUtils';
+import MessMenu from '../../components/MessMenu';
 
 export default function Index() {
   const router = useRouter();
@@ -47,6 +48,11 @@ export default function Index() {
               </View>
             </View>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>MESS MENU</Text>
+          <MessMenu />
         </View>
 
         <View style={styles.section}>
