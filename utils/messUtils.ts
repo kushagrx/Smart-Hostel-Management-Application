@@ -15,15 +15,13 @@ export const currentWeekMenu: Record<string, MealType> = {
   'Monday': {
     breakfast: [
       { dish: 'Aloo Paratha', type: 'veg' },
-      { dish: 'Dahi', type: 'veg' },
       { dish: 'Bread, Butter, Jam', type: 'veg' },
-      { dish: 'Tea/Milk', type: 'veg' },
+      { dish: 'Tea/Milk', type: 'veg' }
     ],
     lunch: [
       { dish: 'Urad Chana Dal', type: 'veg' },
       { dish: 'Mix Veg, Raita', type: 'veg' },
-      { dish: 'Rice, Desi Ghee Roti', type: 'veg' },
-      { dish: 'Salad, Chutney', type: 'veg' },
+      { dish: 'Rice, Desi Ghee Roti', type: 'veg' }
     ],
     snacks: [
       { dish: 'Khasta Chaat', type: 'veg' },
@@ -33,8 +31,7 @@ export const currentWeekMenu: Record<string, MealType> = {
     dinner: [
       { dish: 'Dum Aloo', type: 'veg' },
       { dish: 'Egg Curry', type: 'non-veg', highlight: true },
-      { dish: 'Dal, Butter', type: 'veg' },
-      { dish: 'Roti, Rice, Salad', type: 'veg' },
+      { dish: 'Roti, Rice and Salad', type: 'veg' },
     ]
   },
   'Tuesday': {
@@ -42,7 +39,6 @@ export const currentWeekMenu: Record<string, MealType> = {
       { dish: 'Khasta Kachori', type: 'veg' },
       { dish: 'Aloo Sabzi', type: 'veg' },
       { dish: 'Bread, Butter, Jam', type: 'veg' },
-      { dish: 'Shakes/Tea, Veg Sandwich', type: 'veg' },
     ],
     lunch: [
       { dish: 'Kadhi', type: 'veg' },
@@ -182,4 +178,12 @@ export const currentWeekMenu: Record<string, MealType> = {
       { dish: 'Jalebi', type: 'veg', highlight: true },
     ]
   }
+};
+
+
+export const getTodaysDinner = () => {
+  const today = new Date().toLocaleString('en-US', { weekday: 'long' });
+  const dinner = currentWeekMenu[today]?.dinner;
+  const highlightedDish = dinner?.find(item => item.highlight);
+  return highlightedDish?.dish || dinner?.[0]?.dish || 'Dinner Menu';
 };

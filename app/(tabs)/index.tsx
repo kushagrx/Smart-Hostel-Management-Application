@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
 import { getInitial, userData } from '../../utils/nameUtils';
+import { getTodaysDinner } from '../../utils/messUtils';
 import MessMenu from '../../components/MessMenu';
 
 export default function Index() {
@@ -29,15 +30,24 @@ export default function Index() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>DAILY ALERTS</Text>
           <View style={styles.alertsContainer}>
-            <View style={[styles.alertCard, styles.shadowProp]}>
+            <Pressable 
+              style={[styles.alertCard, styles.shadowProp]}
+              onPress={() => router.push('/mess')}
+            >
               <View style={styles.iconContainer}>
                 <MaterialIcons name="restaurant" size={24} color="#FF8C00" />
               </View>
               <View>
-                <Text style={styles.alertTitle}>Mess Food:</Text>
-                <Text style={styles.alertContent}>Chicken Biryani Tonight!</Text>
+                <Text style={styles.alertTitle}>Today's Dinner:</Text>
+                <Text style={styles.alertContent}>{getTodaysDinner()}</Text>
               </View>
-            </View>
+              <MaterialIcons 
+                name="chevron-right" 
+                size={24} 
+                color="#666" 
+                style={styles.chevronIcon}
+              />
+            </Pressable>
             <View style={[styles.alertCard, styles.shadowProp]}>
               <View style={styles.iconContainer}>
                 <MaterialIcons name="local-laundry-service" size={24} color="#FF8C00" />
@@ -48,11 +58,6 @@ export default function Index() {
               </View>
             </View>
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>MESS MENU</Text>
-          <MessMenu />
         </View>
 
         <View style={styles.section}>
@@ -198,5 +203,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 5,
+  },
+  chevronIcon: {
+    marginLeft: 'auto',
   },
 });
