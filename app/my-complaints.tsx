@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 const mockComplaints = [
   {
@@ -26,6 +26,15 @@ const mockComplaints = [
 
 export default function MyComplaints() {
   const [selectedTab, setSelectedTab] = useState<'active' | 'resolved'>('active');
+  const filteredComplaints = useMemo(() => {
+    return mockComplaints.filter(complaint => {
+      if (selectedTab === 'active') {
+        return ['open', 'inProgress'].includes(complaint.status);
+      } else {
+        return ['resolved', 'closed'].includes(complaint.status);
+      }
+    });
+  }, [selectedTab]);
 
   const getStatusColor = (status: string) => {
     const colors = {
@@ -45,6 +54,29 @@ export default function MyComplaints() {
       closed: 'cancel',
     };
     return icons[status] || icons.open;
+  };
+
+  // Get priority color
+  const getPriorityColor = (priority: string) => {
+    const colors = {
+      low: '#4CAF50',
+      medium: '#FF8C00',
+      high: '#f44336',
+      emergency: '#d32f2f'
+    };
+    return colors[priority] || colors.low;
+  };
+
+  // Format date
+  const formatDate = (date: Date) => {
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays <= 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
   };
 
   return (
@@ -77,34 +109,53 @@ export default function MyComplaints() {
       </View>
 
       <ScrollView style={styles.complaintsList}>
-        {mockComplaints.map((complaint) => (
-          <Pressable key={complaint.id} style={[styles.complaintCard, styles.shadowProp]}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.complaintTitle}>{complaint.title}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(complaint.status) }]}>
-                <MaterialIcons 
-                  name={getStatusIcon(complaint.status)} 
-                  size={16} 
-                  color="white" 
-                />
-                <Text style={styles.statusText}>
-                  {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
-                </Text>
+        {filteredComplaints.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="inbox" size={48} color="#ccc" />
+            <Text style={styles.emptyText}>
+              No {selectedTab} complaints found
+            </Text>
+          </View>
+        ) : (
+          filteredComplaints.map((complaint) => (
+            <Pressable 
+              key={complaint.id} 
+              style={[styles.complaintCard, styles.shadowProp]}
+              onPress={() => {/* Navigate to complaint detail */}}
+            >
+              <View style={styles.cardHeader}>
+                <Text style={styles.complaintTitle}>{complaint.title}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(complaint.status) }]}>
+                  <MaterialIcons name={getStatusIcon(complaint.status)} size={16} color="white" />
+                  <Text style={styles.statusText}>
+                    {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
+                  </Text>
+                </View>
               </View>
-            </View>
-            
-            <Text style={styles.description}>{complaint.description}</Text>
-            
-            <View style={styles.cardFooter}>
-              <Text style={styles.date}>
-                {complaint.createdAt.toLocaleDateString()}
+              
+              <Text style={styles.description} numberOfLines={2}>
+                {complaint.description}
               </Text>
-              <View style={styles.priorityBadge}>
-                <Text style={styles.priorityText}>{complaint.priority}</Text>
+              
+              <View style={styles.cardFooter}>
+                <Text style={styles.date}>
+                  {formatDate(complaint.createdAt)}
+                </Text>
+                <View style={[
+                  styles.priorityBadge, 
+                  { backgroundColor: getPriorityColor(complaint.priority) + '20' }
+                ]}>
+                  <Text style={[
+                    styles.priorityText, 
+                    { color: getPriorityColor(complaint.priority) }
+                  ]}>
+                    {complaint.priority.toUpperCase()}
+                  </Text>
+                </View>
               </View>
-            </View>
-          </Pressable>
-        ))}
+            </Pressable>
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -203,5 +254,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    color: '#666',
+    marginTop: 10,
+    fontSize: 16,
   },
 });
