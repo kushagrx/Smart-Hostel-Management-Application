@@ -32,9 +32,8 @@ const Profile = () => {
           <MaterialCommunityIcons name="wifi" size={24} color="#2196F3" />
           <View>
             <Text style={styles.infoLabel}>Wi-Fi:</Text>
-            <Text style={styles.infoValue}>Hostel_SSID</Text>
+            <Text style={styles.infoValue}>ENET_C11</Text>
           </View>
-          <Text style={styles.copyHint}>(Tap to copy)</Text>
         </View>
       </View>
 

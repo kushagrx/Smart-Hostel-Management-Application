@@ -16,7 +16,6 @@ export default function Complaints() {
         }} 
       />
 
-      {/* Emergency Contacts Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>24/7 EMERGENCY CONTACTS</Text>
         <View style={styles.contactsContainer}>
@@ -37,7 +36,6 @@ export default function Complaints() {
         </View>
       </View>
 
-      {/* Actions Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>RAISE COMPLAINT</Text>
         <View style={styles.actionsGrid}>
@@ -58,7 +56,6 @@ export default function Complaints() {
         </View>
       </View>
 
-      {/* FAQs Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>FREQUENTLY ASKED QUESTIONS</Text>
         <View style={styles.faqContainer}>

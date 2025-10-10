@@ -56,7 +56,6 @@ export default function MyComplaints() {
     return icons[status] || icons.open;
   };
 
-  // Get priority color
   const getPriorityColor = (priority: string) => {
     const colors = {
       low: '#4CAF50',
@@ -67,7 +66,6 @@ export default function MyComplaints() {
     return colors[priority] || colors.low;
   };
 
-  // Format date
   const formatDate = (date: Date) => {
     const today = new Date();
     const diffTime = Math.abs(today.getTime() - date.getTime());
