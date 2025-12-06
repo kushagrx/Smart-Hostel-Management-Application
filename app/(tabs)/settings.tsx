@@ -2,14 +2,30 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { setStoredUser } from '../../utils/authUtils';
+import { useTheme } from '../../utils/ThemeContext';
 
-const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint }) => {
+
+const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, colors, isLast }: any) => {
   return (
     <TouchableOpacity 
-      style={styles.row} 
+      style={[
+        styles.row, 
+        { 
+          borderBottomColor: colors.border,
+          borderBottomWidth: isLast ? 0 : 1,
+        }
+      ]} 
       onPress={onPress} 
       disabled={!onPress}
       accessible={true}
@@ -18,8 +34,8 @@ const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, acc
       accessibilityRole={isSwitch ? 'switch' : (onPress ? 'button' : 'text')}
     >
       <View style={styles.labelContainer}>
-        {icon && <MaterialIcons name={icon} size={24} color="#666" />}
-        <Text style={styles.label}>{label}</Text>
+        {icon && <MaterialIcons name={icon} size={24} color={colors.icon} />}
+        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
       </View>
       {isSwitch ? (
         <Switch
@@ -29,7 +45,7 @@ const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, acc
           thumbColor={value ? '#fff' : '#f4f3f4'}
         />
       ) : (
-        onPress && <MaterialIcons name="chevron-right" size={24} color="#ccc" />
+        onPress && <MaterialIcons name="chevron-right" size={24} color={colors.icon} />
       )}
     </TouchableOpacity>
   );
@@ -37,9 +53,9 @@ const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, acc
 
 export default function Settings() {
   const router = useRouter();
+  const { theme, toggleTheme, colors } = useTheme();
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
 
   const handleLogout = () => {
     Alert.alert(
@@ -53,7 +69,7 @@ export default function Settings() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <Stack.Screen
         options={{
           title: 'Settings',
@@ -62,27 +78,31 @@ export default function Settings() {
           headerShadowVisible: false,
         }}
       />
-      <ScrollView style={styles.container}>
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Account Section */}
-        <Text style={styles.sectionTitle}>Account</Text>
-        <View style={styles.card}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
+        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
           <SettingItem 
             icon="person-outline" 
             label="Edit Profile" 
             onPress={() => router.push('/profile/edit')} 
             accessibilityHint="Navigates to the edit profile screen"
+            colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="lock-outline" 
             label="Change Password" 
             onPress={() => router.push('/account/change-password')}
             accessibilityHint="Navigates to the change password screen"
+            colors={colors}
+            isLast={true}
           />
         </View>
 
         {/* Notifications Section */}
-        <Text style={styles.sectionTitle}>Notifications</Text>
-        <View style={styles.card}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Notifications</Text>
+        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
           <SettingItem 
             icon="notifications-none" 
             label="Push Notifications" 
@@ -90,6 +110,8 @@ export default function Settings() {
             value={pushNotifications} 
             onValueChange={setPushNotifications}
             accessibilityHint="Toggle push notifications on or off"
+            colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="mail-outline" 
@@ -98,60 +120,72 @@ export default function Settings() {
             value={emailNotifications} 
             onValueChange={setEmailNotifications}
             accessibilityHint="Toggle email notifications on or off"
+            colors={colors}
+            isLast={true}
           />
         </View>
 
         {/* App Preferences Section */}
-        <Text style={styles.sectionTitle}>App Preferences</Text>
-        <View style={styles.card}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>App Preferences</Text>
+        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
           <SettingItem 
             icon="brightness-6" 
             label="Dark Mode" 
             isSwitch 
-            value={darkMode} 
-            onValueChange={setDarkMode}
+            value={theme === 'dark'} 
+            onValueChange={toggleTheme}
             accessibilityHint="Toggle dark mode for the app"
+            colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="language" 
             label="Language" 
-            onPress={() => {}} // Placeholder for language selection
+            onPress={() => {}} 
             accessibilityHint="Opens language selection options"
+            colors={colors}
+            isLast={true}
           />
         </View>
 
         {/* About Section */}
-        <Text style={styles.sectionTitle}>About & Support</Text>
-        <View style={styles.card}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>About & Support</Text>
+        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
           <SettingItem 
             icon="support-agent" 
             label="Contact Support" 
-            onPress={() => {}} // Placeholder
+            onPress={() => {}} 
             accessibilityHint="Opens the contact support page"
+            colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="help-outline" 
             label="FAQs" 
-            onPress={() => {}} // Placeholder
+            onPress={() => {}} 
             accessibilityHint="Navigates to the Frequently Asked Questions page"
+            colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="policy" 
             label="Privacy Policy" 
-            onPress={() => {}} // Placeholder
+            onPress={() => {}} 
             accessibilityHint="Opens the privacy policy"
+            colors={colors}
+            isLast={false}
           />
-          <View style={styles.row}>
+          <View style={[styles.row, { borderBottomWidth: 0, borderBottomColor: colors.border }]}>
             <View style={styles.labelContainer}>
-                <MaterialIcons name="info-outline" size={24} color="#666" />
-                <Text style={styles.label}>App Version</Text>
+                <MaterialIcons name="info-outline" size={24} color={colors.icon} />
+                <Text style={[styles.label, { color: colors.text }]}>App Version</Text>
             </View>
-            <Text style={styles.value}>{Application.nativeApplicationVersion}</Text>
+            <Text style={[styles.value, { color: colors.secondary }]}>{Application.nativeApplicationVersion}</Text>
           </View>
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: theme === 'dark' ? '#4d1f1f' : '#FFF3F3' }]} onPress={handleLogout}>
           <MaterialIcons name="logout" size={22} color="#FF5252" />
           <Text style={styles.logoutButtonText}>Log Out</Text>
         </TouchableOpacity>
@@ -176,7 +210,6 @@ export default function Settings() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   container: {
     flex: 1,
@@ -184,17 +217,17 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
     marginHorizontal: 20,
     marginTop: 24,
     marginBottom: 8,
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 14,
     marginHorizontal: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -206,6 +239,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
   },
   labelContainer: {
     flexDirection: 'row',
@@ -214,22 +249,21 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    color: '#2d3436',
+    fontWeight: '500',
   },
   value: {
     fontSize: 16,
-    color: '#999',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF3F3',
     borderRadius: 14,
     margin: 16,
     padding: 16,
     gap: 8,
     marginTop: 32,
+    marginBottom: 40,
   },
   logoutButtonText: {
     fontSize: 16,

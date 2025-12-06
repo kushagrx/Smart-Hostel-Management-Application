@@ -40,13 +40,13 @@ const _layout = () => {
         />
 
         <Tabs.Screen 
-          name="profile" 
+          name="emergency" 
           options={{ 
             headerShown: false, 
-            title: 'Profile',
+            title: 'Emergency',
             tabBarIcon: ({color, focused}) => (
               <MaterialCommunityIcons 
-                name={focused ? "account" : "account-outline"} 
+                name={focused ? "phone-alert" : "phone-alert-outline"} 
                 size={24} 
                 color={color} 
               />

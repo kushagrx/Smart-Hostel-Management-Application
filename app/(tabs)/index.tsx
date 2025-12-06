@@ -1,16 +1,18 @@
 import { Pressable, Text, View, ScrollView } from "react-native";
 import { StyleSheet } from "react-native";
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
 import { getInitial, userData } from '../../utils/nameUtils';
 import { getTodaysDinner } from '../../utils/messUtils';
-import MessMenu from '../../components/MessMenu';
+import { useTheme } from '../../utils/ThemeContext';
 
 export default function Index() {
   const router = useRouter();
+  const { colors, theme } = useTheme();
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
       <LinearGradient
         colors={['#FF8C00', '#FFA500']} 
         style={styles.headerContainer}
@@ -19,7 +21,7 @@ export default function Index() {
           <Text style={styles.title}>Smart Hostel ⚡</Text>
           <Text style={styles.hostelName}>Aashiyana Grand Hostel for Boys</Text>
         </View>
-        <Pressable onPress={() => router.push('/(tabs)/profile')}>
+        <Pressable onPress={() => router.push('/profile')}>
           <View style={styles.userInitialContainer}>
             <Text style={styles.userInitial}>{getInitial(userData.fullName)}</Text>
           </View>
@@ -28,56 +30,56 @@ export default function Index() {
 
       <View style={styles.mainContent}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>DAILY ALERTS</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>DAILY ALERTS</Text>
           <View style={styles.alertsContainer}>
             <Pressable 
-              style={[styles.alertCard, styles.shadowProp]}
+              style={[styles.alertCard, styles.shadowProp, { backgroundColor: colors.cardBackground }]}
               onPress={() => router.push('/mess')}
             >
-              <View style={styles.iconContainer}>
+              <View style={[styles.iconContainer, { backgroundColor: theme === 'dark' ? '#4d2e0a' : '#FFF5E6' }]}>
                 <MaterialIcons name="restaurant" size={24} color="#FF8C00" />
               </View>
               <View>
-                <Text style={styles.alertTitle}>Today's Dinner:</Text>
-                <Text style={styles.alertContent}>{getTodaysDinner()}</Text>
+                <Text style={[styles.alertTitle, { color: colors.text }]}>Today's Dinner:</Text>
+                <Text style={[styles.alertContent, { color: colors.secondary }]}>{getTodaysDinner()}</Text>
               </View>
               <MaterialIcons 
                 name="chevron-right" 
                 size={24} 
-                color="#666" 
+                color={colors.icon}
                 style={styles.chevronIcon}
               />
             </Pressable>
-            <View style={[styles.alertCard, styles.shadowProp]}>
-              <View style={styles.iconContainer}>
+            <View style={[styles.alertCard, styles.shadowProp, { backgroundColor: colors.cardBackground }]}>
+              <View style={[styles.iconContainer, { backgroundColor: theme === 'dark' ? '#4d2e0a' : '#FFF5E6' }]}>
                 <MaterialIcons name="local-laundry-service" size={24} color="#FF8C00" />
               </View>
               <View>
-                <Text style={styles.alertTitle}>Laundry:</Text>
-                <Text style={styles.alertContent}>Pickup today @5:00 PM</Text>
+                <Text style={[styles.alertTitle, { color: colors.text }]}>Laundry:</Text>
+                <Text style={[styles.alertContent, { color: colors.secondary }]}>Pickup today @5:00 PM</Text>
               </View>
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>QUICK ACTIONS</Text>
           <View style={styles.quickActionsGrid}>
-            {([
+            {[
               { icon: "announcement", text: "Imp Notices", onPress: () => router.push('/(tabs)/alerts') },
               { icon: "report-problem", text: "File Complaint", onPress: () => router.push('/complaints') },
-              { icon: "cleaning-services", text: "Room Service" },
-              { icon: "directions-bus", text: "Bus Timings" },
-            ] as const).map((item, index) => (
+              { icon: "cleaning-services", text: "Room Service", onPress: () => router.push('/roomservice') },
+              { icon: "directions-bus", text: "Bus Timings", onPress: () => router.push('/bustimings') },
+            ].map((item, index) => (
               <Pressable 
                 key={index}
-                style={[styles.actionButton, styles.shadowProp]} 
-                onPress={item.onPress ? item.onPress : undefined}
+                style={[styles.actionButton, styles.shadowProp, { backgroundColor: colors.cardBackground }]} 
+                onPress={item.onPress}
               >
-                <View style={styles.actionIconContainer}>
-                  <MaterialIcons name={item.icon} size={24} color="#FF8C00" />
+                <View style={[styles.actionIconContainer, { backgroundColor: theme === 'dark' ? '#4d2e0a' : '#FFF5E6' }]}>
+                  <MaterialIcons name={item.icon as any} size={24} color="#FF8C00" />
                 </View>
-                <Text style={styles.actionText}>{item.text}</Text>
+                <Text style={[styles.actionText, { color: colors.text }]}>{item.text}</Text>
               </Pressable>
             ))}
           </View>
@@ -90,7 +92,6 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   mainContent: {
     padding: 20,
@@ -133,8 +134,8 @@ const styles = StyleSheet.create({
   hostelName: {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 14,
-    fontStyle: 'italic',
-    marginTop: 0,
+    fontWeight: '400',
+    marginTop: 2,
   },
   section: {
     marginBottom: 25,
@@ -143,7 +144,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 15,
-    color: '#2d3436',
     letterSpacing: 1,
   },
   alertsContainer: {
@@ -153,28 +153,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 15,
-    backgroundColor: 'white',
     padding: 15,
     borderRadius: 16,
   },
   iconContainer: {
-    backgroundColor: '#FFF5E6',
     padding: 10,
     borderRadius: 12,
   },
   actionIconContainer: {
-    backgroundColor: '#FFF5E6',
     padding: 12,
     borderRadius: 14,
     marginBottom: 8,
   },
   alertTitle: {
     fontWeight: '600',
-    color: '#2d3436',
     fontSize: 16,
   },
   alertContent: {
-    color: '#636e72',
     fontSize: 14,
   },
   quickActionsGrid: {
@@ -183,14 +178,12 @@ const styles = StyleSheet.create({
     gap: 15,
   },
   actionButton: {
-    backgroundColor: 'white',
     padding: 15,
     borderRadius: 16,
     alignItems: 'center',
     width: '47%',
   },
   actionText: {
-    color: '#2d3436',
     fontWeight: '600',
     fontSize: 14,
   },
