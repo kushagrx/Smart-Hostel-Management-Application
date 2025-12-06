@@ -2,34 +2,38 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { Stack } from 'expo-router';
 import React from 'react'
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getInitial, userData } from '../utils/nameUtils';
+import { useTheme } from '../utils/ThemeContext';
 
 const Profile = () => {
+  const { colors } = useTheme();
+
   return (
-    <>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <Stack.Screen 
         options={{ 
           headerShown: false,
         }} 
       />
-      <ScrollView style={styles.container}>
-        <Text style={styles.headerTitle}>Profile</Text>
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
 
         <View style={styles.profileSection}>
           <View style={styles.profilePic}>
             <Text style={styles.profileInitial}>{getInitial(userData.fullName)}</Text>
           </View>
-          <Text style={styles.name}>{userData.fullName}</Text>
-          <Text style={styles.roomNo}>{userData.roomNo}</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{userData.fullName}</Text>
+          <Text style={[styles.roomNo, { color: colors.secondary }]}>{userData.roomNo}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Quick Info</Text>
-        <View style={styles.infoCard}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Info</Text>
+        <View style={[styles.infoCard, { backgroundColor: colors.theme === 'dark' ? '#1e3a5f' : '#E3F2FD' }]}>
           <View style={styles.infoItem}>
             <MaterialCommunityIcons name="cash" size={24} color="#2196F3" />
             <View>
-              <Text style={styles.infoLabel}>Current Dues:</Text>
-              <Text style={styles.infoValue}>₹1500</Text>
+              <Text style={[styles.infoLabel, { color: colors.secondary }]}>Current Dues:</Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>₹1500</Text>
             </View>
             <Pressable style={styles.payButton}>
               <Text style={styles.payButtonText}>Pay Now</Text>
@@ -38,23 +42,23 @@ const Profile = () => {
           <View style={styles.infoItem}>
             <MaterialCommunityIcons name="wifi" size={24} color="#2196F3" />
             <View>
-              <Text style={styles.infoLabel}>Wi-Fi:</Text>
-              <Text style={styles.infoValue}>ENET_C11</Text>
+              <Text style={[styles.infoLabel, { color: colors.secondary }]}>Wi-Fi:</Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>ENET_C11</Text>
             </View>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Details</Text>
-        <View style={styles.detailsCard}>
-          <Pressable style={styles.detailItem}>
-            <MaterialCommunityIcons name="phone-alert" size={24} color="#666" />
-            <Text style={styles.detailText}>Emergency Contact</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Details</Text>
+        <View style={[styles.detailsCard, { backgroundColor: colors.cardBackground }]}>
+          <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
+            <MaterialCommunityIcons name="phone-alert" size={24} color={colors.icon} />
+            <Text style={[styles.detailText, { color: colors.text }]}>Emergency Contact</Text>
             <Text style={styles.viewEdit}>View/Edit</Text>
           </Pressable>
-          <Pressable style={styles.detailItem}>
-            <MaterialCommunityIcons name="file-document" size={24} color="#666" />
-            <Text style={styles.detailText}>Hostel Policies</Text>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#666" />
+          <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
+            <MaterialCommunityIcons name="file-document" size={24} color={colors.icon} />
+            <Text style={[styles.detailText, { color: colors.text }]}>Hostel Policies</Text>
+            <MaterialCommunityIcons name="chevron-right" size={24} color={colors.icon} />
           </Pressable>
         </View>
 
@@ -62,20 +66,21 @@ const Profile = () => {
           <Text style={styles.logoutText}>Logout</Text>
         </Pressable>
       </ScrollView>
-    </>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
     padding: 20,
-    paddingTop: 40,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     marginBottom: 30,
   },
   profileSection: {
@@ -94,24 +99,22 @@ const styles = StyleSheet.create({
   profileInitial: {
     color: 'white',
     fontSize: 32,
-    fontWeight: '600',
+    fontWeight: '600' as const,
   },
   name: {
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     marginBottom: 5,
   },
   roomNo: {
     fontSize: 16,
-    color: '#666',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     marginBottom: 15,
   },
   infoCard: {
-    backgroundColor: '#E3F2FD',
     borderRadius: 15,
     padding: 15,
     marginBottom: 25,
@@ -123,11 +126,10 @@ const styles = StyleSheet.create({
     gap: 15,
   },
   infoLabel: {
-    color: '#666',
     marginBottom: 2,
   },
   infoValue: {
-    fontWeight: '500',
+    fontWeight: '500' as const,
   },
   payButton: {
     backgroundColor: '#2196F3',
@@ -138,12 +140,12 @@ const styles = StyleSheet.create({
   },
   payButtonText: {
     color: 'white',
-    fontWeight: '500',
+    fontWeight: '500' as const,
   },
   detailsCard: {
-    backgroundColor: 'white',
     borderRadius: 15,
     marginBottom: 25,
+    overflow: 'hidden',
   },
   detailItem: {
     flexDirection: 'row',
@@ -151,7 +153,6 @@ const styles = StyleSheet.create({
     padding: 15,
     gap: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   detailText: {
     flex: 1,
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
   logoutText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
   },
 });
 

@@ -68,8 +68,8 @@ export default function Index() {
             {[
               { icon: "announcement", text: "Imp Notices", onPress: () => router.push('/(tabs)/alerts') },
               { icon: "report-problem", text: "File Complaint", onPress: () => router.push('/complaints') },
-              { icon: "cleaning-services", text: "Room Service", onPress: () => {} },
-              { icon: "directions-bus", text: "Bus Timings", onPress: () => {} },
+              { icon: "cleaning-services", text: "Room Service", onPress: () => router.push('/roomservice') },
+              { icon: "directions-bus", text: "Bus Timings", onPress: () => router.push('/bustimings') },
             ].map((item, index) => (
               <Pressable 
                 key={index}
