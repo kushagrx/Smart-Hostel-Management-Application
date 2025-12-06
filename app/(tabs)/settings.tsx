@@ -6,10 +6,16 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
 import { useTheme } from '../../utils/ThemeContext';
 
-const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, colors }) => {
+const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, colors, isLast }: any) => {
   return (
     <TouchableOpacity 
-      style={[styles.row, { borderBottomColor: colors.border }]} 
+      style={[
+        styles.row, 
+        { 
+          borderBottomColor: colors.border,
+          borderBottomWidth: isLast ? 0 : 1,
+        }
+      ]} 
       onPress={onPress} 
       disabled={!onPress}
       accessible={true}
@@ -29,7 +35,7 @@ const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, acc
           thumbColor={value ? '#fff' : '#f4f3f4'}
         />
       ) : (
-        onPress && <MaterialIcons name="chevron-right" size={24} color="#ccc" />
+        onPress && <MaterialIcons name="chevron-right" size={24} color={colors.icon} />
       )}
     </TouchableOpacity>
   );
@@ -62,7 +68,7 @@ export default function Settings() {
           headerShadowVisible: false,
         }}
       />
-      <ScrollView style={styles.container}>
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Account Section */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
         <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
@@ -72,6 +78,7 @@ export default function Settings() {
             onPress={() => router.push('/profile/edit')} 
             accessibilityHint="Navigates to the edit profile screen"
             colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="lock-outline" 
@@ -79,6 +86,7 @@ export default function Settings() {
             onPress={() => router.push('/account/change-password')}
             accessibilityHint="Navigates to the change password screen"
             colors={colors}
+            isLast={true}
           />
         </View>
 
@@ -93,6 +101,7 @@ export default function Settings() {
             onValueChange={setPushNotifications}
             accessibilityHint="Toggle push notifications on or off"
             colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="mail-outline" 
@@ -102,6 +111,7 @@ export default function Settings() {
             onValueChange={setEmailNotifications}
             accessibilityHint="Toggle email notifications on or off"
             colors={colors}
+            isLast={true}
           />
         </View>
 
@@ -116,6 +126,7 @@ export default function Settings() {
             onValueChange={toggleTheme}
             accessibilityHint="Toggle dark mode for the app"
             colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="language" 
@@ -123,6 +134,7 @@ export default function Settings() {
             onPress={() => {}} 
             accessibilityHint="Opens language selection options"
             colors={colors}
+            isLast={true}
           />
         </View>
 
@@ -135,6 +147,7 @@ export default function Settings() {
             onPress={() => {}} 
             accessibilityHint="Opens the contact support page"
             colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="help-outline" 
@@ -142,6 +155,7 @@ export default function Settings() {
             onPress={() => {}} 
             accessibilityHint="Navigates to the Frequently Asked Questions page"
             colors={colors}
+            isLast={false}
           />
           <SettingItem 
             icon="policy" 
@@ -149,8 +163,9 @@ export default function Settings() {
             onPress={() => {}} 
             accessibilityHint="Opens the privacy policy"
             colors={colors}
+            isLast={false}
           />
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
+          <View style={[styles.row, { borderBottomWidth: 0, borderBottomColor: colors.border }]}>
             <View style={styles.labelContainer}>
                 <MaterialIcons name="info-outline" size={24} color={colors.icon} />
                 <Text style={[styles.label, { color: colors.text }]}>App Version</Text>
@@ -186,8 +201,10 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 14,
     marginHorizontal: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -199,6 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
   labelContainer: {
@@ -208,6 +226,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
+    fontWeight: '500',
   },
   value: {
     fontSize: 16,
@@ -221,6 +240,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
     marginTop: 32,
+    marginBottom: 40,
   },
   logoutButtonText: {
     fontSize: 16,

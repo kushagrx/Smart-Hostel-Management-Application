@@ -8,7 +8,7 @@ export default function NewComplaint() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('maintenance');
-  const [priority, setPriority] = useState('low');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'emergency'>('low');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
@@ -18,6 +18,18 @@ export default function NewComplaint() {
     setIsSubmitting(false);
     router.back();
   };
+
+  const getPriorityIcon = (priorityLevel: string): any => {
+    const icons: Record<string, string> = {
+      low: 'low-priority',
+      medium: 'priority-high',
+      high: 'warning',
+      emergency: 'error'
+    };
+    return icons[priorityLevel] || icons.low;
+  };
+
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
   return (
     <ScrollView style={styles.container}>
@@ -141,18 +153,6 @@ export default function NewComplaint() {
     </ScrollView>
   );
 }
-
-const getPriorityIcon = (priority: string) => {
-  const icons = {
-    low: 'low-priority',
-    medium: 'priority-high',
-    high: 'warning',
-    emergency: 'error'
-  };
-  return icons[priority] || icons.low;
-};
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const styles = StyleSheet.create({
   container: {

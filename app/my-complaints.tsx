@@ -46,8 +46,8 @@ export default function MyComplaints() {
     return colors[status] || colors.open;
   };
 
-  const getStatusIcon = (status: string) => {
-    const icons = {
+  const getStatusIcon = (status: string): any => {
+    const icons: Record<string, string> = {
       open: 'fiber-new',
       inProgress: 'pending-actions',
       resolved: 'check-circle',
