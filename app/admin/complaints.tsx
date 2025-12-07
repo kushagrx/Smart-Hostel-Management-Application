@@ -1,24 +1,44 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdmin, useUser } from '../../utils/authUtils';
-
-const MOCK = [
-  { id: 'c1', student: 'Alice', text: 'WiFi not working in room 101', category: 'Connectivity', status: 'open', date: '2025-12-06', priority: 'high' },
-  { id: 'c2', student: 'Bob', text: 'Mess food quality is poor', category: 'Mess', status: 'resolved', date: '2025-12-05', priority: 'medium' },
-  { id: 'c3', student: 'Charlie', text: 'Water tap broken in bathroom', category: 'Maintenance', status: 'open', date: '2025-12-06', priority: 'high' },
-  { id: 'c4', student: 'Diana', text: 'Noise complaint from neighbors', category: 'Behavior', status: 'in-progress', date: '2025-12-04', priority: 'medium' },
-  { id: 'c5', student: 'Eve', text: 'Missing luggage in storage', category: 'Lost & Found', status: 'open', date: '2025-12-06', priority: 'low' },
-];
+import { Complaint, getAllComplaints, updateComplaintStatus } from '../../utils/complaintsSyncUtils';
 
 export default function ComplaintsPage() {
   const user = useUser();
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadComplaints();
+  }, []);
+
+  const loadComplaints = async () => {
+    try {
+      const data = await getAllComplaints();
+      setComplaints(data);
+    } catch (error) {
+      console.error("Failed to load complaints:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (id: string, status: 'inProgress' | 'resolved' | 'closed') => {
+    try {
+      await updateComplaintStatus(id, status);
+      Alert.alert("Success", `Complaint marked as ${status}.`);
+      loadComplaints();
+    } catch (error) {
+      Alert.alert("Error", "Failed to update status.");
+    }
+  };
 
   if (!isAdmin(user))
     return (
@@ -28,227 +48,242 @@ export default function ComplaintsPage() {
     );
 
   const filteredComplaints = filterStatus
-    ? MOCK.filter((c) => c.status === filterStatus)
-    : MOCK;
+    ? complaints.filter((c) => c.status === filterStatus)
+    : complaints;
 
-  const openCount = MOCK.filter((c) => c.status === 'open').length;
-  const resolvedCount = MOCK.filter((c) => c.status === 'resolved').length;
-  const inProgressCount = MOCK.filter((c) => c.status === 'in-progress').length;
+  const openCount = complaints.filter((c) => c.status === 'open').length;
+  const inProgressCount = complaints.filter((c) => c.status === 'inProgress').length;
+  const resolvedCount = complaints.filter((c) => c.status === 'resolved').length;
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open':
-        return '#FF6B6B';
-      case 'in-progress':
-        return '#FF9800';
-      case 'resolved':
-        return '#4CAF50';
-      default:
-        return '#999';
+      case 'open': return '#FF6B6B';
+      case 'inProgress': return '#FF9800';
+      case 'resolved': return '#4CAF50';
+      case 'closed': return '#94A3B8';
+      default: return '#999';
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string): any => {
     switch (status) {
-      case 'open':
-        return 'alert-circle';
-      case 'in-progress':
-        return 'clock-outline';
-      case 'resolved':
-        return 'check-circle';
-      default:
-        return 'help-circle';
+      case 'open': return 'alert-circle';
+      case 'inProgress': return 'clock-outline';
+      case 'resolved': return 'check-circle';
+      case 'closed': return 'close-circle';
+      default: return 'help-circle';
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high':
-        return '#F44336';
-      case 'medium':
-        return '#FF9800';
-      case 'low':
-        return '#4CAF50';
-      default:
-        return '#999';
+      case 'high': return '#F44336';
+      case 'medium': return '#FF9800';
+      case 'low': return '#4CAF50';
+      case 'emergency': return '#B91C1C';
+      default: return '#999';
     }
   };
 
-  const getPriorityIcon = (priority: string) => {
+  const getPriorityIcon = (priority: string): any => {
     switch (priority) {
-      case 'high':
-        return 'alert';
-      case 'medium':
-        return 'minus-circle';
-      case 'low':
-        return 'check-circle';
-      default:
-        return 'help-circle';
+      case 'high': return 'alert';
+      case 'medium': return 'minus-circle';
+      case 'low': return 'check-circle';
+      case 'emergency': return 'alert-decagram';
+      default: return 'help-circle';
     }
   };
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={['#E11D48', '#F472B6']} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialIcons name="chevron-left" size={28} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Manage Complaints</Text>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <MaterialIcons name="alert-circle" size={22} color="#E11D48" />
-          <Text style={styles.statValue}>{openCount}</Text>
-          <Text style={styles.statLabel}>Open</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
-          <Text style={styles.statValue}>{inProgressCount}</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="check-circle" size={22} color="#10B981" />
-          <Text style={styles.statValue}>{resolvedCount}</Text>
-          <Text style={styles.statLabel}>Resolved</Text>
-        </View>
-      </View>
-
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          <TouchableOpacity
-            style={[styles.filterBtn, !filterStatus && styles.filterBtnActive]}
-            onPress={() => setFilterStatus(null)}
-          >
-            <Text style={[styles.filterBtnText, !filterStatus && styles.filterBtnTextActive]}>All</Text>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <LinearGradient colors={['#E11D48', '#F472B6']} style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="chevron-left" size={28} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, filterStatus === 'open' && styles.filterBtnActive]}
-            onPress={() => setFilterStatus('open')}
-          >
-            <Text style={[styles.filterBtnText, filterStatus === 'open' && styles.filterBtnTextActive]}>Open</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Manage Complaints</Text>
+          </View>
+          <TouchableOpacity onPress={loadComplaints} style={styles.backBtn}>
+            <MaterialIcons name="refresh" size={24} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, filterStatus === 'in-progress' && styles.filterBtnActive]}
-            onPress={() => setFilterStatus('in-progress')}
-          >
-            <Text style={[styles.filterBtnText, filterStatus === 'in-progress' && styles.filterBtnTextActive]}>In Progress</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, filterStatus === 'resolved' && styles.filterBtnActive]}
-            onPress={() => setFilterStatus('resolved')}
-          >
-            <Text style={[styles.filterBtnText, filterStatus === 'resolved' && styles.filterBtnTextActive]}>Resolved</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+        </LinearGradient>
 
-      {/* list header removed per UI request */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <MaterialIcons name="alert-circle" size={22} color="#E11D48" />
+            <Text style={styles.statValue}>{openCount}</Text>
+            <Text style={styles.statLabel}>Open</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
+            <Text style={styles.statValue}>{inProgressCount}</Text>
+            <Text style={styles.statLabel}>In Progress</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="check-circle" size={22} color="#10B981" />
+            <Text style={styles.statValue}>{resolvedCount}</Text>
+            <Text style={styles.statLabel}>Resolved</Text>
+          </View>
+        </View>
 
-      <FlatList
-        data={filteredComplaints}
-        scrollEnabled={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.complaintCard,
-              selectedId === item.id && styles.complaintCardActive,
-            ]}
-            onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.studentInfo}>
-                <View
-                  style={[
-                    styles.studentAvatar,
-                    { backgroundColor: getStatusColor(item.status) },
-                  ]}
-                >
-                  <Text style={styles.studentInitial}>
-                    {item.student.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.textInfo}>
-                  <Text style={styles.studentName}>{item.student}</Text>
-                  <Text style={styles.complaintPreview} numberOfLines={1}>
-                    {item.text}
-                  </Text>
-                </View>
-              </View>
-              <View
+        <View style={styles.filterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+            <TouchableOpacity
+              style={[styles.filterBtn, !filterStatus && styles.filterBtnActive]}
+              onPress={() => setFilterStatus(null)}
+            >
+              <Text style={[styles.filterBtnText, !filterStatus && styles.filterBtnTextActive]}>All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterBtn, filterStatus === 'open' && styles.filterBtnActive]}
+              onPress={() => setFilterStatus('open')}
+            >
+              <Text style={[styles.filterBtnText, filterStatus === 'open' && styles.filterBtnTextActive]}>Open</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterBtn, filterStatus === 'inProgress' && styles.filterBtnActive]}
+              onPress={() => setFilterStatus('inProgress')}
+            >
+              <Text style={[styles.filterBtnText, filterStatus === 'inProgress' && styles.filterBtnTextActive]}>In Progress</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterBtn, filterStatus === 'resolved' && styles.filterBtnActive]}
+              onPress={() => setFilterStatus('resolved')}
+            >
+              <Text style={[styles.filterBtnText, filterStatus === 'resolved' && styles.filterBtnTextActive]}>Resolved</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="#E11D48" style={{ marginTop: 20 }} />
+        ) : (
+          <FlatList
+            data={filteredComplaints}
+            scrollEnabled={false}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
                 style={[
-                  styles.statusBadge,
-                  { backgroundColor: getStatusColor(item.status) },
+                  styles.complaintCard,
+                  selectedId === item.id && styles.complaintCardActive,
                 ]}
+                onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
               >
-                <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
-              </View>
-            </View>
-
-            {selectedId === item.id && (
-              <View style={styles.expandedContent}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Student:</Text>
-                  <Text style={styles.detailValue}>{item.student}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Category:</Text>
-                  <Text style={styles.detailValue}>{item.category}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Date:</Text>
-                  <Text style={styles.detailValue}>{item.date}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Status:</Text>
-                  <View style={[styles.priorityBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                    <MaterialIcons name={getStatusIcon(item.status)} size={12} color="#fff" />
-                    <Text style={styles.badgeText}>{item.status}</Text>
+                <View style={styles.cardHeader}>
+                  <View style={styles.studentInfo}>
+                    <View
+                      style={[
+                        styles.studentAvatar,
+                        { backgroundColor: getStatusColor(item.status) },
+                      ]}
+                    >
+                      <Text style={styles.studentInitial}>
+                        {item.studentName?.charAt(0).toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                    <View style={styles.textInfo}>
+                      <Text style={styles.studentName}>{item.studentName || 'Unknown Student'}</Text>
+                      <Text style={styles.complaintPreview} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Priority:</Text>
-                  <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
-                    <MaterialIcons name={getPriorityIcon(item.priority)} size={12} color="#fff" />
-                    <Text style={styles.badgeText}>{item.priority}</Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusColor(item.status) },
+                    ]}
+                  >
+                    <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
                   </View>
                 </View>
 
-                <View style={styles.complaintText}>
-                  <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
-                  <Text style={styles.complaintTextContent}>{item.text}</Text>
-                </View>
+                {selectedId === item.id && (
+                  <View style={styles.expandedContent}>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Email:</Text>
+                      <Text style={styles.detailValue}>{item.studentEmail}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Date:</Text>
+                      <Text style={styles.detailValue}>
+                        {item.createdAt instanceof Date
+                          ? item.createdAt.toLocaleDateString() + ', ' + item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : 'N/A'}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Status:</Text>
+                      <View style={[styles.priorityBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                        <MaterialIcons name={getStatusIcon(item.status)} size={12} color="#fff" />
+                        <Text style={styles.badgeText}>{item.status}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Priority:</Text>
+                      <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
+                        <MaterialIcons name={getPriorityIcon(item.priority)} size={12} color="#fff" />
+                        <Text style={styles.badgeText}>{item.priority}</Text>
+                      </View>
+                    </View>
 
-                {item.status !== 'resolved' && (
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.progressBtn]}>
-                      <MaterialIcons name="progress-clock" size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>In Progress</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, styles.resolveBtn]}>
-                      <MaterialIcons name="check" size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>Resolve</Text>
-                    </TouchableOpacity>
+                    <View style={styles.complaintText}>
+                      <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
+                      <Text style={styles.complaintTextContent}>{item.description}</Text>
+                    </View>
+
+                    {item.status !== 'resolved' && item.status !== 'closed' && (
+                      <View style={styles.actionButtons}>
+                        {item.status !== 'inProgress' && (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.progressBtn]}
+                            onPress={() => handleStatusUpdate(item.id, 'inProgress')}
+                          >
+                            <MaterialIcons name="progress-clock" size={16} color="#fff" />
+                            <Text style={styles.actionBtnText}>In Progress</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.resolveBtn]}
+                          onPress={() => handleStatusUpdate(item.id, 'resolved')}
+                        >
+                          <MaterialIcons name="check" size={16} color="#fff" />
+                          <Text style={styles.actionBtnText}>Resolve</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.closeBtn]}
+                          onPress={() => handleStatusUpdate(item.id, 'closed')}
+                        >
+                          <MaterialIcons name="close" size={16} color="#fff" />
+                          <Text style={styles.actionBtnText}>Deny/Close</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {(item.status === 'resolved' || item.status === 'closed') && (
+                      <View style={[styles.resolvedMessage, item.status === 'closed' && { backgroundColor: '#F1F5F9' }]}>
+                        <MaterialIcons name={item.status === 'resolved' ? "check-circle" : "close-circle"} size={20} color={item.status === 'resolved' ? "#4CAF50" : "#64748B"} />
+                        <Text style={[styles.resolvedMessageText, item.status === 'closed' && { color: '#475569' }]}>
+                          This complaint is {item.status}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
-
-                {item.status === 'resolved' && (
-                  <View style={styles.resolvedMessage}>
-                    <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
-                    <Text style={styles.resolvedMessageText}>This complaint has been resolved</Text>
-                  </View>
-                )}
-              </View>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', padding: 40 }}>
+                <Text style={{ color: '#94A3B8' }}>No complaints found.</Text>
+              </View>
+            }
+          />
         )}
-        contentContainerStyle={styles.listContent}
-      />
-    </ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -257,6 +292,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#f8f9fa',
     paddingBottom: 20,
+    minHeight: '100%',
   },
   header: {
     paddingVertical: 20,
@@ -335,15 +371,6 @@ const styles = StyleSheet.create({
   },
   filterBtnTextActive: {
     color: '#fff',
-  },
-  listHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  listTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
   },
   listContent: {
     paddingHorizontal: 12,
@@ -485,6 +512,9 @@ const styles = StyleSheet.create({
   },
   resolveBtn: {
     backgroundColor: '#10B981',
+  },
+  closeBtn: {
+    backgroundColor: '#94A3B8',
   },
   actionBtnText: {
     color: '#fff',

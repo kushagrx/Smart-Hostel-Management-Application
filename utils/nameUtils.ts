@@ -1,5 +1,5 @@
-import { getAuthSafe, getDbSafe } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { getAuthSafe, getDbSafe } from './firebase';
 
 export const getInitial = (name: string): string => {
   if (!name) return '';
@@ -17,6 +17,7 @@ export interface StudentData {
   status?: string;
   dues?: number;
   wifiSSID?: string;
+  email?: string;
 }
 
 export const userData: StudentData = {
@@ -33,7 +34,7 @@ export const fetchUserData = async (): Promise<StudentData | null> => {
     if (!auth?.currentUser || !db) return null;
 
     const userEmail = auth.currentUser.email;
-    
+
     // Try to fetch from allocations collection using email as ID
     const allocationRef = doc(db, 'allocations', userEmail || '');
     const allocationSnap = await getDoc(allocationRef);
@@ -51,6 +52,7 @@ export const fetchUserData = async (): Promise<StudentData | null> => {
         status: data.status || 'active',
         dues: data.dues || 0,
         wifiSSID: data.wifiSSID || 'ENET_' + (data.room || 'N/A'),
+        email: userEmail || undefined,
       };
     }
 

@@ -1,28 +1,22 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdmin, setStoredUser, useUser } from '../../utils/authUtils';
+import { Complaint, subscribeToAllComplaints } from '../../utils/complaintsSyncUtils';
+import { LeaveRequest, subscribeToPendingLeaves } from '../../utils/leavesUtils';
 
-const MOCK_STUDENTS = [{ id: 's1', name: 'Alice' }, { id: 's2', name: 'Bob' }, { id: 's3', name: 'Charlie' }];
 const MOCK_ROOMS = [{ id: 'r1', number: '101' }, { id: 'r2', number: '102' }];
-const MOCK_COMPLAINTS = [
-  { id: 'c1', text: 'WiFi not working', student: 'Alice', status: 'open', priority: 'high' },
-  { id: 'c2', text: 'Mess food quality', student: 'Bob', status: 'open', priority: 'medium' },
-];
-const MOCK_LEAVES = [{ id: 'l1', student: 'Charlie', status: 'pending', days: 6 }];
-const MOCK_NOTICES = [
-  { id: 'n1', title: 'Water outage', date: '2025-12-06' },
-  { id: 'n2', title: 'Maintenance work', date: '2025-12-05' },
-];
+
 
 const navItems = [
   { id: 'students', label: 'Students', icon: 'account-group', color: '#6366F1' },
   { id: 'rooms', label: 'Rooms', icon: 'door-closed', color: '#8B5CF6' },
   { id: 'complaints', label: 'Complaints', icon: 'alert-circle', color: '#EC4899' },
   { id: 'leaves', label: 'Leaves', icon: 'calendar-clock', color: '#06B6D4' },
+  { id: 'services', label: 'Services', icon: 'room-service', color: '#10B981' },
   { id: 'notices', label: 'Notices', icon: 'bullhorn', color: '#3B82F6' },
 ];
 
@@ -31,6 +25,59 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [activeNav, setActiveNav] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [recentNotices, setRecentNotices] = useState<any[]>([]);
+  const [recentComplaints, setRecentComplaints] = useState<Complaint[]>([]);
+  const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([]);
+
+  useEffect(() => {
+    let unsubscribeNotices: () => void;
+    let unsubscribeComplaints: () => void;
+
+    const fetchRecentNotices = async () => {
+      try {
+        const { getDbSafe } = await import('../../utils/firebase');
+        const { collection, query, orderBy, limit, onSnapshot } = await import('firebase/firestore');
+        const db = getDbSafe();
+        if (!db) return;
+
+        const q = query(collection(db, 'notices'), orderBy('date', 'desc'), limit(3));
+        unsubscribeNotices = onSnapshot(q, (snapshot) => {
+          setRecentNotices(snapshot.docs.map(doc => {
+            const data = doc.data();
+            let dateVal = data.date;
+            if (dateVal?.toDate) dateVal = dateVal.toDate();
+            else if (typeof dateVal === 'string') dateVal = new Date(dateVal);
+
+            return {
+              id: doc.id,
+              ...data,
+              date: dateVal instanceof Date ? dateVal.toISOString().split('T')[0] : 'Today'
+            };
+          }));
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    fetchRecentNotices();
+
+    // Subscribe to complaints
+    unsubscribeComplaints = subscribeToAllComplaints((data) => {
+      setRecentComplaints(data.slice(0, 3)); // Only show recent 3
+    });
+
+    // Subscribe to pending leaves
+    const unsubscribeLeaves = subscribeToPendingLeaves((data) => {
+      setPendingLeaves(data.slice(0, 3)); // Only show top 3
+    });
+
+    return () => {
+      if (unsubscribeNotices) unsubscribeNotices();
+      if (unsubscribeComplaints) unsubscribeComplaints();
+      unsubscribeLeaves();
+    };
+  }, []);
 
   if (!isAdmin(user)) {
     return (
@@ -40,11 +87,13 @@ export default function AdminDashboard() {
     );
   }
 
-  const openComplaints = MOCK_COMPLAINTS.filter((c) => c.status === 'open').length;
-
   const handleNavPress = (id: string) => {
     setActiveNav(id);
     setSidebarOpen(false);
+    if (id === 'services') {
+      router.push('/admin/services');
+      return;
+    }
     router.push(`/admin/${id === 'students' ? 'students' : id === 'rooms' ? 'rooms' : id === 'complaints' ? 'complaints' : id === 'leaves' ? 'leaveRequests' : 'notices'}`);
   };
 
@@ -52,7 +101,7 @@ export default function AdminDashboard() {
     <SafeAreaView style={styles.mainContainer} edges={['top']}>
       {/* Header with Hamburger Menu */}
       <LinearGradient
-        colors={['#FF8C00', '#FFA500']}
+        colors={['#000428', '#004e92']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerBar}
@@ -64,15 +113,13 @@ export default function AdminDashboard() {
           <MaterialIcons name="menu" size={28} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
-          <Text style={styles.headerBarTitle}>Welcome back, Admin</Text>
+          <Text style={styles.headerBarTitle}>Admin Portal</Text>
+          <Text style={styles.headerBarSubtitle}>Welcome back, Admin</Text>
         </View>
         <View style={styles.headerIcon}>
-          <MaterialIcons name="shield-check" size={24} color="#fff" />
+          <MaterialIcons name="shield-check" size={24} color="#004e92" />
         </View>
       </LinearGradient>
-
-      {/* Header Bottom Accent Bar */}
-      <View style={styles.headerAccent} />
 
       {/* Side Sidebar Panel */}
       {sidebarOpen && (
@@ -82,12 +129,12 @@ export default function AdminDashboard() {
             onPress={() => setSidebarOpen(false)}
           />
           <View style={styles.sidebarPanel}>
-            <View style={styles.sidebarHeader}>
-              <Text style={styles.sidebarTitle}>Management</Text>
+            <LinearGradient colors={['#000428', '#004e92']} style={styles.sidebarHeader}>
+              <Text style={styles.sidebarTitle}>Smart Hostel</Text>
               <TouchableOpacity onPress={() => setSidebarOpen(false)}>
-                <MaterialIcons name="close" size={28} color="#333" />
+                <MaterialIcons name="close" size={24} color="#fff" />
               </TouchableOpacity>
-            </View>
+            </LinearGradient>
 
             <ScrollView
               style={styles.sidebarScrollView}
@@ -100,22 +147,20 @@ export default function AdminDashboard() {
                   style={[styles.sidebarItem, activeNav === item.id && styles.sidebarItemActive]}
                   onPress={() => handleNavPress(item.id)}
                 >
-                  <View style={[styles.sidebarIconContainer, { backgroundColor: item.color + '20' }]}>
-                    <MaterialIcons name={item.icon as any} size={24} color={item.color} />
+                  <View style={[styles.sidebarIconContainer, { backgroundColor: activeNav === item.id ? '#004e92' : '#F1F5F9' }]}>
+                    <MaterialIcons name={item.icon as any} size={22} color={activeNav === item.id ? '#fff' : '#64748B'} />
                   </View>
-                  <View style={styles.sidebarItemContent}>
-                    <Text style={[styles.sidebarItemLabel, activeNav === item.id && styles.sidebarItemLabelActive]}>
-                      {item.label}
-                    </Text>
-                  </View>
+                  <Text style={[styles.sidebarItemLabel, activeNav === item.id && styles.sidebarItemLabelActive]}>
+                    {item.label}
+                  </Text>
                   {activeNav === item.id && (
-                    <MaterialIcons name="check-circle" size={20} color={item.color} />
+                    <MaterialIcons name="chevron-right" size={20} color="#004e92" />
                   )}
                 </TouchableOpacity>
               ))}
 
-              {/* Logout Button */}
               <View style={styles.sidebarDivider} />
+
               <TouchableOpacity
                 style={styles.sidebarLogoutItem}
                 onPress={async () => {
@@ -142,12 +187,10 @@ export default function AdminDashboard() {
                   );
                 }}
               >
-                <View style={[styles.sidebarIconContainer, { backgroundColor: '#FF525220' }]}>
-                  <MaterialIcons name="logout" size={24} color="#FF5252" />
+                <View style={[styles.sidebarIconContainer, { backgroundColor: '#FEF2F2' }]}>
+                  <MaterialIcons name="logout" size={22} color="#EF4444" />
                 </View>
-                <View style={styles.sidebarItemContent}>
-                  <Text style={styles.sidebarLogoutLabel}>Log Out</Text>
-                </View>
+                <Text style={styles.sidebarLogoutLabel}>Log Out</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -156,84 +199,121 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+
+        {/* Quick Stats / Overview could go here */}
+
         {/* Recent Complaints */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="alert-circle" size={20} color="#EC4899" />
-            <Text style={styles.sectionTitle}>Recent Complaints</Text>
+            <View style={styles.sectionHeaderLeft}>
+              <MaterialIcons name="alert-circle-outline" size={20} color="#EC4899" />
+              <Text style={styles.sectionTitle}>Recent Complaints</Text>
+            </View>
             <TouchableOpacity onPress={() => handleNavPress('complaints')}>
-              <Text style={styles.seeAllLink}>See all</Text>
+              <Text style={styles.seeAllLink}>See All</Text>
             </TouchableOpacity>
           </View>
-          {MOCK_COMPLAINTS.map((c) => (
-            <View key={c.id} style={styles.listItem}>
-              <View style={styles.itemIconContainer}>
-                <MaterialIcons
-                  name={c.priority === 'high' ? 'alert' : 'information'}
-                  size={16}
-                  color={c.priority === 'high' ? '#F44336' : '#FF9800'}
-                />
-              </View>
-              <View style={styles.itemContent}>
-                <Text style={styles.itemTitle}>{c.text}</Text>
-                <Text style={styles.itemSubtitle}>by {c.student}</Text>
-              </View>
-              <View style={[styles.priorityBadge, { backgroundColor: c.priority === 'high' ? '#FFEBEE' : '#FFF3E0' }]}>
-                <Text style={[styles.priorityText, { color: c.priority === 'high' ? '#F44336' : '#FF9800' }]}>
-                  {c.priority}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
 
-        {/* Announcements */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="bullhorn" size={20} color="#3B82F6" />
-            <Text style={styles.sectionTitle}>Announcements</Text>
-            <TouchableOpacity onPress={() => handleNavPress('notices')}>
-              <Text style={styles.seeAllLink}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          {MOCK_NOTICES.map((n) => (
-            <View key={n.id} style={styles.listItem}>
-              <View style={styles.itemIconContainer}>
-                <MaterialIcons name="bullhorn" size={16} color="#3B82F6" />
+          {recentComplaints.length > 0 ? (
+            recentComplaints.map((c) => (
+              <View key={c.id} style={styles.cardItem}>
+                <View style={[styles.cardIcon, { backgroundColor: c.priority === 'high' ? '#FEE2E2' : '#FFF7ED' }]}>
+                  <MaterialIcons
+                    name={c.priority === 'high' ? 'alert' : 'information'}
+                    size={20}
+                    color={c.priority === 'high' ? '#EF4444' : '#F97316'}
+                  />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{c.title}</Text>
+                  <Text style={styles.cardSubtitle}>by {c.studentName || 'Student'}</Text>
+                </View>
+                <View style={[styles.statusBadge, {
+                  backgroundColor: c.status === 'resolved' ? '#DCFCE7' : c.status === 'inProgress' ? '#DBEAFE' : '#FaFaFa'
+                }]}>
+                  <Text style={[styles.statusText, {
+                    color: c.status === 'resolved' ? '#166534' : c.status === 'inProgress' ? '#1E40AF' : '#64748B'
+                  }]}>
+                    {c.status.toUpperCase()}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.itemContent}>
-                <Text style={styles.itemTitle}>{n.title}</Text>
-                <Text style={styles.itemSubtitle}>{n.date}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={18} color="#ccc" />
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No recent complaints.</Text>
             </View>
-          ))}
+          )}
         </View>
 
         {/* Pending Leaves */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="calendar-clock" size={20} color="#06B6D4" />
-            <Text style={styles.sectionTitle}>Pending Leaves</Text>
+            <View style={styles.sectionHeaderLeft}>
+              <MaterialIcons name="calendar-clock-outline" size={20} color="#06B6D4" />
+              <Text style={styles.sectionTitle}>Pending Leaves</Text>
+            </View>
             <TouchableOpacity onPress={() => handleNavPress('leaves')}>
-              <Text style={styles.seeAllLink}>See all</Text>
+              <Text style={styles.seeAllLink}>See All</Text>
             </TouchableOpacity>
           </View>
-          {MOCK_LEAVES.map((l) => (
-            <View key={l.id} style={styles.listItem}>
-              <View style={styles.itemIconContainer}>
-                <MaterialIcons name="calendar-clock" size={16} color="#06B6D4" />
+
+          {pendingLeaves.length > 0 ? (
+            pendingLeaves.map((l) => (
+              <View key={l.id} style={styles.cardItem}>
+                <View style={[styles.cardIcon, { backgroundColor: '#ECFEFF' }]}>
+                  <MaterialIcons name="calendar-clock" size={20} color="#06B6D4" />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>{l.studentName || 'Student'}</Text>
+                  <Text style={styles.cardSubtitle}>{l.days} days • Room {l.studentRoom}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.reviewBtn}
+                  onPress={() => handleNavPress('leaves')}
+                >
+                  <Text style={styles.reviewBtnText}>Review</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.itemContent}>
-                <Text style={styles.itemTitle}>{l.student}</Text>
-                <Text style={styles.itemSubtitle}>{l.days} days leave</Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: '#CFFAFE' }]}>
-                <Text style={[styles.statusText, { color: '#06B6D4' }]}>Pending</Text>
-              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No pending leaves.</Text>
             </View>
-          ))}
+          )}
         </View>
+
+        {/* Announcements */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <MaterialIcons name="bullhorn-outline" size={20} color="#3B82F6" />
+              <Text style={styles.sectionTitle}>Announcements</Text>
+            </View>
+            <TouchableOpacity onPress={() => handleNavPress('notices')}>
+              <Text style={styles.seeAllLink}>See All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentNotices.length > 0 ? (
+            recentNotices.map((n) => (
+              <View key={n.id} style={styles.cardItem}>
+                <View style={[styles.cardIcon, { backgroundColor: '#EFF6FF' }]}>
+                  <MaterialIcons name="bullhorn" size={20} color="#3B82F6" />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{n.title}</Text>
+                  <Text style={styles.cardSubtitle}>{n.date}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No announcements yet.</Text>
+            </View>
+          )}
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -242,45 +322,54 @@ export default function AdminDashboard() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1F5F9',
   },
   headerBar: {
-    paddingVertical: 20,
-    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 25,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#FF8C00',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#004e92',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   hamburgerBtn: {
-    padding: 10,
-    marginRight: 14,
-    borderRadius: 10,
+    padding: 8,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   headerTextContainer: {
     flex: 1,
-  },
-  headerBarTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: -0.5,
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
     alignItems: 'center',
   },
-  headerAccent: {
-    height: 16,
-    backgroundColor: '#FFF9F5',
+  headerBarTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#CBD5E1',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  headerBarSubtitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 2,
+  },
+  headerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   sidebarOverlay: {
     position: 'absolute',
@@ -288,219 +377,204 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 10, // Lower zIndex to stay below system UI elements
-    flexDirection: 'row-reverse',
-    // Add safe area insets to prevent covering system UI
-    paddingTop: 30, // Space for status bar
+    zIndex: 50,
+    flexDirection: 'row',
   },
   overlayBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sidebarPanel: {
     width: 280,
     backgroundColor: '#fff',
-    paddingTop: 20,
-    paddingBottom: 20,
+    height: '100%',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
     elevation: 10,
-    // Ensure panel respects safe area
-    marginTop: -30, // Compensate for the paddingTop in parent
   },
   sidebarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingTop: 50,
     paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sidebarTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
   sidebarScrollView: {
     flex: 1,
+    paddingVertical: 10,
   },
   sidebarScrollContent: {
-    paddingBottom: 20,
-  },
-  sidebarTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#333',
+    paddingBottom: 30,
   },
   sidebarItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginHorizontal: 8,
-    marginVertical: 4,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
     borderRadius: 12,
-    gap: 12,
   },
   sidebarItemActive: {
-    backgroundColor: '#E0E7FF',
+    backgroundColor: '#EFF6FF',
   },
   sidebarIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  sidebarItemContent: {
-    flex: 1,
+    marginRight: 14,
   },
   sidebarItemLabel: {
-    fontSize: 14,
-    fontWeight: '700',
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
     color: '#475569',
   },
   sidebarItemLabelActive: {
-    color: '#6366F1',
-    fontWeight: '800',
+    color: '#004e92',
+    fontWeight: '700',
   },
   sidebarDivider: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginHorizontal: 20,
-    marginVertical: 12,
+    marginHorizontal: 24,
+    marginVertical: 16,
   },
   sidebarLogoutItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginHorizontal: 8,
-    marginVertical: 4,
-    borderRadius: 12,
-    gap: 12,
-    backgroundColor: '#FFF5F5',
+    padding: 16,
+    marginHorizontal: 16,
   },
   sidebarLogoutLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FF5252',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#EF4444',
   },
   container: {
-    paddingBottom: 20,
-    paddingTop: 8,
-  },
-  header: {
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    marginHorizontal: 12,
-    marginTop: 16,
-    marginBottom: 20,
-    borderRadius: 18,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerGreeting: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.92,
-    fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#fff',
-    marginTop: 4,
-    letterSpacing: -0.5,
-  },
-  headerBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 40,
   },
   section: {
-    marginHorizontal: 12,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-    borderLeftWidth: 0,
+    backgroundColor: '#fff', // Removed default background from section unless needed
+    borderRadius: 0,
+    padding: 0,
+    marginBottom: 24,
+    shadowColor: 'transparent',
+    elevation: 0,
   },
   sectionHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
-    gap: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 4,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1E293B',
-    flex: 1,
-    letterSpacing: 0.3,
   },
   seeAllLink: {
     fontSize: 13,
-    color: '#6366F1',
-    fontWeight: '700',
+    fontWeight: '600',
+    color: '#004e92',
   },
-  listItem: {
+  cardItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 12,
+    backgroundColor: '#fff',
+    padding: 18,
+    marginBottom: 14,
+    borderRadius: 24,
+    shadowColor: '#94A3B8',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F8FAFC',
   },
-  itemIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f5f7fa',
+  cardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
-  itemContent: {
+  cardContent: {
     flex: 1,
+    justifyContent: 'center',
   },
-  itemTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-  itemSubtitle: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 3,
-  },
-  priorityBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  priorityText: {
-    fontSize: 10,
+  cardTitle: {
+    fontSize: 15,
     fontWeight: '700',
-    textTransform: 'capitalize',
+    color: '#0F172A',
+    marginBottom: 4,
+    letterSpacing: 0.2,
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
   },
   statusBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    textTransform: 'capitalize',
+    letterSpacing: 0.3,
+  },
+  reviewBtn: {
+    backgroundColor: '#004e92',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    shadowColor: '#004e92',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  reviewBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  emptyState: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+  },
+  emptyStateText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '500',
+    fontStyle: 'italic',
   },
 });

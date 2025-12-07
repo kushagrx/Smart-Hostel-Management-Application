@@ -1,94 +1,160 @@
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import { emergencyContacts, faqData } from '../utils/complaintsUtils';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { faqData } from '../utils/complaintsUtils';
 
 export default function Complaints() {
   const router = useRouter();
 
   return (
-    <ScrollView style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          title: "Support & Complaints",
-          headerStyle: { backgroundColor: '#FF8C00' },
-          headerTintColor: '#fff',
-        }} 
-      />
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>24/7 EMERGENCY CONTACTS</Text>
-        <View style={styles.contactsContainer}>
-          {emergencyContacts.map((contact, index) => (
-            <Pressable 
-              key={index} 
-              style={[styles.contactCard, styles.shadowProp]}
-              onPress={() => {/* Implement call functionality */}}
+      {/* Header */}
+      <LinearGradient
+        colors={['#000428', '#004e92']}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView edges={['top', 'left', 'right']}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.headerTitle}>Complaints and FAQs</Text>
+              <Text style={styles.headerSubtitle}>Resolve Issues & Queries</Text>
+            </View>
+            <View style={styles.headerIcon}>
+              <MaterialIcons name="support-agent" size={24} color="#fff" />
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* Complaints Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>COMPLAINTS</Text>
+          <View style={styles.actionsGrid}>
+            <Pressable
+              style={[styles.actionButton, styles.shadowProp]}
+              onPress={() => router.push('/new-complaint')}
             >
-              <MaterialIcons name="phone" size={24} color="#FF8C00" />
-              <View>
-                <Text style={styles.contactName}>{contact.name}</Text>
-                <Text style={styles.contactNumber}>{contact.number}</Text>
+              <LinearGradient
+                colors={['#EFF6FF', '#DBEAFE']}
+                style={styles.actionGradient}
+              >
+                <View style={[styles.actionIconBox, { backgroundColor: '#fff' }]}>
+                  <MaterialIcons name="add-circle-outline" size={28} color="#004e92" />
+                </View>
+                <Text style={styles.actionText}>Raise New{"\n"}Complaint</Text>
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable
+              style={[styles.actionButton, styles.shadowProp]}
+              onPress={() => router.push('/my-complaints')}
+            >
+              <LinearGradient
+                colors={['#F0FDF4', '#DCFCE7']}
+                style={styles.actionGradient}
+              >
+                <View style={[styles.actionIconBox, { backgroundColor: '#fff' }]}>
+                  <MaterialIcons name="history" size={28} color="#16A34A" />
+                </View>
+                <Text style={[styles.actionText, { color: '#14532D' }]}>Track Past{"\n"}Complaints</Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* FAQ Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>FREQUENTLY ASKED QUESTIONS</Text>
+          <View style={styles.faqContainer}>
+            {faqData.map((faq, index) => (
+              <View
+                key={index}
+                style={[styles.faqCard, styles.shadowProp]}
+              >
+                <View style={styles.faqHeader}>
+                  <MaterialCommunityIcons name="help-circle-outline" size={20} color="#004e92" style={{ marginTop: 2 }} />
+                  <Text style={styles.question}>{faq.question}</Text>
+                </View>
+                <Text style={styles.answer}>{faq.answer}</Text>
               </View>
-              <MaterialIcons name="call" size={24} color="#4CAF50" style={styles.callIcon} />
-            </Pressable>
-          ))}
+            ))}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>RAISE COMPLAINT</Text>
-        <View style={styles.actionsGrid}>
-          <Pressable 
-            style={[styles.actionButton, styles.shadowProp]}
-            onPress={() => router.push('/new-complaint')}
-          >
-            <MaterialIcons name="add-circle" size={32} color="#FF8C00" />
-            <Text style={styles.actionText}>New Complaint</Text>
-          </Pressable>
-          <Pressable 
-            style={[styles.actionButton, styles.shadowProp]}
-            onPress={() => router.push('/my-complaints')}
-          >
-            <MaterialIcons name="history" size={32} color="#FF8C00" />
-            <Text style={styles.actionText}>My Complaints</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>FREQUENTLY ASKED QUESTIONS</Text>
-        <View style={styles.faqContainer}>
-          {faqData.map((faq, index) => (
-            <Pressable 
-              key={index} 
-              style={[styles.faqCard, styles.shadowProp]}
-            >
-              <Text style={styles.question}>{faq.question}</Text>
-              <Text style={styles.answer}>{faq.answer}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    padding: 15,
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: "#004e92",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  headerContent: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
   },
   section: {
-    marginBottom: 25,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
-    marginBottom: 15,
-    color: '#2d3436',
-    letterSpacing: 1,
+    color: '#64748B',
+    marginBottom: 12,
+    marginLeft: 4,
+    letterSpacing: 0.5,
   },
   contactsContainer: {
     gap: 12,
@@ -97,66 +163,108 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    padding: 15,
+    padding: 12,
+    borderRadius: 16,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  iconBox: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    gap: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contactInfo: {
+    flex: 1,
   },
   contactName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2d3436',
+    color: '#1E293B',
+    marginBottom: 2,
   },
   contactNumber: {
-    color: '#636e72',
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  callIcon: {
-    marginLeft: 'auto',
+  callBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   actionsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 15,
+    gap: 16,
   },
   actionButton: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+    height: 140,
+  },
+  actionGradient: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  actionIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
     alignItems: 'center',
-    width: '47%',
-    aspectRatio: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   actionText: {
-    marginTop: 8,
-    color: '#2d3436',
+    fontSize: 15,
     fontWeight: '600',
-    textAlign: 'center',
+    color: '#1E3A8A',
+    lineHeight: 20,
   },
   faqContainer: {
     gap: 12,
   },
   faqCard: {
     backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  question: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2d3436',
+  faqHeader: {
+    flexDirection: 'row',
+    gap: 10,
     marginBottom: 8,
   },
+  question: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1E293B',
+    flex: 1,
+    lineHeight: 22,
+  },
   answer: {
-    color: '#636e72',
+    color: '#64748B',
     lineHeight: 20,
+    fontSize: 14,
+    paddingLeft: 30, // Indent for cleanliness
   },
   shadowProp: {
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
   },
 });

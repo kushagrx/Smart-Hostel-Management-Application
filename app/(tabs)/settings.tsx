@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -15,37 +16,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { setStoredUser } from '../../utils/authUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
-
-const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, colors, isLast }: any) => {
+const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, isLast, danger }: any) => {
   return (
     <TouchableOpacity
       style={[
         styles.row,
-        {
-          borderBottomColor: colors.border,
-          borderBottomWidth: isLast ? 0 : 1,
-        }
+        !isLast && styles.rowBorder
       ]}
       onPress={onPress}
-      disabled={!onPress}
+      disabled={!onPress && !isSwitch}
       accessible={true}
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityRole={isSwitch ? 'switch' : (onPress ? 'button' : 'text')}
     >
       <View style={styles.labelContainer}>
-        {icon && <MaterialIcons name={icon} size={24} color={colors.icon} />}
-        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+        <View style={[styles.iconBox, { backgroundColor: danger ? '#FEF2F2' : '#EFF6FF' }]}>
+          <MaterialIcons name={icon} size={20} color={danger ? '#EF4444' : '#004e92'} />
+        </View>
+        <Text style={[styles.label, { color: danger ? '#EF4444' : '#1E293B' }]}>{label}</Text>
       </View>
       {isSwitch ? (
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ false: '#ddd', true: '#FF8C00' }}
-          thumbColor={value ? '#fff' : '#f4f3f4'}
+          trackColor={{ false: '#E2E8F0', true: '#004e92' }}
+          thumbColor={'#fff'}
+          ios_backgroundColor="#E2E8F0"
         />
       ) : (
-        onPress && <MaterialIcons name="chevron-right" size={24} color={colors.icon} />
+        onPress && <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
       )}
     </TouchableOpacity>
   );
@@ -60,7 +60,7 @@ export default function Settings() {
   const handleLogout = async () => {
     Alert.alert(
       "Log Out",
-      "Are you sure you want to log out?",
+      "Are you sure you want to log out of your account?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -81,65 +81,80 @@ export default function Settings() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <Stack.Screen
-        options={{
-          title: 'Settings',
-          headerStyle: { backgroundColor: '#FF8C00' },
-          headerTintColor: '#fff',
-          headerShadowVisible: false,
-        }}
-      />
-      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Header */}
+      <LinearGradient
+        colors={['#000428', '#004e92']}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView edges={['top', 'left', 'right']}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.headerTitle}>Settings</Text>
+              <Text style={styles.headerSubtitle}>Preferences & Account</Text>
+            </View>
+            <View style={styles.headerIcon}>
+              <MaterialIcons name="settings" size={24} color="#fff" />
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+
         {/* Account Section */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={[styles.card, styles.shadowProp]}>
           <SettingItem
-            icon="person-outline"
+            icon="person"
             label="Edit Profile"
             onPress={() => router.push('/profile/edit')}
             accessibilityHint="Navigates to the edit profile screen"
-            colors={colors}
             isLast={false}
           />
           <SettingItem
-            icon="lock-outline"
+            icon="lock"
             label="Change Password"
             onPress={() => router.push('/account/change-password')}
             accessibilityHint="Navigates to the change password screen"
-            colors={colors}
             isLast={true}
           />
         </View>
 
         {/* Notifications Section */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Notifications</Text>
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+        <Text style={styles.sectionTitle}>Notifications</Text>
+        <View style={[styles.card, styles.shadowProp]}>
           <SettingItem
-            icon="notifications-none"
+            icon="notifications"
             label="Push Notifications"
             isSwitch
             value={pushNotifications}
             onValueChange={setPushNotifications}
             accessibilityHint="Toggle push notifications on or off"
-            colors={colors}
             isLast={false}
           />
           <SettingItem
-            icon="mail-outline"
-            label="Email Notifications"
+            icon="mail"
+            label="Email Updates"
             isSwitch
             value={emailNotifications}
             onValueChange={setEmailNotifications}
             accessibilityHint="Toggle email notifications on or off"
-            colors={colors}
             isLast={true}
           />
         </View>
 
         {/* App Preferences Section */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>App Preferences</Text>
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+        <Text style={styles.sectionTitle}>App Preferences</Text>
+        <View style={[styles.card, styles.shadowProp]}>
           <SettingItem
             icon="brightness-6"
             label="Dark Mode"
@@ -147,7 +162,6 @@ export default function Settings() {
             value={theme === 'dark'}
             onValueChange={toggleTheme}
             accessibilityHint="Toggle dark mode for the app"
-            colors={colors}
             isLast={false}
           />
           <SettingItem
@@ -155,20 +169,18 @@ export default function Settings() {
             label="Language"
             onPress={() => { }}
             accessibilityHint="Opens language selection options"
-            colors={colors}
             isLast={true}
           />
         </View>
 
         {/* About Section */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>About & Support</Text>
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+        <Text style={styles.sectionTitle}>Support</Text>
+        <View style={[styles.card, styles.shadowProp]}>
           <SettingItem
             icon="support-agent"
             label="Contact Support"
             onPress={() => { }}
             accessibilityHint="Opens the contact support page"
-            colors={colors}
             isLast={false}
           />
           <SettingItem
@@ -176,97 +188,164 @@ export default function Settings() {
             label="FAQs"
             onPress={() => { }}
             accessibilityHint="Navigates to the Frequently Asked Questions page"
-            colors={colors}
             isLast={false}
           />
           <SettingItem
-            icon="policy"
+            icon="privacy-tip"
             label="Privacy Policy"
             onPress={() => { }}
             accessibilityHint="Opens the privacy policy"
-            colors={colors}
             isLast={false}
           />
-          <View style={[styles.row, { borderBottomWidth: 0, borderBottomColor: colors.border }]}>
+
+          {/* Version Info */}
+          <View style={[styles.row, { paddingVertical: 12 }]}>
             <View style={styles.labelContainer}>
-              <MaterialIcons name="info-outline" size={24} color={colors.icon} />
-              <Text style={[styles.label, { color: colors.text }]}>App Version</Text>
+              <View style={[styles.iconBox, { backgroundColor: '#F1F5F9' }]}>
+                <MaterialIcons name="info" size={20} color="#64748B" />
+              </View>
+              <Text style={[styles.label, { color: '#64748B' }]}>App Version</Text>
             </View>
-            <Text style={[styles.value, { color: colors.secondary }]}>{Application.nativeApplicationVersion}</Text>
+            <Text style={styles.version}>{Application.nativeApplicationVersion}</Text>
           </View>
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: theme === 'dark' ? '#4d1f1f' : '#FFF3F3' }]} onPress={handleLogout}>
-          <MaterialIcons name="logout" size={22} color="#FF5252" />
-          <Text style={styles.logoutButtonText}>Log Out</Text>
+        <TouchableOpacity style={[styles.logoutButton, styles.shadowProp]} onPress={handleLogout}>
+          <MaterialIcons name="logout" size={20} color="#EF4444" />
+          <Text style={styles.logoutButtonText}>Log Out Session</Text>
         </TouchableOpacity>
+
+        <Text style={styles.footerText}>Smart Hostel © 2026</Text>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
   container: {
     flex: 1,
   },
+  header: {
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: "#004e92",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  headerContent: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginHorizontal: 20,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
     marginTop: 24,
-    marginBottom: 8,
+    marginBottom: 12,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   card: {
-    borderRadius: 14,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    padding: 12,
+    paddingRight: 16,
+  },
+  rowBorder: {
     borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   labelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   label: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
   },
-  value: {
-    fontSize: 16,
+  version: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginRight: 4,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
-    margin: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     padding: 16,
-    gap: 8,
+    gap: 10,
     marginTop: 32,
-    marginBottom: 40,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
   },
   logoutButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF5252',
+    color: '#EF4444',
+  },
+  footerText: {
+    textAlign: 'center',
+    color: '#CBD5E1',
+    fontSize: 12,
+    marginBottom: 20,
+  },
+  shadowProp: {
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
 });
