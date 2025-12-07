@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdmin, useUser } from '../../utils/authUtils';
 
 const MOCK = [
@@ -37,8 +38,9 @@ export default function NoticesPage() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={['#DB2777', '#F472B6']} style={styles.header}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <LinearGradient colors={['#DB2777', '#F472B6']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <MaterialIcons name="chevron-left" size={28} color="#fff" />
         </TouchableOpacity>
@@ -78,7 +80,8 @@ export default function NoticesPage() {
         )}
         contentContainerStyle={styles.listContent}
       />
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

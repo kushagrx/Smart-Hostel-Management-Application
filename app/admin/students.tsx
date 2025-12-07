@@ -2,38 +2,183 @@ import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdmin, useUser } from '../../utils/authUtils';
 
-const MOCK_STUDENTS = [
-  { id: 's1', name: 'Alice Johnson', room: '101', email: 'alice@hostel.edu', phone: '9876543210', rollNo: 'B001', status: 'active' },
-  { id: 's2', name: 'Bob Smith', room: '102', email: 'bob@hostel.edu', phone: '9876543211', rollNo: 'B002', status: 'active' },
-  { id: 's3', name: 'Charlie Brown', room: '103', email: 'charlie@hostel.edu', phone: '9876543212', rollNo: 'B003', status: 'inactive' },
-  { id: 's4', name: 'Diana Prince', room: '104', email: 'diana@hostel.edu', phone: '9876543213', rollNo: 'B004', status: 'active' },
-  { id: 's5', name: 'Eve White', room: '105', email: 'eve@hostel.edu', phone: '9876543214', rollNo: 'B005', status: 'active' },
-];
+
 
 export default function StudentsPage() {
   const user = useUser();
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (!isAdmin(user))
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Access denied.</Text>
-      </View>
-    );
+  // Edit Modal State
+  const [isEditModalVisible, setEditModalVisible] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<any>(null);
 
-  const filteredStudents = MOCK_STUDENTS.filter(
+  // Form State
+  const [editName, setEditName] = useState('');
+  const [editRollNo, setEditRollNo] = useState('');
+  const [editRoom, setEditRoom] = useState('');
+  const [editCollege, setEditCollege] = useState('');
+  const [editAge, setEditAge] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+
+  const [editPersonalEmail, setEditPersonalEmail] = useState('');
+  const [editStatus, setEditStatus] = useState('active');
+  const [editPassword, setEditPassword] = useState('');
+
+  // Fetch students from Firestore
+  React.useEffect(() => {
+    let unsubscribe: () => void;
+
+    const fetchStudents = async () => {
+      try {
+        const { getDbSafe } = await import('../../utils/firebase');
+        const { collection, query, orderBy, onSnapshot } = await import('firebase/firestore');
+        const db = getDbSafe();
+        if (!db) return;
+
+        const q = query(collection(db, 'allocations'), orderBy('createdAt', 'desc'));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setStudents(list);
+          setLoading(false);
+        });
+      } catch (e) {
+        console.error(e);
+        setLoading(false);
+      }
+    };
+
+    fetchStudents();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  const handleEdit = (student: any) => {
+    setEditingStudent(student);
+    setEditName(student.name || '');
+    setEditRollNo(student.rollNo || '');
+    setEditRoom(student.room || '');
+    setEditCollege(student.collegeName || '');
+    setEditAge(student.age || '');
+    setEditPhone(student.phone || '');
+    setEditPersonalEmail(student.personalEmail || '');
+    setEditStatus(student.status || 'active');
+    setEditPassword(student.tempPassword || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingStudent) return;
+
+    try {
+      const { getDbSafe } = await import('../../utils/firebase');
+      const { doc, updateDoc, collection, query, where, getDocs, writeBatch } = await import('firebase/firestore');
+      const db = getDbSafe();
+      if (!db) {
+        Alert.alert('Error', 'Database not connected');
+        return;
+      }
+
+      setLoading(true);
+
+      const batch = writeBatch(db);
+
+      // 1. Update Allocation Document
+      const allocationRef = doc(db, 'allocations', editingStudent.id); // ID is official email
+      const updates = {
+        name: editName,
+        rollNo: editRollNo,
+        room: editRoom,
+        collegeName: editCollege,
+        age: editAge,
+        phone: editPhone,
+
+        personalEmail: editPersonalEmail,
+        status: editStatus,
+        tempPassword: editPassword,
+      };
+      batch.update(allocationRef, updates);
+
+      // 2. Find and Update User Profile (if exists) via Official Email
+      // Note: Assuming User ID might not be known, so we query.
+      // Actually, we can check if any user has this email.
+
+      // Strategy: Query users where email == officialEmail OR personalEmail == officialEmail etc.
+      // Simpler: Query users where 'officialEmail' == editingStudent.id OR 'email' == editingStudent.id
+
+      // Because we structured users to have `officialEmail` field upon login, we can use that.
+      const usersRef = collection(db, 'users');
+      // Query for users linked to this official email
+      // This covers the case where they logged in via Google (and set officialEmail)
+      const q = query(usersRef, where('officialEmail', '==', editingStudent.id));
+      const querySnap = await getDocs(q);
+
+      querySnap.forEach((userDoc) => {
+        batch.update(userDoc.ref, updates);
+      });
+
+      // Also check if they logged in directly with the official email (and it matches their auth email)
+      if (querySnap.empty) {
+        const q2 = query(usersRef, where('email', '==', editingStudent.id));
+        const snap2 = await getDocs(q2);
+        snap2.forEach((userDoc) => {
+          batch.update(userDoc.ref, updates);
+        });
+      }
+
+      await batch.commit();
+
+      Alert.alert('Success', 'Student details updated successfully.');
+      setEditModalVisible(false);
+      setEditingStudent(null);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to update student: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const handleDelete = async (id: string, name: string) => {
+    Alert.alert('Confirm Delete', `Are you sure you want to remove ${name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const { getDbSafe } = await import('../../utils/firebase');
+            const { doc, deleteDoc } = await import('firebase/firestore');
+            const db = getDbSafe();
+            if (db) {
+              await deleteDoc(doc(db, 'allocations', id));
+              setSelectedId(null);
+            }
+          } catch (e) {
+            Alert.alert('Error', 'Failed to delete allocation');
+          }
+        },
+      },
+    ]);
+  };
+
+  const filteredStudents = students.filter(
     (s) =>
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.room.includes(searchQuery) ||
-      s.rollNo.includes(searchQuery)
+      s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.room?.includes(searchQuery) ||
+      s.rollNo?.includes(searchQuery)
   );
 
-  const activeStudents = MOCK_STUDENTS.filter((s) => s.status === 'active').length;
+  const activeStudents = students.filter((s) => s.status === 'active').length;
 
   const getStatusColor = (status: string) => {
     return status === 'active' ? '#4CAF50' : '#F44336';
@@ -43,158 +188,278 @@ export default function StudentsPage() {
     return status === 'active' ? 'check-circle' : 'alert-circle';
   };
 
+  if (!isAdmin(user))
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Access denied.</Text>
+      </View>
+    );
+
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={['#6366F1', '#8B5CF6']} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialIcons name="chevron-left" size={28} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Manage Students</Text>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <MaterialIcons name="account-group" size={22} color="#6366F1" />
-          <Text style={styles.statValue}>{MOCK_STUDENTS.length}</Text>
-          <Text style={styles.statLabel}>Total Students</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="check-circle" size={22} color="#06B6D4" />
-          <Text style={styles.statValue}>{activeStudents}</Text>
-          <Text style={styles.statLabel}>Active</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="door-closed" size={22} color="#8B5CF6" />
-          <Text style={styles.statValue}>{MOCK_STUDENTS.length}</Text>
-          <Text style={styles.statLabel}>Rooms</Text>
-        </View>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <MaterialIcons name="magnify" size={20} color="#999" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name, room, or roll no..."
-          placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      <View style={styles.listHeader}>
-        <Text style={styles.listTitle}>
-          {filteredStudents.length} Student{filteredStudents.length !== 1 ? 's' : ''}
-        </Text>
-      </View>
-
-      <FlatList
-        data={filteredStudents}
-        scrollEnabled={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.studentCard,
-              selectedId === item.id && styles.studentCardActive,
-            ]}
-            onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      {/* Edit Modal */}
+      {isEditModalVisible && (
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingView}
           >
-            <View style={styles.cardHeader}>
-              <View style={styles.studentAvatarContainer}>
-                <View style={styles.studentAvatar}>
-                  <Text style={styles.studentInitial}>
-                    {item.name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .toUpperCase()}
-                  </Text>
-                </View>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Student</Text>
+                <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                  <MaterialIcons name="close" size={24} color="#64748B" />
+                </TouchableOpacity>
               </View>
-              <View style={styles.studentInfo}>
-                <Text style={styles.studentName}>{item.name}</Text>
-                <View style={styles.roomRollContainer}>
-                  <Text style={styles.detailSmall}>Room {item.room}</Text>
-                  <Text style={styles.detailSmall}>• {item.rollNo}</Text>
+              <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
+                <Text style={styles.modalLabel}>Official Email (ID) - Read Only</Text>
+                <TextInput style={[styles.modalInput, styles.disabledInput]} value={editingStudent?.id} editable={false} />
+
+                <Text style={styles.modalLabel}>Full Name</Text>
+                <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} />
+
+                <Text style={styles.modalLabel}>Roll No</Text>
+                <TextInput style={styles.modalInput} value={editRollNo} onChangeText={setEditRollNo} />
+
+                <Text style={styles.modalLabel}>Room Number</Text>
+                <TextInput style={styles.modalInput} value={editRoom} onChangeText={setEditRoom} />
+
+                <Text style={styles.modalLabel}>College Name</Text>
+                <TextInput style={styles.modalInput} value={editCollege} onChangeText={setEditCollege} />
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalLabel}>Age</Text>
+                    <TextInput style={styles.modalInput} value={editAge} onChangeText={setEditAge} keyboardType="numeric" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalLabel}>Phone</Text>
+                    <TextInput style={styles.modalInput} value={editPhone} onChangeText={setEditPhone} keyboardType="phone-pad" />
+                  </View>
                 </View>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
+
+
+                <Text style={styles.modalLabel}>Linked Gmail (Personal) - Read Only</Text>
+                <TextInput style={[styles.modalInput, styles.disabledInput]} value={editPersonalEmail} editable={false} />
+
+                <Text style={styles.modalLabel}>Status (active / inactive)</Text>
+                <TextInput style={styles.modalInput} value={editStatus} onChangeText={(text) => setEditStatus(text.toLowerCase())} placeholder="active or inactive" />
+
+                <Text style={styles.modalLabel}>Temporary Password</Text>
+                <TextInput style={styles.modalInput} value={editPassword} onChangeText={setEditPassword} />
+              </ScrollView>
+              <View style={styles.modalFooter}>
+                <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setEditModalVisible(false)}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.saveBtn]} onPress={handleSaveEdit}>
+                  <Text style={styles.saveBtnText}>Save Changes</Text>
+                </TouchableOpacity>
               </View>
             </View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
 
-            {selectedId === item.id && (
-              <View style={styles.expandedContent}>
-                <View style={styles.infoSection}>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailLeft}>
-                      <MaterialIcons name="account" size={16} color="#6366F1" />
-                      <Text style={styles.detailLabel}>Full Name</Text>
-                    </View>
-                    <Text style={styles.detailValue}>{item.name}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailLeft}>
-                      <MaterialIcons name="card-account-details" size={16} color="#6366F1" />
-                      <Text style={styles.detailLabel}>Roll No</Text>
-                    </View>
-                    <Text style={styles.detailValue}>{item.rollNo}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailLeft}>
-                      <MaterialIcons name="door-closed" size={16} color="#8B5CF6" />
-                      <Text style={styles.detailLabel}>Room</Text>
-                    </View>
-                    <Text style={styles.detailValue}>{item.room}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailLeft}>
-                      <MaterialIcons name="email" size={16} color="#06B6D4" />
-                      <Text style={styles.detailLabel}>Email</Text>
-                    </View>
-                    <Text style={styles.detailValue}>{item.email}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailLeft}>
-                      <MaterialIcons name="phone" size={16} color="#EC4899" />
-                      <Text style={styles.detailLabel}>Phone</Text>
-                    </View>
-                    <Text style={styles.detailValue}>{item.phone}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailLeft}>
-                      <MaterialIcons name="check-circle" size={16} color={getStatusColor(item.status)} />
-                      <Text style={styles.detailLabel}>Status</Text>
-                    </View>
-                    <Text style={[styles.detailValue, { color: getStatusColor(item.status), fontWeight: '700' }]}>
-                      {item.status.toUpperCase()}
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <LinearGradient colors={['#6366F1', '#8B5CF6']} style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="chevron-left" size={28} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Manage Students</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.navBar}>
+          <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
+            <MaterialIcons name="account-group" size={18} color="#6366F1" />
+            <Text style={[styles.navItemLabel, styles.navItemLabelActive]}>Manage Students</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => router.push('/admin/student-allotment')}
+          >
+            <MaterialIcons name="clipboard-list" size={18} color="#64748B" />
+            <Text style={styles.navItemLabel}>Student Allotment</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <MaterialIcons name="account-group" size={22} color="#6366F1" />
+            <Text style={styles.statValue}>{students.length}</Text>
+            <Text style={styles.statLabel}>Total Students</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="check-circle" size={22} color="#06B6D4" />
+            <Text style={styles.statValue}>{activeStudents}</Text>
+            <Text style={styles.statLabel}>Active</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="door-closed" size={22} color="#8B5CF6" />
+            <Text style={styles.statValue}>{students.length}</Text>
+            <Text style={styles.statLabel}>Rooms</Text>
+          </View>
+        </View>
+
+        <View style={styles.searchContainer}>
+          <MaterialIcons name="magnify" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name, room, or roll no..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        <View style={styles.listHeader}>
+          <Text style={styles.listTitle}>
+            {filteredStudents.length} Student{filteredStudents.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+
+        <FlatList
+          data={filteredStudents}
+          scrollEnabled={false}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.studentCard,
+                selectedId === item.id && styles.studentCardActive,
+              ]}
+              onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.studentAvatarContainer}>
+                  <View style={styles.studentAvatar}>
+                    <Text style={styles.studentInitial}>
+                      {item.name
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .join('')
+                        .toUpperCase()}
                     </Text>
                   </View>
                 </View>
-
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity style={[styles.actionBtn, styles.editBtn]}>
-                    <MaterialIcons name="pencil" size={16} color="#fff" />
-                    <Text style={styles.actionBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, styles.viewBtn]}>
-                    <MaterialIcons name="eye" size={16} color="#fff" />
-                    <Text style={styles.actionBtnText}>View Profile</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]}>
-                    <MaterialIcons name="delete" size={16} color="#fff" />
-                    <Text style={styles.actionBtnText}>Delete</Text>
-                  </TouchableOpacity>
+                <View style={styles.studentInfo}>
+                  <Text style={styles.studentName}>{item.name}</Text>
+                  <View style={styles.roomRollContainer}>
+                    <Text style={styles.detailSmall}>Room {item.room}</Text>
+                    <Text style={styles.detailSmall}>• {item.rollNo}</Text>
+                  </View>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                  <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
                 </View>
               </View>
-            )}
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContent}
-      />
-    </ScrollView>
+
+              {selectedId === item.id && (
+                <View style={styles.expandedContent}>
+                  <View style={styles.infoSection}>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="account" size={16} color="#6366F1" />
+                        <Text style={styles.detailLabel}>Full Name</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.name}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="card-account-details" size={16} color="#6366F1" />
+                        <Text style={styles.detailLabel}>Roll No</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.rollNo}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="school" size={16} color="#8B5CF6" />
+                        <Text style={styles.detailLabel}>College</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.collegeName || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="cake" size={16} color="#EC4899" />
+                        <Text style={styles.detailLabel}>Age</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.age || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="door-closed" size={16} color="#8B5CF6" />
+                        <Text style={styles.detailLabel}>Room</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.room}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="email" size={16} color="#06B6D4" />
+                        <Text style={styles.detailLabel}>Official Email</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.email}</Text>
+                    </View>
+                    {item.personalEmail && (
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailLeft}>
+                          <MaterialIcons name="gmail" size={16} color="#DB4437" />
+                          <Text style={styles.detailLabel}>Linked Gmail</Text>
+                        </View>
+                        <Text style={styles.detailValue}>{item.personalEmail}</Text>
+                      </View>
+                    )}
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="phone" size={16} color="#EC4899" />
+                        <Text style={styles.detailLabel}>Phone</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.phone}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="check-circle" size={16} color={getStatusColor(item.status)} />
+                        <Text style={styles.detailLabel}>Status</Text>
+                      </View>
+                      <Text style={[styles.detailValue, { color: getStatusColor(item.status), fontWeight: '700' }]}>
+                        {item.status.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLeft}>
+                      <MaterialIcons name="key" size={16} color="#F59E0B" />
+                      <Text style={styles.detailLabel}>Password</Text>
+                    </View>
+                    <Text style={[styles.detailValue, { fontFamily: 'monospace', color: '#D97706' }]}>
+                      {item.tempPassword || 'N/A'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={() => handleEdit(item)}>
+                      <MaterialIcons name="pencil" size={16} color="#fff" />
+                      <Text style={styles.actionBtnText}>Edit</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.deleteBtn]}
+                      onPress={() => handleDelete(item.id, item.name)}
+                    >
+                      <MaterialIcons name="delete" size={16} color="#fff" />
+                      <Text style={styles.actionBtnText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={styles.listContent}
+        />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -221,6 +486,41 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#fff',
+  },
+  navBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  navItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  navItemActive: {
+    borderBottomColor: '#6366F1',
+    backgroundColor: '#FAFBFF',
+  },
+  navItemLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  navItemLabelActive: {
+    color: '#6366F1',
+    fontWeight: '700',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -416,15 +716,114 @@ const styles = StyleSheet.create({
   editBtn: {
     backgroundColor: '#6366F1',
   },
-  viewBtn: {
-    backgroundColor: '#06B6D4',
-  },
+
   deleteBtn: {
     backgroundColor: '#EC4899',
   },
   actionBtnText: {
     color: '#fff',
     fontSize: 11,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: '90%',
+    height: Dimensions.get('window').height * 0.75, // Fixed pixel height
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  keyboardAvoidingView: {
+    width: '100%',
+    flex: 1, // Ensure it takes full space to center the modal
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#fff',
+    zIndex: 1,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  modalBody: {
+    padding: 20,
+    flex: 1, // Full flexible height
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modalInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1E293B',
+  },
+  disabledInput: {
+    backgroundColor: '#F1F5F9',
+    color: '#94A3B8',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#F1F5F9',
+  },
+  saveBtn: {
+    backgroundColor: '#6366F1',
+  },
+  cancelBtnText: {
+    color: '#64748B',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
