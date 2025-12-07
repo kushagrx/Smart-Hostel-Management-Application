@@ -1,24 +1,60 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
-import { Stack } from 'expo-router';
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Stack, useFocusEffect } from 'expo-router';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../utils/ThemeContext';
-import { personalizedAlerts, paymentReminders, hostelDocuments, AlertType } from '../../utils/alertsUtils';
+import { subscribeToStudentComplaints, Complaint } from '../../utils/complaintsSyncUtils';
+import { subscribeToNotices, Notice } from '../../utils/noticesSyncUtils';
+import { personalizedAlerts } from '../../utils/alertsUtils';
 
 export default function Alerts() {
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'alerts' | 'complaints' | 'documents'>('alerts');
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [complaintsLoading, setComplaintsLoading] = useState(true);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [noticesLoading, setNoticesLoading] = useState(true);
   const { colors } = useTheme();
-  const [activeTab, setActiveTab] = useState<'alerts' | 'payments' | 'documents'>('alerts');
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+  useFocusEffect(
+    useCallback(() => {
+      setComplaintsLoading(true);
+      const unsubscribe = subscribeToStudentComplaints((data) => {
+        setComplaints(data);
+        setComplaintsLoading(false);
+      });
+
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      setNoticesLoading(true);
+      const unsubscribe = subscribeToNotices((data) => {
+        setNotices(data);
+        setNoticesLoading(false);
+      });
+
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }, [])
+  );
+
+  const getPriorityColor = (priority?: string) => {
+    const priorityColors: Record<string, string> = {
+      low: '#4CAF50',
+      medium: '#FF8C00',
+      high: '#f44336',
+      emergency: '#d32f2f',
+    };
+    return priorityColors[priority || 'low'] || '#FF8C00';
   };
 
-  const getAlertIcon = (type: AlertType | string) => {
+  const getAlertIcon = (type: string) => {
     const icons: Record<string, string> = {
       mess: 'food-fork-drink',
       laundry: 'washing-machine',
@@ -30,204 +66,204 @@ export default function Alerts() {
     return icons[type] || 'bell';
   };
 
-  const getPriorityColor = (priority?: string) => {
-    const priorityColors: Record<string, string> = {
-      low: '#4CAF50',
-      medium: '#FF8C00',
-      high: '#f44336',
-    };
-    return priorityColors[priority || 'low'] || '#FF8C00';
-  };
-
-  const getDocumentIcon = (category: string) => {
+  const getStatusIcon = (status: string): any => {
     const icons: Record<string, string> = {
-      rules: 'file-document-outline',
-      policies: 'file-certificate-outline',
-      forms: 'file-edit-outline',
-      other: 'file-outline',
+      open: 'fiber-new',
+      inProgress: 'pending-actions',
+      resolved: 'check-circle',
+      closed: 'cancel',
     };
-    return icons[category] || 'file-outline';
+    return icons[status] || 'help-circle';
   };
 
-  const getPaymentStatus = (status: string) => {
-    const statusConfig: Record<string, { color: string; text: string }> = {
-      pending: { color: '#FF8C00', text: 'Pending' },
-      overdue: { color: '#f44336', text: 'Overdue' },
-      paid: { color: '#4CAF50', text: 'Paid' },
-    };
-    return statusConfig[status] || statusConfig.pending;
+  const formatDate = (date: Date) => {
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays <= 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Stack.Screen
-          options={{
-            title: 'Alerts & Notifications',
-            headerStyle: { backgroundColor: '#FF8C00' },
-            headerTintColor: '#fff',
-            headerShadowVisible: false,
-          }}
-        />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <Stack.Screen
+        options={{
+          title: 'Alerts & Notifications',
+          headerStyle: { backgroundColor: '#FF8C00' },
+          headerTintColor: '#fff',
+          headerShadowVisible: false,
+        }}
+      />
 
-        {/* Tab Navigation */}
-        <View style={[styles.tabContainer, { backgroundColor: colors.cardBackground }]}>
-          {(['alerts', 'payments', 'documents'] as const).map((tab) => (
-            <Pressable
-              key={tab}
+      {/* Tab Navigation */}
+      <View style={[styles.tabContainer, { backgroundColor: colors.cardBackground }]}>
+        {(['alerts', 'complaints', 'documents'] as const).map((tab) => (
+          <Pressable
+            key={tab}
+            style={[styles.tab, activeTab === tab && styles.activeTab]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text
               style={[
-                styles.tab,
-                activeTab === tab && styles.activeTab,
-              ]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text style={[
                 styles.tabText,
-                activeTab === tab && { color: '#FF8C00' }
-              ]}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+                activeTab === tab && { color: '#FF8C00' },
+              ]}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
-        <ScrollView
-          style={styles.content}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#FF8C00']}
-              tintColor="#FF8C00"
-            />
-          }
-        >
-          {/* Alerts Tab */}
-          {activeTab === 'alerts' && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Personalized Alerts</Text>
-              {personalizedAlerts.map((alert) => (
+      <ScrollView style={[styles.content, { backgroundColor: colors.background }]}>
+        {/* Alerts Tab */}
+        {activeTab === 'alerts' && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Hostel Notices</Text>
+            {noticesLoading ? (
+              <ActivityIndicator size="large" color="#FF8C00" />
+            ) : notices.length > 0 ? (
+              notices.map((notice) => (
                 <Pressable
-                  key={alert.id}
+                  key={notice.id}
                   style={[styles.alertCard, { backgroundColor: colors.cardBackground }]}
                 >
-                  <View style={[
-                    styles.priorityIndicator,
-                    { backgroundColor: getPriorityColor(alert.priority) }
-                  ]} />
+                  <View
+                    style={[
+                      styles.priorityIndicator,
+                      { backgroundColor: getPriorityColor(notice.priority) },
+                    ]}
+                  />
                   <MaterialCommunityIcons
-                    name={getAlertIcon(alert.type)}
+                    name="bullhorn"
                     size={28}
                     color="#FF8C00"
                     style={styles.alertIcon}
                   />
                   <View style={styles.alertContent}>
                     <Text style={[styles.alertTitle, { color: colors.text }]}>
-                      {alert.title}
+                      {notice.title}
                     </Text>
                     <Text style={[styles.alertMessage, { color: colors.secondary }]}>
-                      {alert.message}
+                      {notice.body}
                     </Text>
                     <Text style={[styles.alertTime, { color: colors.icon }]}>
-                      {alert.time}
+                      {notice.date.toLocaleDateString()}
                     </Text>
                   </View>
-                  {alert.actionable && (
-                    <MaterialIcons name="arrow-forward" size={20} color="#FF8C00" />
-                  )}
                 </Pressable>
-              ))}
-            </View>
-          )}
+              ))
+            ) : (
+              <Text style={[styles.emptyText, { color: colors.secondary }]}>No notices</Text>
+            )}
 
-          {/* Payments Tab */}
-          {activeTab === 'payments' && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Reminders</Text>
-              {paymentReminders.map((reminder) => {
-                const status = getPaymentStatus(reminder.status);
-                return (
-                  <Pressable
-                    key={reminder.id}
-                    style={[styles.paymentCard, { backgroundColor: colors.cardBackground }]}
-                  >
-                    <View style={styles.paymentLeft}>
-                      <View style={[styles.paymentIconBox, { backgroundColor: '#FFF3E0' }]}>
-                        <MaterialCommunityIcons name="credit-card" size={24} color="#FF8C00" />
-                      </View>
-                      <View style={styles.paymentInfo}>
-                        <Text style={[styles.paymentTitle, { color: colors.text }]}>
-                          {reminder.title}
-                        </Text>
-                        <Text style={[styles.paymentDescription, { color: colors.secondary }]}>
-                          {reminder.description}
-                        </Text>
-                        <Text style={[styles.dueDate, { color: colors.icon }]}>
-                          Due: {reminder.dueDate.toLocaleDateString()}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.paymentRight}>
-                      <Text style={styles.amount}>₹{reminder.amount}</Text>
-                      <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
-                        <Text style={[styles.statusText, { color: status.color }]}>
-                          {status.text}
-                        </Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
+            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 20 }]}>Personal Alerts</Text>
+            {personalizedAlerts.map((alert) => (
+              <Pressable
+                key={alert.id}
+                style={[styles.alertCard, { backgroundColor: colors.cardBackground }]}
+              >
+                <View
+                  style={[
+                    styles.priorityIndicator,
+                    { backgroundColor: getPriorityColor(alert.priority) },
+                  ]}
+                />
+                <MaterialCommunityIcons
+                  name={getAlertIcon(alert.type)}
+                  size={28}
+                  color="#FF8C00"
+                  style={styles.alertIcon}
+                />
+                <View style={styles.alertContent}>
+                  <Text style={[styles.alertTitle, { color: colors.text }]}>
+                    {alert.title}
+                  </Text>
+                  <Text style={[styles.alertMessage, { color: colors.secondary }]}>
+                    {alert.message}
+                  </Text>
+                  <Text style={[styles.alertTime, { color: colors.icon }]}>
+                    {alert.time}
+                  </Text>
+                </View>
+                {alert.actionable && (
+                  <MaterialIcons name="arrow-forward" size={20} color="#FF8C00" />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        )}
 
-          {/* Documents Tab */}
-          {activeTab === 'documents' && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Important Documents</Text>
-              {hostelDocuments.map((doc) => (
+        {/* Complaints Tab */}
+        {activeTab === 'complaints' && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>My Complaints</Text>
+            {complaintsLoading ? (
+              <ActivityIndicator size="large" color="#FF8C00" />
+            ) : complaints.length > 0 ? (
+              complaints.map((complaint) => (
                 <Pressable
-                  key={doc.id}
-                  style={[styles.documentCard, { backgroundColor: colors.cardBackground }]}
+                  key={complaint.id}
+                  style={[styles.complaintCard, styles.shadowProp, { backgroundColor: colors.cardBackground }]}
                 >
-                  <View style={[styles.docIconBox, { backgroundColor: '#E3F2FD' }]}>
-                    <MaterialCommunityIcons
-                      name={getDocumentIcon(doc.category)}
-                      size={24}
-                      color="#2196F3"
-                    />
-                  </View>
-                  <View style={styles.documentInfo}>
-                    <Text style={[styles.documentName, { color: colors.text }]}>
-                      {doc.name}
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.complaintTitle, { color: colors.text }]}>
+                      {complaint.title}
                     </Text>
-                    <Text style={[styles.documentCategory, { color: colors.secondary }]}>
-                      {doc.category.charAt(0).toUpperCase() + doc.category.slice(1)}
-                    </Text>
-                    <View style={styles.docMetadata}>
-                      <Text style={[styles.uploadDate, { color: colors.icon }]}>
-                        {doc.uploadDate.toLocaleDateString()}
-                      </Text>
-                      <Text style={[styles.fileSize, { color: colors.icon }]}>
-                        {doc.fileSize}
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getPriorityColor(complaint.priority) },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={getStatusIcon(complaint.status)}
+                        size={14}
+                        color="white"
+                      />
+                      <Text style={styles.statusText}>
+                        {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
                       </Text>
                     </View>
                   </View>
-                  <MaterialCommunityIcons name="download" size={24} color="#2196F3" />
+
+                  <Text style={[styles.description, { color: colors.secondary }]} numberOfLines={2}>
+                    {complaint.description}
+                  </Text>
+
+                  <View style={styles.cardFooter}>
+                    <Text style={[styles.date, { color: colors.icon }]}>
+                      {formatDate(complaint.createdAt)}
+                    </Text>
+                  </View>
                 </Pressable>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      </View>
+              ))
+            ) : (
+              <Text style={[styles.emptyText, { color: colors.secondary }]}>
+                No complaints submitted yet
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Documents Tab */}
+        {activeTab === 'documents' && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Important Documents</Text>
+            <Text style={[styles.emptyText, { color: colors.secondary }]}>
+              Documents feature coming soon
+            </Text>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
   container: {
     flex: 1,
   },
@@ -302,105 +338,58 @@ const styles = StyleSheet.create({
   alertTime: {
     fontSize: 12,
   },
-  paymentCard: {
+  complaintCard: {
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+  },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
-  paymentLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  paymentIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  paymentInfo: {
-    flex: 1,
-  },
-  paymentTitle: {
-    fontSize: 15,
+  complaintTitle: {
+    fontSize: 16,
     fontWeight: '600' as const,
-    marginBottom: 2,
-  },
-  paymentDescription: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  dueDate: {
-    fontSize: 11,
-  },
-  paymentRight: {
-    alignItems: 'flex-end',
-  },
-  amount: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: '#FF8C00',
-    marginBottom: 4,
+    flex: 1,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 6,
+    borderRadius: 20,
+    gap: 4,
   },
   statusText: {
+    color: 'white',
     fontSize: 12,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
   },
-  documentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
+  description: {
     marginBottom: 10,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  date: {
+    fontSize: 12,
+  },
+  shadowProp: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 2,
+    elevation: 3,
   },
-  docIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  documentInfo: {
-    flex: 1,
-  },
-  documentName: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    marginBottom: 2,
-  },
-  documentCategory: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  docMetadata: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  uploadDate: {
-    fontSize: 11,
-  },
-  fileSize: {
-    fontSize: 11,
+  emptyText: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 20,
   },
 });
