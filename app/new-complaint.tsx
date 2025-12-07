@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,16 +7,55 @@ import { Picker } from '@react-native-picker/picker';
 export default function NewComplaint() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('maintenance');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'emergency'>('low');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async () => {
+    if (!title || !description) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    router.back();
+    try {
+      const { getDbSafe } = await import('../../utils/firebase');
+      const { getAuthSafe } = await import('../../utils/authUtils');
+      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+      const { fetchUserData } = await import('../../utils/nameUtils');
+
+      const db = getDbSafe();
+      const auth = getAuthSafe();
+
+      if (!db || !auth?.currentUser?.email) {
+        Alert.alert('Error', 'Not authenticated');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const userData = await fetchUserData();
+
+      const complaintRef = collection(db, 'complaints');
+      await addDoc(complaintRef, {
+        title,
+        description,
+        priority,
+        status: 'open',
+        category: 'general',
+        studentEmail: auth.currentUser.email,
+        studentName: userData?.fullName || 'Student',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      Alert.alert('Success', 'Complaint submitted successfully');
+      router.back();
+    } catch (error) {
+      console.error('Error submitting complaint:', error);
+      Alert.alert('Error', 'Failed to submit complaint');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getPriorityIcon = (priorityLevel: string): any => {
@@ -60,27 +99,6 @@ export default function NewComplaint() {
           </View>
         </View>
 
-        {/* <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Category
-            <Text style={styles.required}> *</Text>
-          </Text>
-          <View style={styles.simplePickerWrapper}>
-            <Picker
-              selectedValue={category}
-              onValueChange={setCategory}
-              style={styles.simplePicker}
-              dropdownIconColor="#666"
-            >
-              <Picker.Item label="Maintenance" value="maintenance" />
-              <Picker.Item label="Cleanliness" value="cleanliness" />
-              <Picker.Item label="Security" value="security" />
-              <Picker.Item label="Mess Related" value="mess" />
-              <Picker.Item label="Others" value="others" />
-            </Picker>
-          </View>
-        </View> */}
-
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Priority Level</Text>
           <ScrollView 
@@ -88,7 +106,7 @@ export default function NewComplaint() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.priorityContainer}
           >
-            {['low', 'medium', 'high', 'emergency'].map((level) => (
+            {(['low', 'medium', 'high', 'emergency'] as const).map((level) => (
               <Pressable
                 key={level}
                 style={[
@@ -168,7 +186,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#2d3436',
     marginBottom: 4,
   },
@@ -197,17 +215,6 @@ const styles = StyleSheet.create({
   },
   textArea: {
     height: 100,
-  },
-  simplePickerWrapper: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  simplePicker: {
-    height: 50,
-    width: '100%',
-    color: '#2d3436',
   },
   priorityContainer: {
     flexDirection: 'row',
@@ -243,7 +250,7 @@ const styles = StyleSheet.create({
   },
   priorityText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#666',
   },
   priorityTextSelected: {
@@ -265,6 +272,6 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
   },
 });
