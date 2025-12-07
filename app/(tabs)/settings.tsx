@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
+import { Stack, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { setStoredUser } from '../../utils/authUtils';
 import { useTheme } from '../../utils/ThemeContext';
+
 
 const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, colors, isLast }: any) => {
   return (
@@ -178,6 +188,19 @@ export default function Settings() {
         <TouchableOpacity style={[styles.logoutButton, { backgroundColor: theme === 'dark' ? '#4d1f1f' : '#FFF3F3' }]} onPress={handleLogout}>
           <MaterialIcons name="logout" size={22} color="#FF5252" />
           <Text style={styles.logoutButtonText}>Log Out</Text>
+        </TouchableOpacity>
+
+        {/* Dev: Open Admin Dashboard */}
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: '#fff3e0' }]}
+          onPress={async () => {
+            // quick dev helper to set an admin user in storage and navigate
+            await setStoredUser({ id: 'dev-admin', name: 'Admin (dev)', role: 'admin' });
+            router.push('/admin');
+          }}
+        >
+          <MaterialIcons name="admin-panel-settings" size={22} color="#FF8C00" />
+          <Text style={[styles.logoutButtonText, { color: '#FF8C00' }]}>Open Admin Dashboard</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
