@@ -1,12 +1,13 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useFocusEffect } from 'expo-router';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../utils/ThemeContext';
-import { subscribeToStudentComplaints, Complaint } from '../../utils/complaintsSyncUtils';
-import { subscribeToNotices, Notice } from '../../utils/noticesSyncUtils';
 import { personalizedAlerts } from '../../utils/alertsUtils';
+import { Complaint, subscribeToStudentComplaints } from '../../utils/complaintsSyncUtils';
+import { Notice, subscribeToNotices } from '../../utils/noticesSyncUtils';
 
 export default function Alerts() {
   const [activeTab, setActiveTab] = useState<'alerts' | 'complaints' | 'documents'>('alerts');
@@ -46,12 +47,12 @@ export default function Alerts() {
 
   const getPriorityColor = (priority?: string) => {
     const priorityColors: Record<string, string> = {
-      low: '#4CAF50',
-      medium: '#FF8C00',
-      high: '#f44336',
-      emergency: '#d32f2f',
+      low: '#10B981',      // Green
+      medium: '#F59E0B',   // Yellow/Orange
+      high: '#EF4444',     // Red
+      emergency: '#7F1D1D', // Dark Red
     };
-    return priorityColors[priority || 'low'] || '#FF8C00';
+    return priorityColors[priority || 'low'] || '#3B82F6';
   };
 
   const getAlertIcon = (type: string) => {
@@ -61,19 +62,19 @@ export default function Alerts() {
       payment: 'credit-card',
       maintenance: 'wrench',
       event: 'calendar-event',
-      announcement: 'megaphone',
+      announcement: 'bullhorn',
     };
-    return icons[type] || 'bell';
+    return icons[type] || 'bell-ring';
   };
 
   const getStatusIcon = (status: string): any => {
     const icons: Record<string, string> = {
-      open: 'fiber-new',
-      inProgress: 'pending-actions',
-      resolved: 'check-circle',
-      closed: 'cancel',
+      open: 'clock-outline',
+      inProgress: 'progress-wrench',
+      resolved: 'check-circle-outline',
+      closed: 'close-circle-outline',
     };
-    return icons[status] || 'help-circle';
+    return icons[status] || 'help-circle-outline';
   };
 
   const formatDate = (date: Date) => {
@@ -88,110 +89,109 @@ export default function Alerts() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <Stack.Screen
-        options={{
-          title: 'Alerts & Notifications',
-          headerStyle: { backgroundColor: '#FF8C00' },
-          headerTintColor: '#fff',
-          headerShadowVisible: false,
-        }}
-      />
+    <View style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Tab Navigation */}
-      <View style={[styles.tabContainer, { backgroundColor: colors.cardBackground }]}>
-        {(['alerts', 'complaints', 'documents'] as const).map((tab) => (
-          <Pressable
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && { color: '#FF8C00' },
-              ]}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      {/* Header */}
+      <LinearGradient
+        colors={['#000428', '#004e92']}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView edges={['top', 'left', 'right']}>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            <View style={styles.notificationBadge}>
+              <MaterialIcons name="notifications-none" size={24} color="#fff" />
+              {(notices.length > 0) && <View style={styles.dot} />}
+            </View>
+          </View>
 
-      <ScrollView style={[styles.content, { backgroundColor: colors.background }]}>
+          {/* Custom Tab Bar */}
+          <View style={styles.tabBar}>
+            {(['alerts', 'complaints', 'documents'] as const).map((tab) => (
+              <Pressable
+                key={tab}
+                style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Alerts Tab */}
         {activeTab === 'alerts' && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Hostel Notices</Text>
+
+            {/* Hostel Notices Section */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Hostel Notices</Text>
+              {notices.length > 0 && <View style={styles.countBadge}><Text style={styles.countText}>{notices.length}</Text></View>}
+            </View>
+
             {noticesLoading ? (
-              <ActivityIndicator size="large" color="#FF8C00" />
+              <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 20 }} />
             ) : notices.length > 0 ? (
               notices.map((notice) => (
-                <Pressable
+                <View
                   key={notice.id}
-                  style={[styles.alertCard, { backgroundColor: colors.cardBackground }]}
+                  style={[styles.card, styles.shadowProp]}
                 >
-                  <View
-                    style={[
-                      styles.priorityIndicator,
-                      { backgroundColor: getPriorityColor(notice.priority) },
-                    ]}
-                  />
-                  <MaterialCommunityIcons
-                    name="bullhorn"
-                    size={28}
-                    color="#FF8C00"
-                    style={styles.alertIcon}
-                  />
-                  <View style={styles.alertContent}>
-                    <Text style={[styles.alertTitle, { color: colors.text }]}>
-                      {notice.title}
-                    </Text>
-                    <Text style={[styles.alertMessage, { color: colors.secondary }]}>
-                      {notice.body}
-                    </Text>
-                    <Text style={[styles.alertTime, { color: colors.icon }]}>
-                      {notice.date.toLocaleDateString()}
-                    </Text>
+                  <View style={[styles.priorityLine, { backgroundColor: getPriorityColor(notice.priority) }]} />
+                  <View style={styles.cardInner}>
+                    <View style={styles.cardHeaderRow}>
+                      <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
+                        <MaterialCommunityIcons name="bullhorn" size={20} color="#004e92" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle}>{notice.title}</Text>
+                        <Text style={styles.cardDate}>{notice.date.toLocaleDateString()}</Text>
+                      </View>
+                      {notice.priority === 'emergency' && <MaterialIcons name="warning" size={20} color="#EF4444" />}
+                    </View>
+                    <Text style={styles.cardBody}>{notice.body}</Text>
                   </View>
-                </Pressable>
+                </View>
               ))
             ) : (
-              <Text style={[styles.emptyText, { color: colors.secondary }]}>No notices</Text>
+              <View style={styles.emptyState}>
+                <MaterialCommunityIcons name="bell-sleep" size={48} color="#CBD5E1" />
+                <Text style={styles.emptyText}>No new notices</Text>
+              </View>
             )}
 
-            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 20 }]}>Personal Alerts</Text>
+            {/* Personal Alerts Section */}
+            <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 12 }]}>Personal Alerts</Text>
             {personalizedAlerts.map((alert) => (
               <Pressable
                 key={alert.id}
-                style={[styles.alertCard, { backgroundColor: colors.cardBackground }]}
+                style={[styles.card, styles.shadowProp]}
               >
-                <View
-                  style={[
-                    styles.priorityIndicator,
-                    { backgroundColor: getPriorityColor(alert.priority) },
-                  ]}
-                />
-                <MaterialCommunityIcons
-                  name={getAlertIcon(alert.type)}
-                  size={28}
-                  color="#FF8C00"
-                  style={styles.alertIcon}
-                />
-                <View style={styles.alertContent}>
-                  <Text style={[styles.alertTitle, { color: colors.text }]}>
-                    {alert.title}
-                  </Text>
-                  <Text style={[styles.alertMessage, { color: colors.secondary }]}>
-                    {alert.message}
-                  </Text>
-                  <Text style={[styles.alertTime, { color: colors.icon }]}>
-                    {alert.time}
-                  </Text>
+                <View style={[styles.priorityLine, { backgroundColor: getPriorityColor(alert.priority) }]} />
+                <View style={styles.cardInner}>
+                  <View style={styles.cardHeaderRow}>
+                    <View style={[styles.iconBox, { backgroundColor: '#F0F9FF' }]}>
+                      <MaterialCommunityIcons name={getAlertIcon(alert.type) as any} size={20} color="#0EA5E9" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTitle}>{alert.title}</Text>
+                      <Text style={styles.cardDate}>{alert.time}</Text>
+                    </View>
+                    {alert.actionable && <MaterialIcons name="chevron-right" size={24} color="#94A3B8" />}
+                  </View>
+                  <Text style={styles.cardBody}>{alert.message}</Text>
                 </View>
-                {alert.actionable && (
-                  <MaterialIcons name="arrow-forward" size={20} color="#FF8C00" />
-                )}
               </Pressable>
             ))}
           </View>
@@ -200,51 +200,53 @@ export default function Alerts() {
         {/* Complaints Tab */}
         {activeTab === 'complaints' && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>My Complaints</Text>
+            <Text style={styles.sectionTitle}>My Complaints</Text>
             {complaintsLoading ? (
-              <ActivityIndicator size="large" color="#FF8C00" />
+              <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 20 }} />
             ) : complaints.length > 0 ? (
               complaints.map((complaint) => (
-                <Pressable
+                <View
                   key={complaint.id}
-                  style={[styles.complaintCard, styles.shadowProp, { backgroundColor: colors.cardBackground }]}
+                  style={[styles.card, styles.shadowProp]}
                 >
-                  <View style={styles.cardHeader}>
-                    <Text style={[styles.complaintTitle, { color: colors.text }]}>
-                      {complaint.title}
-                    </Text>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: getPriorityColor(complaint.priority) },
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={getStatusIcon(complaint.status)}
-                        size={14}
-                        color="white"
-                      />
-                      <Text style={styles.statusText}>
-                        {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
-                      </Text>
+                  <View style={styles.cardInner}>
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={styles.cardTitle}>{complaint.title}</Text>
+                      <View style={[styles.statusTag, { backgroundColor: getPriorityColor(complaint.priority) + '20' }]}>
+                        <Text style={[styles.statusTagText, { color: getPriorityColor(complaint.priority) }]}>
+                          {complaint.priority?.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={[styles.cardBody, { marginTop: 8 }]}>{complaint.description}</Text>
+
+                    <View style={styles.divider} />
+
+                    <View style={styles.cardFooter}>
+                      <View style={styles.statusRow}>
+                        <MaterialCommunityIcons
+                          name={getStatusIcon(complaint.status)}
+                          size={16}
+                          color={complaint.status === 'resolved' ? '#10B981' : '#64748B'}
+                        />
+                        <Text style={[
+                          styles.statusText,
+                          complaint.status === 'resolved' && { color: '#10B981', fontWeight: '600' }
+                        ]}>
+                          {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
+                        </Text>
+                      </View>
+                      <Text style={styles.cardDate}>{formatDate(complaint.createdAt)}</Text>
                     </View>
                   </View>
-
-                  <Text style={[styles.description, { color: colors.secondary }]} numberOfLines={2}>
-                    {complaint.description}
-                  </Text>
-
-                  <View style={styles.cardFooter}>
-                    <Text style={[styles.date, { color: colors.icon }]}>
-                      {formatDate(complaint.createdAt)}
-                    </Text>
-                  </View>
-                </Pressable>
+                </View>
               ))
             ) : (
-              <Text style={[styles.emptyText, { color: colors.secondary }]}>
-                No complaints submitted yet
-              </Text>
+              <View style={styles.emptyState}>
+                <MaterialCommunityIcons name="clipboard-check-outline" size={48} color="#CBD5E1" />
+                <Text style={styles.emptyText}>No complaints history</Text>
+              </View>
             )}
           </View>
         )}
@@ -252,14 +254,16 @@ export default function Alerts() {
         {/* Documents Tab */}
         {activeTab === 'documents' && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Important Documents</Text>
-            <Text style={[styles.emptyText, { color: colors.secondary }]}>
-              Documents feature coming soon
-            </Text>
+            <Text style={styles.sectionTitle}>My Documents</Text>
+            <View style={[styles.card, styles.shadowProp, styles.emptyState, { height: 200 }]}>
+              <MaterialCommunityIcons name="file-document-outline" size={48} color="#CBD5E1" />
+              <Text style={styles.emptyText}>No documents available</Text>
+              <Text style={styles.subEmptyText}>Hostel circulars and forms will appear here.</Text>
+            </View>
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -267,129 +271,213 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+  header: {
+    paddingBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: "#004e92",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#FF8C00',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: '#999',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  section: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    marginBottom: 12,
-  },
-  alertCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  priorityIndicator: {
-    width: 4,
-    height: '100%',
-    borderRadius: 4,
-    marginRight: 12,
-    position: 'absolute',
-    left: 0,
-  },
-  alertIcon: {
-    marginRight: 12,
-  },
-  alertContent: {
-    flex: 1,
-    marginLeft: 8,
-  },
-  alertTitle: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    marginBottom: 2,
-  },
-  alertMessage: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  alertTime: {
-    fontSize: 12,
-  },
-  complaintCard: {
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-  },
-  cardHeader: {
+  headerContent: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  complaintTitle: {
-    fontSize: 16,
-    fontWeight: '600' as const,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  notificationBadge: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  tabItem: {
     flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
   },
-  statusBadge: {
+  tabItemActive: {
+    backgroundColor: '#fff',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+  },
+  tabTextActive: {
+    color: '#004e92',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  section: {
+    gap: 16,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 6,
-    borderRadius: 20,
-    gap: 4,
+    marginBottom: 8,
+    gap: 8,
   },
-  statusText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '500' as const,
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  description: {
-    marginBottom: 10,
+  countBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  countText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  cardInner: {
+    padding: 16,
+  },
+  priorityLine: {
+    width: 4,
+    height: '100%',
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
+    flex: 1,
+  },
+  cardDate: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  cardBody: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
+  },
+  statusTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  date: {
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusText: {
     fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   shadowProp: {
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
   },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    gap: 12,
+  },
   emptyText: {
+    color: '#94A3B8',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  subEmptyText: {
+    color: '#CBD5E1',
+    fontSize: 12,
     textAlign: 'center',
-    paddingVertical: 20,
   },
 });

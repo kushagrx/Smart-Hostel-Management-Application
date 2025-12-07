@@ -1,4 +1,4 @@
-import { collection, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { getAuthSafe, getDbSafe } from './firebase';
 
 export type Complaint = {
@@ -53,13 +53,13 @@ export const subscribeToStudentComplaints = (
 
     if (!auth?.currentUser || !db) {
       callback([]);
-      return () => {};
+      return () => { };
     }
 
     const email = auth.currentUser.email;
     if (!email) {
       callback([]);
-      return () => {};
+      return () => { };
     }
 
     const complaintsRef = collection(db, 'complaints');
@@ -80,6 +80,77 @@ export const subscribeToStudentComplaints = (
     });
   } catch (error) {
     console.error('Error subscribing to complaints:', error);
-    return () => {};
+    return () => { };
+  }
+};
+
+// Admin Functions
+
+export const getAllComplaints = async (): Promise<Complaint[]> => {
+  try {
+    const db = getDbSafe();
+    if (!db) return [];
+
+    const complaintsRef = collection(db, 'complaints');
+    const q = query(complaintsRef, orderBy('createdAt', 'desc'));
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate() || new Date(),
+      updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+    } as Complaint));
+  } catch (error) {
+    console.error("Error fetching all complaints:", error);
+    return [];
+  }
+};
+
+export const updateComplaintStatus = async (
+  complaintId: string,
+  status: 'open' | 'inProgress' | 'resolved' | 'closed'
+) => {
+  try {
+    const db = getDbSafe();
+    if (!db) throw new Error("Database not initialized");
+
+    const complaintRef = doc(db, 'complaints', complaintId);
+
+    await updateDoc(complaintRef, {
+      status,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Error updating complaint status:", error);
+    throw error;
+  }
+};
+
+export const subscribeToAllComplaints = (
+  callback: (complaints: Complaint[]) => void
+) => {
+  try {
+    const db = getDbSafe();
+    if (!db) {
+      callback([]);
+      return () => { };
+    }
+
+    const complaintsRef = collection(db, 'complaints');
+    const q = query(complaintsRef, orderBy('createdAt', 'desc'));
+
+    return onSnapshot(q, (snapshot) => {
+      const complaints = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+      } as Complaint));
+      callback(complaints);
+    });
+  } catch (error) {
+    console.error("Error subscribing to all complaints:", error);
+    return () => { };
   }
 };

@@ -1,22 +1,43 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdmin, useUser } from '../../utils/authUtils';
-
-const MOCK = [
-  { id: 'l1', student: 'Charlie', from: '2025-12-10', to: '2025-12-15', status: 'pending', days: 6 },
-  { id: 'l2', student: 'Diana', from: '2025-12-08', to: '2025-12-09', status: 'approved', days: 2 },
-  { id: 'l3', student: 'Eve', from: '2025-12-20', to: '2025-12-25', status: 'pending', days: 6 },
-  { id: 'l4', student: 'Frank', from: '2025-12-01', to: '2025-12-03', status: 'rejected', days: 3 },
-];
+import { getAllLeaves, LeaveRequest, updateLeaveStatus } from '../../utils/leavesUtils';
 
 export default function LeaveRequestsPage() {
   const user = useUser();
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
+
+  const loadRequests = async () => {
+    try {
+      const data = await getAllLeaves();
+      setRequests(data);
+    } catch (error) {
+      console.error("Failed to load leaves:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      await updateLeaveStatus(id, status);
+      Alert.alert("Success", `Request ${status} successfully.`);
+      loadRequests(); // Refresh
+    } catch (error) {
+      Alert.alert("Error", "Failed to update status.");
+    }
+  };
 
   if (!isAdmin(user))
     return (
@@ -25,157 +46,157 @@ export default function LeaveRequestsPage() {
       </View>
     );
 
-  const pendingCount = MOCK.filter((l) => l.status === 'pending').length;
-  const approvedCount = MOCK.filter((l) => l.status === 'approved').length;
+  const pendingCount = requests.filter((l) => l.status === 'pending').length;
+  const approvedCount = requests.filter((l) => l.status === 'approved').length;
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return '#F59E0B';
-      case 'approved':
-        return '#10B981';
-      case 'rejected':
-        return '#EF4444';
-      default:
-        return '#64748B';
+      case 'pending': return '#F59E0B';
+      case 'approved': return '#10B981';
+      case 'rejected': return '#EF4444';
+      default: return '#64748B';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'pending':
-        return 'clock-outline';
-      case 'approved':
-        return 'check-circle';
-      case 'rejected':
-        return 'close-circle';
-      default:
-        return 'help-circle';
+      case 'pending': return 'clock-outline';
+      case 'approved': return 'check-circle';
+      case 'rejected': return 'close-circle';
+      default: return 'help-circle';
     }
   };
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={['#D97706', '#F59E0B']} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialIcons name="chevron-left" size={28} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Leave Requests</Text>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <LinearGradient colors={['#D97706', '#F59E0B']} style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="chevron-left" size={28} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Leave Requests</Text>
+          </View>
+          <TouchableOpacity onPress={loadRequests} style={styles.backBtn}>
+            <MaterialIcons name="refresh" size={24} color="#fff" />
+          </TouchableOpacity>
+        </LinearGradient>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <MaterialIcons name="calendar-clock" size={22} color="#D97706" />
+            <Text style={styles.statValue}>{requests.length}</Text>
+            <Text style={styles.statLabel}>Total Requests</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
+            <Text style={styles.statValue}>{pendingCount}</Text>
+            <Text style={styles.statLabel}>Pending</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="check-circle" size={22} color="#10B981" />
+            <Text style={styles.statValue}>{approvedCount}</Text>
+            <Text style={styles.statLabel}>Approved</Text>
+          </View>
         </View>
-      </LinearGradient>
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <MaterialIcons name="calendar-clock" size={22} color="#D97706" />
-          <Text style={styles.statValue}>{MOCK.length}</Text>
-          <Text style={styles.statLabel}>Total Requests</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
-          <Text style={styles.statValue}>{pendingCount}</Text>
-          <Text style={styles.statLabel}>Pending</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="check-circle" size={22} color="#10B981" />
-          <Text style={styles.statValue}>{approvedCount}</Text>
-          <Text style={styles.statLabel}>Approved</Text>
-        </View>
-      </View>
-
-      {/* list header removed per UI request */}
-
-      <FlatList
-        data={MOCK}
-        scrollEnabled={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.requestCard,
-              selectedId === item.id && styles.requestCardActive,
-            ]}
-            onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.studentInfo}>
-                <View
-                  style={[
-                    styles.studentAvatar,
-                    { backgroundColor: getStatusColor(item.status) },
-                  ]}
-                >
-                  <Text style={styles.studentInitial}>
-                    {item.student.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.textInfo}>
-                  <Text style={styles.studentName}>{item.student}</Text>
-                  <Text style={styles.dateRange}>
-                    {item.from} to {item.to}
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
-                <Text style={styles.statusText}>{item.status}</Text>
-              </View>
-            </View>
-
-            {selectedId === item.id && (
-              <View style={styles.expandedContent}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Student:</Text>
-                  <Text style={styles.detailValue}>{item.student}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>From Date:</Text>
-                  <Text style={styles.detailValue}>{item.from}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>To Date:</Text>
-                  <Text style={styles.detailValue}>{item.to}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Duration:</Text>
-                  <Text style={styles.detailValue}>{item.days} days</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Current Status:</Text>
-                  <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
-                    {item.status.toUpperCase()}
-                  </Text>
-                </View>
-
-                {item.status === 'pending' && (
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]}>
-                      <MaterialIcons name="check" size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>Approve</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]}>
-                      <MaterialIcons name="close" size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>Reject</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {item.status !== 'pending' && (
-                  <View style={styles.statusMessage}>
-                    <Text style={styles.statusMessageText}>
-                      This request has already been{' '}
-                      <Text style={{ fontWeight: '700' }}>{item.status}</Text>
+        <FlatList
+          data={requests}
+          scrollEnabled={false}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.requestCard,
+                selectedId === item.id && styles.requestCardActive,
+              ]}
+              onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.studentInfo}>
+                  <View
+                    style={[
+                      styles.studentAvatar,
+                      { backgroundColor: getStatusColor(item.status) },
+                    ]}
+                  >
+                    <Text style={styles.studentInitial}>
+                      {item.studentName.charAt(0).toUpperCase()}
                     </Text>
                   </View>
-                )}
+                  <View style={styles.textInfo}>
+                    <Text style={styles.studentName}>{item.studentName}</Text>
+                    <Text style={styles.dateRange}>
+                      {item.startDate} to {item.endDate}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                  <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
+                  <Text style={styles.statusText}>{item.status}</Text>
+                </View>
               </View>
-            )}
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContent}
-      />
-    </ScrollView>
+
+              {selectedId === item.id && (
+                <View style={styles.expandedContent}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Room No:</Text>
+                    <Text style={styles.detailValue}>{item.studentRoom}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Reason:</Text>
+                    <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]}>{item.reason}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Duration:</Text>
+                    <Text style={styles.detailValue}>{item.days} days</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Current Status:</Text>
+                    <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
+                      {item.status.toUpperCase()}
+                    </Text>
+                  </View>
+
+                  {item.status === 'pending' && (
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.approveBtn]}
+                        onPress={() => handleStatusUpdate(item.id, 'approved')}
+                      >
+                        <MaterialIcons name="check" size={16} color="#fff" />
+                        <Text style={styles.actionBtnText}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.rejectBtn]}
+                        onPress={() => handleStatusUpdate(item.id, 'rejected')}
+                      >
+                        <MaterialIcons name="close" size={16} color="#fff" />
+                        <Text style={styles.actionBtnText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {item.status !== 'pending' && (
+                    <View style={styles.statusMessage}>
+                      <Text style={styles.statusMessageText}>
+                        This request has already been{' '}
+                        <Text style={{ fontWeight: '700' }}>{item.status}</Text>
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ color: '#94A3B8' }}>No leave requests found.</Text>
+            </View>
+          }
+        />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -184,6 +205,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#f8f9fa',
     paddingBottom: 20,
+    minHeight: '100%',
   },
   header: {
     paddingVertical: 20,
@@ -234,15 +256,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 4,
     textAlign: 'center',
-  },
-  listHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  listTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
   },
   listContent: {
     paddingHorizontal: 12,
