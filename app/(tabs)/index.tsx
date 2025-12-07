@@ -1,15 +1,45 @@
 import { Pressable, Text, View, ScrollView } from "react-native";
 import { StyleSheet } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
-import { getInitial, userData } from '../../utils/nameUtils';
+import { getInitial, fetchUserData, StudentData } from '../../utils/nameUtils';
 import { getTodaysDinner } from '../../utils/messUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import { useState, useCallback } from "react";
 
 export default function Index() {
   const router = useRouter();
   const { colors, theme } = useTheme();
+  const [student, setStudent] = useState<StudentData | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadUserData = async () => {
+        try {
+          const data = await fetchUserData();
+          setStudent(data);
+        } catch (error) {
+          console.error('Failed to load user data:', error);
+        }
+      };
+
+      loadUserData();
+    }, [])
+  );
+
+  if (!student) {
+    return (
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+        <LinearGradient
+          colors={['#FF8C00', '#FFA500']} 
+          style={styles.headerContainer}
+        >
+          <Text style={styles.title}>Loading...</Text>
+        </LinearGradient>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -23,7 +53,7 @@ export default function Index() {
         </View>
         <Pressable onPress={() => router.push('/profile')}>
           <View style={styles.userInitialContainer}>
-            <Text style={styles.userInitial}>{getInitial(userData.fullName)}</Text>
+            <Text style={styles.userInitial}>{getInitial(student.fullName)}</Text>
           </View>
         </Pressable>
       </LinearGradient>
