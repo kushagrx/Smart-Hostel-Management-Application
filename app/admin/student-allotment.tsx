@@ -22,6 +22,7 @@ export default function StudentAllotmentPage() {
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
   const [generatedPassword, setGeneratedPassword] = useState('');
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   React.useEffect(() => {
     // Generate a secure random password on mount
@@ -30,14 +31,23 @@ export default function StudentAllotmentPage() {
   }, []);
 
   const handleSubmit = async () => {
+    setHasSubmitted(true);
+
     if (!fullName || !rollNo || !collegeName || !age || !room || !email || !phone) {
-      Alert.alert('Missing details', 'Please fill all fields (Personal Email is optional).');
+      Alert.alert('Missing details', 'Please fill all mandatory fields (marked red).');
+      return;
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits.');
       return;
     }
 
     try {
       const { getDbSafe } = await import('../../utils/firebase');
       const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const { allocateRoom, deallocateRoom } = await import('../../utils/roomUtils'); // Import utility
+
       const db = getDbSafe();
 
       if (!db) {
@@ -45,27 +55,37 @@ export default function StudentAllotmentPage() {
         return;
       }
 
-      // Use email as doc ID for uniqueness and easy lookup
-      await setDoc(doc(db, 'allocations', email.toLowerCase().trim()), {
-        name: fullName,
-        rollNo,
-        collegeName,
-        age,
-        room,
-        email: email.toLowerCase().trim(),
-        personalEmail: personalEmail ? personalEmail.toLowerCase().trim() : null, // Save Personal Email
-        phone,
-        status,
-        tempPassword: generatedPassword, // Save the password
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      // 1. Try to allocate room first (checks capacity)
+      await allocateRoom(db, room, email.toLowerCase().trim(), fullName);
+
+      // 2. If successful, create allocation document
+      try {
+        await setDoc(doc(db, 'allocations', email.toLowerCase().trim()), {
+          name: fullName,
+          rollNo,
+          collegeName,
+          age,
+          room,
+          email: email.toLowerCase().trim(),
+          personalEmail: personalEmail ? personalEmail.toLowerCase().trim() : null,
+          phone,
+          status,
+          tempPassword: generatedPassword,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (allocError: any) {
+        // Rollback room allocation if saving student data fails
+        console.error("Allocation save failed, rolling back room...", allocError);
+        await deallocateRoom(db, room, email.toLowerCase().trim());
+        throw allocError; // Re-throw to be caught below
+      }
 
       Alert.alert(
         'Success',
-        `Student allotted.\n\nLogin Password: ${generatedPassword}\n\nPlease share this with the student.`,
+        `Student allotted to Room ${room}.\n\nLogin Password: ${generatedPassword}\n\nPlease share this with the student.`,
         [
-          { text: 'Copy & Close', onPress: () => router.replace('/admin/students') } // In a real app we'd copy to clipboard
+          { text: 'Copy & Close', onPress: () => router.replace('/admin/students') }
         ]
       );
     } catch (error: any) {
@@ -125,64 +145,112 @@ export default function StudentAllotmentPage() {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Full Name</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                hasSubmitted && !fullName && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
               placeholder="Enter full name"
               value={fullName}
               onChangeText={setFullName}
             />
+            {hasSubmitted && !fullName && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                Full Name is required
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Roll Number</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                hasSubmitted && !rollNo && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
               placeholder="Enter roll number"
               value={rollNo}
               onChangeText={setRollNo}
             />
+            {hasSubmitted && !rollNo && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                Roll Number is required
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Room</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                hasSubmitted && !room && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
               placeholder="Enter room"
               value={room}
               onChangeText={setRoom}
             />
+            {hasSubmitted && !room && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                Room is required
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>College Name</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                hasSubmitted && !collegeName && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
               placeholder="Enter college name"
               value={collegeName}
               onChangeText={setCollegeName}
             />
+            {hasSubmitted && !collegeName && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                College Name is required
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Age</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                hasSubmitted && !age && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
               placeholder="Enter age"
               keyboardType="numeric"
               value={age}
               onChangeText={setAge}
             />
+            {hasSubmitted && !age && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                Age is required
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email (Official/Login ID)</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                hasSubmitted && !email && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
               placeholder="Enter official email"
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
             />
+            {hasSubmitted && !email && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                Official Email is required
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
@@ -203,12 +271,20 @@ export default function StudentAllotmentPage() {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Phone</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                ((hasSubmitted && !phone) || (phone.length > 0 && !/^\d{10}$/.test(phone))) && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
               placeholder="Enter phone"
               keyboardType="phone-pad"
               value={phone}
               onChangeText={setPhone}
             />
+            {((hasSubmitted && !phone) || (phone.length > 0 && !/^\d{10}$/.test(phone))) && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                {!phone ? 'Phone is required' : 'Number must be 10 digits'}
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>

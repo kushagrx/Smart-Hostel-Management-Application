@@ -81,6 +81,8 @@ export default function StudentsPage() {
     try {
       const { getDbSafe } = await import('../../utils/firebase');
       const { doc, updateDoc, collection, query, where, getDocs, writeBatch } = await import('firebase/firestore');
+      const { allocateRoom, deallocateRoom } = await import('../../utils/roomUtils');
+
       const db = getDbSafe();
       if (!db) {
         Alert.alert('Error', 'Database not connected');
@@ -89,9 +91,22 @@ export default function StudentsPage() {
 
       setLoading(true);
 
+      const roomChanged = editRoom !== editingStudent.room;
+
+      // 1. If room changed, reserve the new room first (checks capacity)
+      if (roomChanged) {
+        try {
+          await allocateRoom(db, editRoom, editingStudent.id, editName);
+        } catch (err: any) {
+          Alert.alert('Room Assignment Failed', err.message);
+          setLoading(false);
+          return;
+        }
+      }
+
       const batch = writeBatch(db);
 
-      // 1. Update Allocation Document
+      // 2. Update Allocation Document
       const allocationRef = doc(db, 'allocations', editingStudent.id); // ID is official email
       const updates = {
         name: editName,
@@ -100,24 +115,14 @@ export default function StudentsPage() {
         collegeName: editCollege,
         age: editAge,
         phone: editPhone,
-
         personalEmail: editPersonalEmail,
         status: editStatus,
         tempPassword: editPassword,
       };
       batch.update(allocationRef, updates);
 
-      // 2. Find and Update User Profile (if exists) via Official Email
-      // Note: Assuming User ID might not be known, so we query.
-      // Actually, we can check if any user has this email.
-
-      // Strategy: Query users where email == officialEmail OR personalEmail == officialEmail etc.
-      // Simpler: Query users where 'officialEmail' == editingStudent.id OR 'email' == editingStudent.id
-
-      // Because we structured users to have `officialEmail` field upon login, we can use that.
+      // 3. Find and Update User Profile (if exists) via Official Email
       const usersRef = collection(db, 'users');
-      // Query for users linked to this official email
-      // This covers the case where they logged in via Google (and set officialEmail)
       const q = query(usersRef, where('officialEmail', '==', editingStudent.id));
       const querySnap = await getDocs(q);
 
@@ -125,7 +130,6 @@ export default function StudentsPage() {
         batch.update(userDoc.ref, updates);
       });
 
-      // Also check if they logged in directly with the official email (and it matches their auth email)
       if (querySnap.empty) {
         const q2 = query(usersRef, where('email', '==', editingStudent.id));
         const snap2 = await getDocs(q2);
@@ -134,11 +138,25 @@ export default function StudentsPage() {
         });
       }
 
-      await batch.commit();
+      try {
+        await batch.commit();
 
-      Alert.alert('Success', 'Student details updated successfully.');
-      setEditModalVisible(false);
-      setEditingStudent(null);
+        // 4. If commit successful AND room changed, release the old room
+        if (roomChanged && editingStudent.room) {
+          await deallocateRoom(db, editingStudent.room, editingStudent.id);
+        }
+
+        Alert.alert('Success', 'Student details updated successfully.');
+        setEditModalVisible(false);
+        setEditingStudent(null);
+      } catch (commitError: any) {
+        // 5. If batch failed, rollback the new room allocation
+        if (roomChanged) {
+          await deallocateRoom(db, editRoom, editingStudent.id);
+        }
+        throw commitError;
+      }
+
     } catch (e: any) {
       console.error(e);
       Alert.alert('Error', 'Failed to update student: ' + e.message);
@@ -148,7 +166,7 @@ export default function StudentsPage() {
   };
 
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string, room: string) => {
     Alert.alert('Confirm Delete', `Are you sure you want to remove ${name}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -158,9 +176,15 @@ export default function StudentsPage() {
           try {
             const { getDbSafe } = await import('../../utils/firebase');
             const { doc, deleteDoc } = await import('firebase/firestore');
+            const { deallocateRoom } = await import('../../utils/roomUtils');
+
             const db = getDbSafe();
             if (db) {
               await deleteDoc(doc(db, 'allocations', id));
+              // Sync Room
+              if (room) {
+                await deallocateRoom(db, room, id);
+              }
               setSelectedId(null);
             }
           } catch (e) {
@@ -446,7 +470,7 @@ export default function StudentsPage() {
 
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.deleteBtn]}
-                      onPress={() => handleDelete(item.id, item.name)}
+                      onPress={() => handleDelete(item.id, item.name, item.room)}
                     >
                       <MaterialIcons name="delete" size={16} color="#fff" />
                       <Text style={styles.actionBtnText}>Delete</Text>
