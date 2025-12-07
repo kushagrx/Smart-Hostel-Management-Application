@@ -18,15 +18,15 @@ import { useTheme } from '../../utils/ThemeContext';
 
 const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, colors, isLast }: any) => {
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
-        styles.row, 
-        { 
+        styles.row,
+        {
           borderBottomColor: colors.border,
           borderBottomWidth: isLast ? 0 : 1,
         }
-      ]} 
-      onPress={onPress} 
+      ]}
+      onPress={onPress}
       disabled={!onPress}
       accessible={true}
       accessibilityLabel={label}
@@ -57,13 +57,25 @@ export default function Settings() {
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     Alert.alert(
       "Log Out",
       "Are you sure you want to log out?",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Log Out", onPress: () => router.replace('/login'), style: "destructive" }
+        {
+          text: "Log Out",
+          onPress: async () => {
+            const { getAuthSafe } = await import('../../utils/firebase');
+            const { signOut } = await import('firebase/auth');
+            const auth = getAuthSafe();
+            if (auth) await signOut(auth);
+
+            await setStoredUser(null);
+            router.replace('/login');
+          },
+          style: "destructive"
+        }
       ]
     );
   };
@@ -82,17 +94,17 @@ export default function Settings() {
         {/* Account Section */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
         <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-          <SettingItem 
-            icon="person-outline" 
-            label="Edit Profile" 
-            onPress={() => router.push('/profile/edit')} 
+          <SettingItem
+            icon="person-outline"
+            label="Edit Profile"
+            onPress={() => router.push('/profile/edit')}
             accessibilityHint="Navigates to the edit profile screen"
             colors={colors}
             isLast={false}
           />
-          <SettingItem 
-            icon="lock-outline" 
-            label="Change Password" 
+          <SettingItem
+            icon="lock-outline"
+            label="Change Password"
             onPress={() => router.push('/account/change-password')}
             accessibilityHint="Navigates to the change password screen"
             colors={colors}
@@ -103,21 +115,21 @@ export default function Settings() {
         {/* Notifications Section */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Notifications</Text>
         <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-          <SettingItem 
-            icon="notifications-none" 
-            label="Push Notifications" 
-            isSwitch 
-            value={pushNotifications} 
+          <SettingItem
+            icon="notifications-none"
+            label="Push Notifications"
+            isSwitch
+            value={pushNotifications}
             onValueChange={setPushNotifications}
             accessibilityHint="Toggle push notifications on or off"
             colors={colors}
             isLast={false}
           />
-          <SettingItem 
-            icon="mail-outline" 
-            label="Email Notifications" 
-            isSwitch 
-            value={emailNotifications} 
+          <SettingItem
+            icon="mail-outline"
+            label="Email Notifications"
+            isSwitch
+            value={emailNotifications}
             onValueChange={setEmailNotifications}
             accessibilityHint="Toggle email notifications on or off"
             colors={colors}
@@ -128,20 +140,20 @@ export default function Settings() {
         {/* App Preferences Section */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>App Preferences</Text>
         <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-          <SettingItem 
-            icon="brightness-6" 
-            label="Dark Mode" 
-            isSwitch 
-            value={theme === 'dark'} 
+          <SettingItem
+            icon="brightness-6"
+            label="Dark Mode"
+            isSwitch
+            value={theme === 'dark'}
             onValueChange={toggleTheme}
             accessibilityHint="Toggle dark mode for the app"
             colors={colors}
             isLast={false}
           />
-          <SettingItem 
-            icon="language" 
-            label="Language" 
-            onPress={() => {}} 
+          <SettingItem
+            icon="language"
+            label="Language"
+            onPress={() => { }}
             accessibilityHint="Opens language selection options"
             colors={colors}
             isLast={true}
@@ -151,34 +163,34 @@ export default function Settings() {
         {/* About Section */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>About & Support</Text>
         <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-          <SettingItem 
-            icon="support-agent" 
-            label="Contact Support" 
-            onPress={() => {}} 
+          <SettingItem
+            icon="support-agent"
+            label="Contact Support"
+            onPress={() => { }}
             accessibilityHint="Opens the contact support page"
             colors={colors}
             isLast={false}
           />
-          <SettingItem 
-            icon="help-outline" 
-            label="FAQs" 
-            onPress={() => {}} 
+          <SettingItem
+            icon="help-outline"
+            label="FAQs"
+            onPress={() => { }}
             accessibilityHint="Navigates to the Frequently Asked Questions page"
             colors={colors}
             isLast={false}
           />
-          <SettingItem 
-            icon="policy" 
-            label="Privacy Policy" 
-            onPress={() => {}} 
+          <SettingItem
+            icon="policy"
+            label="Privacy Policy"
+            onPress={() => { }}
             accessibilityHint="Opens the privacy policy"
             colors={colors}
             isLast={false}
           />
           <View style={[styles.row, { borderBottomWidth: 0, borderBottomColor: colors.border }]}>
             <View style={styles.labelContainer}>
-                <MaterialIcons name="info-outline" size={24} color={colors.icon} />
-                <Text style={[styles.label, { color: colors.text }]}>App Version</Text>
+              <MaterialIcons name="info-outline" size={24} color={colors.icon} />
+              <Text style={[styles.label, { color: colors.text }]}>App Version</Text>
             </View>
             <Text style={[styles.value, { color: colors.secondary }]}>{Application.nativeApplicationVersion}</Text>
           </View>
@@ -188,19 +200,6 @@ export default function Settings() {
         <TouchableOpacity style={[styles.logoutButton, { backgroundColor: theme === 'dark' ? '#4d1f1f' : '#FFF3F3' }]} onPress={handleLogout}>
           <MaterialIcons name="logout" size={22} color="#FF5252" />
           <Text style={styles.logoutButtonText}>Log Out</Text>
-        </TouchableOpacity>
-
-        {/* Dev: Open Admin Dashboard */}
-        <TouchableOpacity
-          style={[styles.logoutButton, { backgroundColor: '#fff3e0' }]}
-          onPress={async () => {
-            // quick dev helper to set an admin user in storage and navigate
-            await setStoredUser({ id: 'dev-admin', name: 'Admin (dev)', role: 'admin' });
-            router.push('/admin');
-          }}
-        >
-          <MaterialIcons name="admin-panel-settings" size={22} color="#FF8C00" />
-          <Text style={[styles.logoutButtonText, { color: '#FF8C00' }]}>Open Admin Dashboard</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

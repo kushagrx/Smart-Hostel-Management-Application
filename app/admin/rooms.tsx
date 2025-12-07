@@ -2,21 +2,47 @@ import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdmin, useUser } from '../../utils/authUtils';
 
-const MOCK_ROOMS = [
-  { id: 'r101', number: '101', occupant: 'Alice', status: 'occupied', capacity: 2, occupied: 1 },
-  { id: 'r102', number: '102', occupant: 'Bob', status: 'occupied', capacity: 2, occupied: 2 },
-  { id: 'r103', number: '103', occupant: null, status: 'vacant', capacity: 2, occupied: 0 },
-  { id: 'r104', number: '104', occupant: 'Charlie', status: 'occupied', capacity: 2, occupied: 1 },
-  { id: 'r105', number: '105', occupant: null, status: 'maintenance', capacity: 2, occupied: 0 },
-];
+
 
 export default function RoomsPage() {
   const user = useUser();
   const router = useRouter();
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    let unsubscribe: () => void;
+
+    const fetchRooms = async () => {
+      try {
+        const { getDbSafe } = await import('../../utils/firebase');
+        const { collection, query, orderBy, onSnapshot } = await import('firebase/firestore');
+        const db = getDbSafe();
+        if (!db) return;
+
+        const q = query(collection(db, 'rooms'), orderBy('number', 'asc'));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setRooms(list);
+          setLoading(false);
+        });
+      } catch (e) {
+        console.error(e);
+        setLoading(false);
+      }
+    };
+
+    fetchRooms();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
 
   if (!isAdmin(user))
     return (
@@ -25,12 +51,17 @@ export default function RoomsPage() {
       </View>
     );
 
-  const occupiedRooms = MOCK_ROOMS.filter((r) => r.status === 'occupied').length;
-  const vacantRooms = MOCK_ROOMS.filter((r) => r.status === 'vacant').length;
+  const occupiedRooms = rooms.filter((r) => r.status === 'full' || r.status === 'occupied').length; // full is also occupied
+  const vacantRooms = rooms.filter((r) => r.status === 'vacant').length;
+
+  const filteredRooms = rooms.filter((room) =>
+    room.number.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'occupied':
+      case 'full':
         return '#06B6D4';
       case 'vacant':
         return '#8B5CF6';
@@ -44,6 +75,7 @@ export default function RoomsPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'occupied':
+      case 'full':
         return 'check-circle';
       case 'vacant':
         return 'home-outline';
@@ -54,103 +86,116 @@ export default function RoomsPage() {
     }
   };
 
+
+  const getOccupantNames = (item: any) => {
+    if (item.occupantDetails && item.occupantDetails.length > 0) {
+      return item.occupantDetails.map((d: any) => d.name).join(', ');
+    }
+    return 'Vacant';
+  };
+
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={['#0891B2', '#06B6D4']} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialIcons name="chevron-left" size={28} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Manage Rooms</Text>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <MaterialIcons name="door-closed" size={24} color="#0891B2" />
-          <Text style={styles.statValue}>{MOCK_ROOMS.length}</Text>
-          <Text style={styles.statLabel}>Total Rooms</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="check-circle" size={24} color="#06B6D4" />
-          <Text style={styles.statValue}>{occupiedRooms}</Text>
-          <Text style={styles.statLabel}>Occupied</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="home-outline" size={24} color="#14B8A6" />
-          <Text style={styles.statValue}>{vacantRooms}</Text>
-          <Text style={styles.statLabel}>Vacant</Text>
-        </View>
-      </View>
-
-      {/* list header removed per UI request */}
-
-      <FlatList
-        data={MOCK_ROOMS}
-        scrollEnabled={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.roomCard,
-              selectedRoom === item.id && styles.roomCardActive,
-            ]}
-            onPress={() => setSelectedRoom(selectedRoom === item.id ? null : item.id)}
-          >
-            <View style={styles.roomHeader}>
-              <View style={styles.roomNumber}>
-                <Text style={styles.roomNumberText}>#{item.number}</Text>
-              </View>
-              <View style={styles.roomInfo}>
-                <Text style={styles.roomTitle}>
-                  {item.occupant ? item.occupant : 'Vacant'}
-                </Text>
-                <Text style={styles.roomCapacity}>
-                  Capacity: {item.occupied}/{item.capacity}
-                </Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                <MaterialIcons name={getStatusIcon(item.status)} size={16} color="#fff" />
-                <Text style={styles.statusText}>{item.status}</Text>
-              </View>
-            </View>
-
-            {selectedRoom === item.id && (
-              <View style={styles.expandedContent}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Room Number:</Text>
-                  <Text style={styles.detailValue}>{item.number}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Current Occupant:</Text>
-                  <Text style={styles.detailValue}>
-                    {item.occupant || 'No occupant'}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Bed Usage:</Text>
-                  <Text style={styles.detailValue}>
-                    {item.occupied} of {item.capacity} beds
-                  </Text>
-                </View>
-
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]}>
-                    <MaterialIcons name="pencil" size={16} color="#fff" />
-                    <Text style={styles.actionBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, styles.dangerBtn]}>
-                    <MaterialIcons name="delete" size={16} color="#fff" />
-                    <Text style={styles.actionBtnText}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <LinearGradient colors={['#0891B2', '#06B6D4']} style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="chevron-left" size={28} color="#fff" />
           </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContent}
-      />
-    </ScrollView>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Manage Rooms</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <MaterialIcons name="door-closed" size={24} color="#0891B2" />
+            <Text style={styles.statValue}>{rooms.length}</Text>
+            <Text style={styles.statLabel}>Total Rooms</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="check-circle" size={24} color="#06B6D4" />
+            <Text style={styles.statValue}>{occupiedRooms}</Text>
+            <Text style={styles.statLabel}>Occupied</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="home-outline" size={24} color="#14B8A6" />
+            <Text style={styles.statValue}>{vacantRooms}</Text>
+            <Text style={styles.statLabel}>Vacant</Text>
+          </View>
+        </View>
+
+        <View style={styles.searchContainer}>
+          <MaterialIcons name="magnify" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by room number..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        <FlatList
+          data={filteredRooms}
+          scrollEnabled={false}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.roomCard,
+                selectedRoom === item.id && styles.roomCardActive,
+              ]}
+              onPress={() => setSelectedRoom(selectedRoom === item.id ? null : item.id)}
+            >
+              <View style={styles.roomHeader}>
+                <View style={styles.roomNumber}>
+                  <Text style={styles.roomNumberText}>#{item.number}</Text>
+                </View>
+                <View style={styles.roomInfo}>
+                  <Text style={styles.roomTitle}>
+                    {getOccupantNames(item)}
+                  </Text>
+                  <Text style={styles.roomCapacity}>
+                    Occupancy: {item.occupants?.length || 0}/{item.capacity || 2}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                  <MaterialIcons name={getStatusIcon(item.status)} size={16} color="#fff" />
+                  <Text style={styles.statusText}>{item.status}</Text>
+                </View>
+              </View>
+
+              {selectedRoom === item.id && (
+                <View style={styles.expandedContent}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Room Number:</Text>
+                    <Text style={styles.detailValue}>{item.number}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Occupants:</Text>
+                    <Text style={styles.detailValue}>
+                      {getOccupantNames(item)}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Availability:</Text>
+                    <Text style={styles.detailValue}>
+                      {(item.capacity || 2) - (item.occupants?.length || 0)} spots left
+                    </Text>
+                  </View>
+
+                  {/* Removed Action Buttons since Room Editing is done via Student Allotment mostly */}
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <Text style={{ textAlign: 'center', marginTop: 20, color: '#666' }}>No rooms found. Allot students to create rooms.</Text>
+          }
+        />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -207,6 +252,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     marginTop: 4,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    marginBottom: 16,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#0891B2',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#333',
   },
   listHeader: {
     paddingHorizontal: 20,

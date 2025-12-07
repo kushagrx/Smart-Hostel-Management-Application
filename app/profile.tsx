@@ -1,20 +1,39 @@
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
-import { Stack } from 'expo-router';
-import React from 'react'
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Stack, useRouter } from 'expo-router';
+import { signOut } from 'firebase/auth';
+import React from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { setStoredUser } from '../utils/authUtils';
+import { getAuthSafe } from '../utils/firebase';
 import { getInitial, userData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
 
 const Profile = () => {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      const auth = getAuthSafe();
+      if (auth) {
+        await signOut(auth);
+      }
+      await setStoredUser(null);
+
+      // Use replace to prevent going back
+      router.replace('/login');
+    } catch (error: any) {
+      Alert.alert('Error', 'Failed to logout: ' + error.message);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           headerShown: false,
-        }} 
+        }}
       />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
@@ -28,7 +47,7 @@ const Profile = () => {
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Info</Text>
-        <View style={[styles.infoCard, { backgroundColor: colors.theme === 'dark' ? '#1e3a5f' : '#E3F2FD' }]}>
+        <View style={[styles.infoCard, { backgroundColor: theme === 'dark' ? '#1e3a5f' : '#E3F2FD' }]}>
           <View style={styles.infoItem}>
             <MaterialCommunityIcons name="cash" size={24} color="#2196F3" />
             <View>
@@ -62,7 +81,7 @@ const Profile = () => {
           </Pressable>
         </View>
 
-        <Pressable style={styles.logoutButton}>
+        <Pressable style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Logout</Text>
         </Pressable>
       </ScrollView>

@@ -2,8 +2,9 @@ import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { isAdmin, useUser } from '../../utils/authUtils';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { isAdmin, setStoredUser, useUser } from '../../utils/authUtils';
 
 const MOCK_STUDENTS = [{ id: 's1', name: 'Alice' }, { id: 's2', name: 'Bob' }, { id: 's3', name: 'Charlie' }];
 const MOCK_ROOMS = [{ id: 'r1', number: '101' }, { id: 'r2', number: '102' }];
@@ -33,8 +34,8 @@ export default function AdminDashboard() {
 
   if (!isAdmin(user)) {
     return (
-      <View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
-        <Text style={{fontSize:16}}>Access denied. Admins only.</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 16 }}>Access denied. Admins only.</Text>
       </View>
     );
   }
@@ -48,7 +49,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <View style={styles.mainContainer}>
+    <SafeAreaView style={styles.mainContainer} edges={['top']}>
       {/* Header with Hamburger Menu */}
       <LinearGradient
         colors={['#FF8C00', '#FFA500']}
@@ -56,7 +57,7 @@ export default function AdminDashboard() {
         end={{ x: 1, y: 1 }}
         style={styles.headerBar}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.hamburgerBtn}
           onPress={() => setSidebarOpen(!sidebarOpen)}
         >
@@ -76,7 +77,7 @@ export default function AdminDashboard() {
       {/* Side Sidebar Panel */}
       {sidebarOpen && (
         <View style={styles.sidebarOverlay}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.overlayBackground}
             onPress={() => setSidebarOpen(false)}
           />
@@ -88,25 +89,67 @@ export default function AdminDashboard() {
               </TouchableOpacity>
             </View>
 
-            {navItems.map((item) => (
+            <ScrollView
+              style={styles.sidebarScrollView}
+              contentContainerStyle={styles.sidebarScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {navItems.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.sidebarItem, activeNav === item.id && styles.sidebarItemActive]}
+                  onPress={() => handleNavPress(item.id)}
+                >
+                  <View style={[styles.sidebarIconContainer, { backgroundColor: item.color + '20' }]}>
+                    <MaterialIcons name={item.icon as any} size={24} color={item.color} />
+                  </View>
+                  <View style={styles.sidebarItemContent}>
+                    <Text style={[styles.sidebarItemLabel, activeNav === item.id && styles.sidebarItemLabelActive]}>
+                      {item.label}
+                    </Text>
+                  </View>
+                  {activeNav === item.id && (
+                    <MaterialIcons name="check-circle" size={20} color={item.color} />
+                  )}
+                </TouchableOpacity>
+              ))}
+
+              {/* Logout Button */}
+              <View style={styles.sidebarDivider} />
               <TouchableOpacity
-                key={item.id}
-                style={[styles.sidebarItem, activeNav === item.id && styles.sidebarItemActive]}
-                onPress={() => handleNavPress(item.id)}
+                style={styles.sidebarLogoutItem}
+                onPress={async () => {
+                  Alert.alert(
+                    "Log Out",
+                    "Are you sure you want to log out?",
+                    [
+                      { text: "Cancel", style: "cancel", onPress: () => setSidebarOpen(false) },
+                      {
+                        text: "Log Out",
+                        style: "destructive",
+                        onPress: async () => {
+                          const { getAuthSafe } = await import('../../utils/firebase');
+                          const { signOut } = await import('firebase/auth');
+                          const auth = getAuthSafe();
+                          if (auth) await signOut(auth);
+
+                          await setStoredUser(null);
+                          setSidebarOpen(false);
+                          router.replace('/login');
+                        },
+                      },
+                    ]
+                  );
+                }}
               >
-                <View style={[styles.sidebarIconContainer, { backgroundColor: item.color + '20' }]}>
-                  <MaterialIcons name={item.icon} size={24} color={item.color} />
+                <View style={[styles.sidebarIconContainer, { backgroundColor: '#FF525220' }]}>
+                  <MaterialIcons name="logout" size={24} color="#FF5252" />
                 </View>
                 <View style={styles.sidebarItemContent}>
-                  <Text style={[styles.sidebarItemLabel, activeNav === item.id && styles.sidebarItemLabelActive]}>
-                    {item.label}
-                  </Text>
+                  <Text style={styles.sidebarLogoutLabel}>Log Out</Text>
                 </View>
-                {activeNav === item.id && (
-                  <MaterialIcons name="check-circle" size={20} color={item.color} />
-                )}
               </TouchableOpacity>
-            ))}
+            </ScrollView>
           </View>
         </View>
       )}
@@ -125,10 +168,10 @@ export default function AdminDashboard() {
           {MOCK_COMPLAINTS.map((c) => (
             <View key={c.id} style={styles.listItem}>
               <View style={styles.itemIconContainer}>
-                <MaterialIcons 
-                  name={c.priority === 'high' ? 'alert' : 'information'} 
-                  size={16} 
-                  color={c.priority === 'high' ? '#F44336' : '#FF9800'} 
+                <MaterialIcons
+                  name={c.priority === 'high' ? 'alert' : 'information'}
+                  size={16}
+                  color={c.priority === 'high' ? '#F44336' : '#FF9800'}
                 />
               </View>
               <View style={styles.itemContent}>
@@ -192,7 +235,7 @@ export default function AdminDashboard() {
           ))}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -245,8 +288,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 999,
+    zIndex: 10, // Lower zIndex to stay below system UI elements
     flexDirection: 'row-reverse',
+    // Add safe area insets to prevent covering system UI
+    paddingTop: 30, // Space for status bar
   },
   overlayBackground: {
     flex: 1,
@@ -261,6 +306,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowOffset: { width: 2, height: 0 },
     elevation: 10,
+    // Ensure panel respects safe area
+    marginTop: -30, // Compensate for the paddingTop in parent
   },
   sidebarHeader: {
     flexDirection: 'row',
@@ -270,6 +317,12 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  sidebarScrollView: {
+    flex: 1,
+  },
+  sidebarScrollContent: {
+    paddingBottom: 20,
   },
   sidebarTitle: {
     fontSize: 20,
@@ -307,6 +360,28 @@ const styles = StyleSheet.create({
   sidebarItemLabelActive: {
     color: '#6366F1',
     fontWeight: '800',
+  },
+  sidebarDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 20,
+    marginVertical: 12,
+  },
+  sidebarLogoutItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginHorizontal: 8,
+    marginVertical: 4,
+    borderRadius: 12,
+    gap: 12,
+    backgroundColor: '#FFF5F5',
+  },
+  sidebarLogoutLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF5252',
   },
   container: {
     paddingBottom: 20,
