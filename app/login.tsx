@@ -105,22 +105,35 @@ export default function Login() {
           const allocationSnap = await getDoc(allocationRef);
 
           if (!allocationSnap.exists()) {
-            // Not allotted at all
-            throw new Error('Access Denied: Your email has not been allotted a room by the Admin.');
+            // If not allotted, check if it was 'User Not Found' (Stranger) or 'Wrong Password' (Admin)
+            if (signInError.code === 'auth/user-not-found') {
+              throw new Error('Access Denied: Your email has not been allotted a room by the Admin.');
+            } else {
+              // Likely Admin or other unallocated user typing wrong password
+              throw signInError;
+            }
           }
 
           const allocationData = allocationSnap.data();
           const expectedPassword = allocationData.tempPassword;
 
-          // 2. Validate Password
-          if (expectedPassword && password.trim() !== expectedPassword) {
-            // Wrong password for first time login
-            throw new Error('Invalid Credentials: Please use the password provided by the Admin.');
+          // 2. If password matches the expected (Temp) Password, try to create account
+          if (expectedPassword && password.trim() === expectedPassword) {
+            // 3. Create Account
+            try {
+              const { createUserWithEmailAndPassword } = await import('firebase/auth');
+              cred = await createUserWithEmailAndPassword(a, email.trim(), password.trim());
+            } catch (createError: any) {
+              if (createError.code === 'auth/email-already-in-use') {
+                // Account exists, pass matched temp, but signIn failed.
+                throw new Error('Invalid Credentials.');
+              }
+              throw createError;
+            }
+          } else {
+            // Password doesn't match Temp Password, and signIn failed.
+            throw new Error('Invalid Credentials.');
           }
-
-          // 3. Create Account
-          const { createUserWithEmailAndPassword } = await import('firebase/auth');
-          cred = await createUserWithEmailAndPassword(a, email.trim(), password.trim());
         } else {
           throw signInError;
         }

@@ -11,6 +11,7 @@ export interface StudentData {
   roomNo: string;
   rollNo?: string;
   collegeName?: string;
+  hostelName?: string;
   age?: string;
   phone?: string;
   personalEmail?: string;
@@ -46,6 +47,7 @@ export const fetchUserData = async (): Promise<StudentData | null> => {
         roomNo: data.room || 'N/A',
         rollNo: data.rollNo || 'N/A',
         collegeName: data.collegeName || 'N/A',
+        hostelName: data.hostelName || 'N/A',
         age: data.age || 'N/A',
         phone: data.phone || 'N/A',
         personalEmail: data.personalEmail || userEmail || 'N/A',
