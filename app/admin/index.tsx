@@ -64,7 +64,7 @@ export default function AdminDashboard() {
 
     // Subscribe to complaints
     unsubscribeComplaints = subscribeToAllComplaints((data) => {
-      setRecentComplaints(data.slice(0, 3)); // Only show recent 3
+      setRecentComplaints(data.filter(c => c.status !== 'closed' && c.status !== 'resolved').slice(0, 3)); // Only show recent 3 non-closed/resolved
     });
 
     // Subscribe to pending leaves

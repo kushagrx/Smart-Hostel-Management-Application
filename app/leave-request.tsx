@@ -84,6 +84,12 @@ export default function LeaveRequestPage() {
         if (selectedDate) setEndDate(selectedDate);
     };
 
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await loadHistory();
+        setRefreshing(false);
+    };
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'approved': return '#10B981';
@@ -108,10 +114,13 @@ export default function LeaveRequestPage() {
                         <Pressable onPress={() => router.back()} style={styles.backBtn}>
                             <MaterialIcons name="arrow-back" size={24} color="#fff" />
                         </Pressable>
-                        <View>
+                        <View style={{ flex: 1 }}>
                             <Text style={styles.headerTitle}>Apply for Leave</Text>
                             <Text style={styles.headerSubtitle}>Request Time Off</Text>
                         </View>
+                        <Pressable onPress={handleRefresh} style={styles.backBtn} disabled={refreshing}>
+                            <MaterialIcons name="refresh" size={24} color={refreshing ? "rgba(255,255,255,0.5)" : "#fff"} />
+                        </Pressable>
                     </View>
                 </SafeAreaView>
             </LinearGradient>

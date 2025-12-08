@@ -68,7 +68,7 @@ export default function Index() {
                   <Text style={styles.userName}>{student.fullName}</Text>
                   <View style={styles.hostelBadge}>
                     <MaterialCommunityIcons name="office-building-marker" size={14} color="rgba(255,255,255,0.9)" />
-                    <Text style={styles.hostelName}>Aashiyana Grand</Text>
+                    <Text style={styles.hostelName}>{student.hostelName || 'Smart Hostel'}</Text>
                   </View>
                 </View>
                 <Pressable onPress={() => router.push('/profile')} style={styles.profileBtn}>

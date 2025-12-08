@@ -15,6 +15,7 @@ export default function StudentAllotmentPage() {
   const [fullName, setFullName] = useState('');
   const [rollNo, setRollNo] = useState('');
   const [collegeName, setCollegeName] = useState('');
+  const [hostelName, setHostelName] = useState('');
   const [age, setAge] = useState('');
   const [room, setRoom] = useState('');
   const [email, setEmail] = useState('');
@@ -33,7 +34,7 @@ export default function StudentAllotmentPage() {
   const handleSubmit = async () => {
     setHasSubmitted(true);
 
-    if (!fullName || !rollNo || !collegeName || !age || !room || !email || !phone) {
+    if (!fullName || !rollNo || !collegeName || !hostelName || !age || !room || !email || !phone) {
       Alert.alert('Missing details', 'Please fill all mandatory fields (marked red).');
       return;
     }
@@ -64,6 +65,7 @@ export default function StudentAllotmentPage() {
           name: fullName,
           rollNo,
           collegeName,
+          hostelName,
           age,
           room,
           email: email.toLowerCase().trim(),
@@ -210,6 +212,24 @@ export default function StudentAllotmentPage() {
             {hasSubmitted && !collegeName && (
               <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
                 College Name is required
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Hostel Name</Text>
+            <TextInput
+              style={[
+                styles.input,
+                hasSubmitted && !hostelName && { borderColor: '#EF4444', borderWidth: 1.5 }
+              ]}
+              placeholder="Enter hostel name"
+              value={hostelName}
+              onChangeText={setHostelName}
+            />
+            {hasSubmitted && !hostelName && (
+              <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 2 }}>
+                Hostel Name is required
               </Text>
             )}
           </View>

@@ -6,7 +6,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { setStoredUser } from '../utils/authUtils';
 import { getAuthSafe } from '../utils/firebase';
-import { getInitial, fetchUserData, StudentData } from '../utils/nameUtils';
+import { fetchUserData, getInitial, StudentData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
 
 const Profile = () => {
@@ -135,6 +135,15 @@ const Profile = () => {
               <View style={styles.detailContent}>
                 <Text style={[styles.detailLabel, { color: colors.secondary }]}>Age</Text>
                 <Text style={[styles.detailText, { color: colors.text }]}>{student.age}</Text>
+              </View>
+            </Pressable>
+          )}
+          {student.hostelName && (
+            <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
+              <MaterialCommunityIcons name="home-city" size={24} color={colors.icon} />
+              <View style={styles.detailContent}>
+                <Text style={[styles.detailLabel, { color: colors.secondary }]}>Hostel Name</Text>
+                <Text style={[styles.detailText, { color: colors.text }]}>{student.hostelName}</Text>
               </View>
             </Pressable>
           )}

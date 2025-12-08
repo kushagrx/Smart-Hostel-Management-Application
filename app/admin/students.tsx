@@ -25,6 +25,7 @@ export default function StudentsPage() {
   const [editRollNo, setEditRollNo] = useState('');
   const [editRoom, setEditRoom] = useState('');
   const [editCollege, setEditCollege] = useState('');
+  const [editHostelName, setEditHostelName] = useState('');
   const [editAge, setEditAge] = useState('');
   const [editPhone, setEditPhone] = useState('');
 
@@ -67,6 +68,7 @@ export default function StudentsPage() {
     setEditRollNo(student.rollNo || '');
     setEditRoom(student.room || '');
     setEditCollege(student.collegeName || '');
+    setEditHostelName(student.hostelName || '');
     setEditAge(student.age || '');
     setEditPhone(student.phone || '');
     setEditPersonalEmail(student.personalEmail || '');
@@ -113,6 +115,7 @@ export default function StudentsPage() {
         rollNo: editRollNo,
         room: editRoom,
         collegeName: editCollege,
+        hostelName: editHostelName,
         age: editAge,
         phone: editPhone,
         personalEmail: editPersonalEmail,
@@ -250,6 +253,9 @@ export default function StudentsPage() {
 
                 <Text style={styles.modalLabel}>College Name</Text>
                 <TextInput style={styles.modalInput} value={editCollege} onChangeText={setEditCollege} />
+
+                <Text style={styles.modalLabel}>Hostel Name</Text>
+                <TextInput style={styles.modalInput} value={editHostelName} onChangeText={setEditHostelName} />
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
@@ -403,6 +409,13 @@ export default function StudentsPage() {
                         <Text style={styles.detailLabel}>College</Text>
                       </View>
                       <Text style={styles.detailValue}>{item.collegeName || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailLeft}>
+                        <MaterialIcons name="home-city" size={16} color="#8B5CF6" />
+                        <Text style={styles.detailLabel}>Hostel</Text>
+                      </View>
+                      <Text style={styles.detailValue}>{item.hostelName || 'N/A'}</Text>
                     </View>
                     <View style={styles.detailRow}>
                       <View style={styles.detailLeft}>
