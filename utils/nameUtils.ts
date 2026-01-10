@@ -1,5 +1,5 @@
-import { getAuthSafe, getDbSafe } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { getAuthSafe, getDbSafe } from './firebase';
 
 export const getInitial = (name: string): string => {
   if (!name) return '';
@@ -11,12 +11,14 @@ export interface StudentData {
   roomNo: string;
   rollNo?: string;
   collegeName?: string;
+  hostelName?: string;
   age?: string;
   phone?: string;
   personalEmail?: string;
   status?: string;
   dues?: number;
   wifiSSID?: string;
+  email?: string;
 }
 
 export const userData: StudentData = {
@@ -33,7 +35,7 @@ export const fetchUserData = async (): Promise<StudentData | null> => {
     if (!auth?.currentUser || !db) return null;
 
     const userEmail = auth.currentUser.email;
-    
+
     // Try to fetch from allocations collection using email as ID
     const allocationRef = doc(db, 'allocations', userEmail || '');
     const allocationSnap = await getDoc(allocationRef);
@@ -45,12 +47,14 @@ export const fetchUserData = async (): Promise<StudentData | null> => {
         roomNo: data.room || 'N/A',
         rollNo: data.rollNo || 'N/A',
         collegeName: data.collegeName || 'N/A',
+        hostelName: data.hostelName || 'N/A',
         age: data.age || 'N/A',
         phone: data.phone || 'N/A',
         personalEmail: data.personalEmail || userEmail || 'N/A',
         status: data.status || 'active',
         dues: data.dues || 0,
         wifiSSID: data.wifiSSID || 'ENET_' + (data.room || 'N/A'),
+        email: userEmail || undefined,
       };
     }
 

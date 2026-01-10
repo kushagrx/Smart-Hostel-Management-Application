@@ -2,49 +2,70 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../context/AlertContext';
 import { setStoredUser } from '../utils/authUtils';
 import { getAuthSafe } from '../utils/firebase';
-import { getInitial, fetchUserData, StudentData } from '../utils/nameUtils';
+import { fetchUserData, getInitial, StudentData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
 
-const Profile = () => {
+export default function ProfilePage() {
   const { colors, theme } = useTheme();
   const router = useRouter();
+  const { showAlert } = useAlert();
   const [student, setStudent] = useState<StudentData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const data = await fetchUserData();
-        setStudent(data);
-      } catch (error) {
-        console.error('Failed to load user data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadUserData();
-
-    // Set up real-time listener
-    const interval = setInterval(loadUserData, 5000); // Refresh every 5 seconds
+    const interval = setInterval(loadUserData, 10000); // Relaxed interval since we have pull-to-refresh
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogout = async () => {
+  const loadUserData = async () => {
     try {
-      const auth = getAuthSafe();
-      if (auth) {
-        await signOut(auth);
-      }
-      await setStoredUser(null);
-      router.replace('/login');
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to logout: ' + error.message);
+      const data = await fetchUserData();
+      setStudent(data);
+    } catch (error) {
+      console.error('Failed to load user data:', error);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadUserData();
+    setRefreshing(false);
+  };
+
+  const handleSignOut = () => {
+    showAlert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => { } },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const auth = getAuthSafe();
+              if (auth) {
+                await signOut(auth);
+              }
+              await setStoredUser(null); // Clear stored user on successful sign out
+              router.replace('/login');
+            } catch (error: any) {
+              console.error('Error signing out:', error);
+              showAlert('Error', 'Failed to sign out: ' + error.message, [], 'error');
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (loading) {
@@ -74,7 +95,11 @@ const Profile = () => {
           headerShown: false,
         }}
       />
-      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
+      >
         <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
 
         <View style={styles.profileSection}>
@@ -138,6 +163,15 @@ const Profile = () => {
               </View>
             </Pressable>
           )}
+          {student.hostelName && (
+            <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
+              <MaterialCommunityIcons name="home-city" size={24} color={colors.icon} />
+              <View style={styles.detailContent}>
+                <Text style={[styles.detailLabel, { color: colors.secondary }]}>Hostel Name</Text>
+                <Text style={[styles.detailText, { color: colors.text }]}>{student.hostelName}</Text>
+              </View>
+            </Pressable>
+          )}
           <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
             <MaterialCommunityIcons name="email" size={24} color={colors.icon} />
             <View style={styles.detailContent}>
@@ -150,13 +184,13 @@ const Profile = () => {
             <View style={styles.detailContent}>
               <Text style={[styles.detailLabel, { color: colors.secondary }]}>Status</Text>
               <Text style={[styles.detailText, { color: colors.text }]}>
-                {student.status?.charAt(0).toUpperCase() + student.status?.slice(1)}
+                {student.status ? (student.status.charAt(0).toUpperCase() + student.status.slice(1)) : 'Unknown'}
               </Text>
             </View>
           </Pressable>
         </View>
 
-        <Pressable style={styles.logoutButton} onPress={handleLogout}>
+        <Pressable style={styles.logoutButton} onPress={handleSignOut}>
           <Text style={styles.logoutText}>Logout</Text>
         </Pressable>
       </ScrollView>
@@ -280,4 +314,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Profile;

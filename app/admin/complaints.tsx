@@ -1,24 +1,389 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { isAdmin, useUser } from '../../utils/authUtils';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const MOCK = [
-  { id: 'c1', student: 'Alice', text: 'WiFi not working in room 101', category: 'Connectivity', status: 'open', date: '2025-12-06', priority: 'high' },
-  { id: 'c2', student: 'Bob', text: 'Mess food quality is poor', category: 'Mess', status: 'resolved', date: '2025-12-05', priority: 'medium' },
-  { id: 'c3', student: 'Charlie', text: 'Water tap broken in bathroom', category: 'Maintenance', status: 'open', date: '2025-12-06', priority: 'high' },
-  { id: 'c4', student: 'Diana', text: 'Noise complaint from neighbors', category: 'Behavior', status: 'in-progress', date: '2025-12-04', priority: 'medium' },
-  { id: 'c5', student: 'Eve', text: 'Missing luggage in storage', category: 'Lost & Found', status: 'open', date: '2025-12-06', priority: 'low' },
-];
+import { AdminComplaintListSkeleton } from '../../components/SkeletonLists';
+import { useAlert } from '../../context/AlertContext';
+import { useTheme } from '../../utils/ThemeContext';
+import { isAdmin, useUser } from '../../utils/authUtils';
+import { Complaint, getAllComplaints, updateComplaintStatus } from '../../utils/complaintsSyncUtils';
 
 export default function ComplaintsPage() {
+  const { colors, theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const user = useUser();
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    container: {
+      backgroundColor: colors.background,
+      paddingBottom: 20,
+      minHeight: '100%',
+    },
+    header: {
+      paddingVertical: 24,
+      paddingHorizontal: 24,
+      marginBottom: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: colors.primary,
+      shadowOpacity: 0.25,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    headerContent: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: '#fff',
+      letterSpacing: 0.5,
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    statsContainer: {
+      flexDirection: 'row',
+      paddingHorizontal: 20,
+      marginBottom: 24,
+      gap: 12,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 16,
+      alignItems: 'center',
+      shadowColor: colors.textSecondary,
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      elevation: 3,
+    },
+    statValue: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: colors.text,
+      marginTop: 8,
+    },
+    statLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginTop: 2,
+      textAlign: 'center',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    filterContainer: {
+      paddingHorizontal: 20,
+      marginBottom: 24,
+    },
+    filterScroll: {
+      flexDirection: 'row',
+    },
+    filterBtn: {
+      paddingVertical: 10,
+      paddingHorizontal: 18,
+      borderRadius: 24,
+      backgroundColor: colors.card,
+      marginRight: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: colors.textSecondary,
+      shadowOpacity: 0.05,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 1,
+    },
+    filterBtnActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+      shadowColor: colors.primary,
+      shadowOpacity: 0.2,
+      elevation: 3,
+    },
+    filterBtnText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    filterBtnTextActive: {
+      color: '#fff',
+    },
+    listContent: {
+      paddingHorizontal: 20,
+      paddingBottom: 40,
+    },
+    complaintCard: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      marginBottom: 16,
+      overflow: 'hidden',
+      shadowColor: colors.textSecondary,
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    complaintCardActive: {
+      borderColor: colors.primary,
+      borderWidth: 1.5,
+      shadowColor: colors.primary,
+      shadowOpacity: 0.15,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: 18,
+    },
+    studentInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+      gap: 14,
+    },
+    studentAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    studentInitial: {
+      color: '#fff',
+      fontSize: 20,
+      fontWeight: '700',
+    },
+    textInfo: {
+      flex: 1,
+    },
+    studentName: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    complaintPreview: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    statusBadge: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    expandedContent: {
+      backgroundColor: theme === 'dark' ? colors.background : '#F8FAFC',
+      padding: 20,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    detailLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    detailValue: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    priorityBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+    },
+    badgeText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    complaintText: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    complaintTextLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    complaintTextContent: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 22,
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 8,
+    },
+    actionBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: 12,
+      gap: 8,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    progressBtn: {
+      backgroundColor: '#F59E0B',
+    },
+    resolveBtn: {
+      backgroundColor: '#10B981',
+    },
+    closeBtn: {
+      backgroundColor: '#64748B',
+    },
+    actionBtnText: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    resolvedMessage: {
+      backgroundColor: theme === 'dark' ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: theme === 'dark' ? 'rgba(16, 185, 129, 0.3)' : '#D1FAE5',
+    },
+    resolvedMessageText: {
+      color: theme === 'dark' ? '#34D399' : '#047857',
+      fontSize: 13,
+      fontWeight: '600',
+    },
+  }), [colors, theme]);
   const router = useRouter();
+  const { showAlert } = useAlert();
+  const { openId } = useLocalSearchParams();
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadComplaints();
+    setRefreshing(false);
+  };
+
+  // Ref to store Swipeable instances
+  const swipeableRefs = useRef(new Map<string, Swipeable>());
+
+  useEffect(() => {
+    loadComplaints();
+  }, []);
+
+  // Auto-expand if openId is provided
+  useEffect(() => {
+    if (openId && complaints.length > 0) {
+      if (complaints.some(c => c.id === openId)) {
+        setSelectedId(openId as string);
+      }
+    }
+  }, [openId, complaints]);
+
+  const loadComplaints = async () => {
+    try {
+      const data = await getAllComplaints();
+      setComplaints(data);
+    } catch (error) {
+      console.error("Failed to load complaints:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeSwipeable = (id: string) => {
+    const ref = swipeableRefs.current.get(id);
+    if (ref) {
+      ref.close();
+    }
+  };
+
+  const handleUpdateStatus = (id: string, status: 'inProgress' | 'resolved' | 'closed') => {
+    // If it's just 'inProgress', maybe don't show a full confirmation if not needed, 
+    // or just show it for consistency. Let's show it for all major state changes.
+    const actionText = status === 'resolved' ? 'resolve' : status === 'closed' ? 'close' : 'start working on';
+
+    showAlert(
+      'Confirm Action',
+      `Are you sure you want to ${actionText} this complaint?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => closeSwipeable(id),
+        },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              await updateComplaintStatus(id, status);
+              loadComplaints();
+              showAlert("Success", `Complaint marked as ${status}.`, [], 'success');
+            } catch (error) {
+              console.error(error);
+              showAlert("Error", "Failed to update status.", [], 'error');
+            } finally {
+              closeSwipeable(id);
+            }
+          },
+        },
+      ],
+      'warning'
+    );
+  };
 
   if (!isAdmin(user))
     return (
@@ -28,482 +393,316 @@ export default function ComplaintsPage() {
     );
 
   const filteredComplaints = filterStatus
-    ? MOCK.filter((c) => c.status === filterStatus)
-    : MOCK;
+    ? complaints.filter((c) => c.status === filterStatus)
+    : complaints;
 
-  const openCount = MOCK.filter((c) => c.status === 'open').length;
-  const resolvedCount = MOCK.filter((c) => c.status === 'resolved').length;
-  const inProgressCount = MOCK.filter((c) => c.status === 'in-progress').length;
+  const openCount = complaints.filter((c) => c.status === 'open').length;
+  const inProgressCount = complaints.filter((c) => c.status === 'inProgress').length;
+  const resolvedCount = complaints.filter((c) => c.status === 'resolved').length;
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open':
-        return '#FF6B6B';
-      case 'in-progress':
-        return '#FF9800';
-      case 'resolved':
-        return '#4CAF50';
-      default:
-        return '#999';
+      case 'open': return '#FF6B6B';
+      case 'inProgress': return '#FF9800';
+      case 'resolved': return '#4CAF50';
+      case 'closed': return '#94A3B8';
+      default: return '#999';
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string): any => {
     switch (status) {
-      case 'open':
-        return 'alert-circle';
-      case 'in-progress':
-        return 'clock-outline';
-      case 'resolved':
-        return 'check-circle';
-      default:
-        return 'help-circle';
+      case 'open': return 'alert-circle';
+      case 'inProgress': return 'clock-outline';
+      case 'resolved': return 'check-circle';
+      case 'closed': return 'close-circle';
+      default: return 'help-circle';
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high':
-        return '#F44336';
-      case 'medium':
-        return '#FF9800';
-      case 'low':
-        return '#4CAF50';
-      default:
-        return '#999';
+      case 'high': return '#F44336';
+      case 'medium': return '#FF9800';
+      case 'low': return '#4CAF50';
+      case 'emergency': return '#B91C1C';
+      default: return '#999';
     }
   };
 
-  const getPriorityIcon = (priority: string) => {
+  const getPriorityIcon = (priority: string): any => {
     switch (priority) {
-      case 'high':
-        return 'alert';
-      case 'medium':
-        return 'minus-circle';
-      case 'low':
-        return 'check-circle';
-      default:
-        return 'help-circle';
+      case 'high': return 'alert';
+      case 'medium': return 'minus-circle';
+      case 'low': return 'check-circle';
+      case 'emergency': return 'alert-decagram';
+      default: return 'help-circle';
     }
+  };
+
+  const renderLeftActions = (progress: any, dragX: any, item: Complaint) => {
+    if (item.status === 'resolved' || item.status === 'closed') return null;
+    const trans = dragX.interpolate({
+      inputRange: [0, 50, 100],
+      outputRange: [-20, 0, 0],
+    });
+    return (
+      <View style={{ width: 80, marginBottom: 16 }}>
+        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
+          <View
+            style={[styles.actionBtn, styles.resolveBtn, { borderRadius: 20, height: '100%', justifyContent: 'center' }]}
+          >
+            <MaterialIcons name="check" size={24} color="#fff" />
+          </View>
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const renderRightActions = (progress: any, dragX: any, item: Complaint) => {
+    if (item.status === 'resolved' || item.status === 'closed') return null;
+    const trans = dragX.interpolate({
+      inputRange: [-100, -50, 0],
+      outputRange: [0, 0, 20],
+    });
+    return (
+      <View style={{ width: 80, marginBottom: 16 }}>
+        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
+          <View
+            style={[styles.actionBtn, styles.closeBtn, { borderRadius: 20, height: '100%', justifyContent: 'center' }]}
+          >
+            <MaterialIcons name="close" size={28} color="#fff" />
+          </View>
+        </Animated.View>
+      </View>
+    );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={['#E11D48', '#F472B6']} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialIcons name="chevron-left" size={28} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Manage Complaints</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['left', 'right', 'bottom']}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+      >
+        <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: 24 + insets.top }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="chevron-left" size={32} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Manage Complaints</Text>
+          </View>
+
+        </LinearGradient>
+
+
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <MaterialIcons name="alert-circle" size={22} color="#EF4444" />
+            <Text style={styles.statValue}>{openCount}</Text>
+            <Text style={styles.statLabel}>Open</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
+            <Text style={styles.statValue}>{inProgressCount}</Text>
+            <Text style={styles.statLabel}>In Progress</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="check-circle" size={22} color="#10B981" />
+            <Text style={styles.statValue}>{resolvedCount}</Text>
+            <Text style={styles.statLabel}>Resolved</Text>
+          </View>
         </View>
-      </LinearGradient>
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <MaterialIcons name="alert-circle" size={22} color="#E11D48" />
-          <Text style={styles.statValue}>{openCount}</Text>
-          <Text style={styles.statLabel}>Open</Text>
+        <View style={styles.filterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+            <TouchableOpacity
+              style={[styles.filterBtn, !filterStatus && styles.filterBtnActive]}
+              onPress={() => setFilterStatus(null)}
+            >
+              <Text style={[styles.filterBtnText, !filterStatus && styles.filterBtnTextActive]}>All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterBtn, filterStatus === 'open' && styles.filterBtnActive]}
+              onPress={() => setFilterStatus('open')}
+            >
+              <Text style={[styles.filterBtnText, filterStatus === 'open' && styles.filterBtnTextActive]}>Open</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterBtn, filterStatus === 'inProgress' && styles.filterBtnActive]}
+              onPress={() => setFilterStatus('inProgress')}
+            >
+              <Text style={[styles.filterBtnText, filterStatus === 'inProgress' && styles.filterBtnTextActive]}>In Progress</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterBtn, filterStatus === 'resolved' && styles.filterBtnActive]}
+              onPress={() => setFilterStatus('resolved')}
+            >
+              <Text style={[styles.filterBtnText, filterStatus === 'resolved' && styles.filterBtnTextActive]}>Resolved</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
-          <Text style={styles.statValue}>{inProgressCount}</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="check-circle" size={22} color="#10B981" />
-          <Text style={styles.statValue}>{resolvedCount}</Text>
-          <Text style={styles.statLabel}>Resolved</Text>
-        </View>
-      </View>
 
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          <TouchableOpacity
-            style={[styles.filterBtn, !filterStatus && styles.filterBtnActive]}
-            onPress={() => setFilterStatus(null)}
-          >
-            <Text style={[styles.filterBtnText, !filterStatus && styles.filterBtnTextActive]}>All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, filterStatus === 'open' && styles.filterBtnActive]}
-            onPress={() => setFilterStatus('open')}
-          >
-            <Text style={[styles.filterBtnText, filterStatus === 'open' && styles.filterBtnTextActive]}>Open</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, filterStatus === 'in-progress' && styles.filterBtnActive]}
-            onPress={() => setFilterStatus('in-progress')}
-          >
-            <Text style={[styles.filterBtnText, filterStatus === 'in-progress' && styles.filterBtnTextActive]}>In Progress</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, filterStatus === 'resolved' && styles.filterBtnActive]}
-            onPress={() => setFilterStatus('resolved')}
-          >
-            <Text style={[styles.filterBtnText, filterStatus === 'resolved' && styles.filterBtnTextActive]}>Resolved</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* list header removed per UI request */}
-
-      <FlatList
-        data={filteredComplaints}
-        scrollEnabled={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.complaintCard,
-              selectedId === item.id && styles.complaintCardActive,
-            ]}
-            onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.studentInfo}>
-                <View
-                  style={[
-                    styles.studentAvatar,
-                    { backgroundColor: getStatusColor(item.status) },
-                  ]}
-                >
-                  <Text style={styles.studentInitial}>
-                    {item.student.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.textInfo}>
-                  <Text style={styles.studentName}>{item.student}</Text>
-                  <Text style={styles.complaintPreview} numberOfLines={1}>
-                    {item.text}
-                  </Text>
-                </View>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: getStatusColor(item.status) },
-                ]}
-              >
-                <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
-              </View>
-            </View>
-
-            {selectedId === item.id && (
-              <View style={styles.expandedContent}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Student:</Text>
-                  <Text style={styles.detailValue}>{item.student}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Category:</Text>
-                  <Text style={styles.detailValue}>{item.category}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Date:</Text>
-                  <Text style={styles.detailValue}>{item.date}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Status:</Text>
-                  <View style={[styles.priorityBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                    <MaterialIcons name={getStatusIcon(item.status)} size={12} color="#fff" />
-                    <Text style={styles.badgeText}>{item.status}</Text>
-                  </View>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Priority:</Text>
-                  <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
-                    <MaterialIcons name={getPriorityIcon(item.priority)} size={12} color="#fff" />
-                    <Text style={styles.badgeText}>{item.priority}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.complaintText}>
-                  <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
-                  <Text style={styles.complaintTextContent}>{item.text}</Text>
-                </View>
-
-                {item.status !== 'resolved' && (
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.progressBtn]}>
-                      <MaterialIcons name="progress-clock" size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>In Progress</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, styles.resolveBtn]}>
-                      <MaterialIcons name="check" size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>Resolve</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {item.status === 'resolved' && (
-                  <View style={styles.resolvedMessage}>
-                    <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
-                    <Text style={styles.resolvedMessageText}>This complaint has been resolved</Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </TouchableOpacity>
+        {(!filterStatus || filterStatus === 'open') && (
+          <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+            <Text style={{ fontSize: 13, color: '#64748B', fontStyle: 'italic', textAlign: 'center' }}>
+              Swipe Right <MaterialIcons name="arrow-right" size={14} /> to Resolve, Swipe Left <MaterialIcons name="arrow-left" size={14} /> to Deny/Close
+            </Text>
+          </View>
         )}
-        contentContainerStyle={styles.listContent}
-      />
-    </ScrollView>
+
+        {loading ? (
+          <AdminComplaintListSkeleton />
+        ) : (
+          <FlatList
+            data={filteredComplaints}
+            scrollEnabled={false}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <Swipeable
+                ref={(ref) => {
+                  if (ref) {
+                    swipeableRefs.current.set(item.id, ref);
+                  } else {
+                    swipeableRefs.current.delete(item.id);
+                  }
+                }}
+                renderLeftActions={(p, d) => renderLeftActions(p, d, item)}
+                renderRightActions={(p, d) => renderRightActions(p, d, item)}
+                onSwipeableLeftOpen={() => handleUpdateStatus(item.id, 'resolved')}
+                onSwipeableRightOpen={() => handleUpdateStatus(item.id, 'closed')}
+                enabled={item.status !== 'resolved' && item.status !== 'closed'}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.complaintCard,
+                    selectedId === item.id && styles.complaintCardActive,
+                  ]}
+                  activeOpacity={1}
+                  onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={styles.studentInfo}>
+                      <View
+                        style={[
+                          styles.studentAvatar,
+                          { backgroundColor: getStatusColor(item.status) },
+                        ]}
+                      >
+                        <Text style={styles.studentInitial}>
+                          {item.studentName?.charAt(0).toUpperCase() || '?'}
+                        </Text>
+                      </View>
+                      <View style={styles.textInfo}>
+                        <Text style={styles.studentName}>{item.studentName || 'Unknown Student'}</Text>
+                        <Text style={styles.complaintPreview} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                      </View>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getStatusColor(item.status) },
+                      ]}
+                    >
+                      <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
+                    </View>
+                  </View>
+
+                  {selectedId === item.id && (
+                    <View style={styles.expandedContent}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Email:</Text>
+                        <Text style={styles.detailValue}>{item.studentEmail}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Date:</Text>
+                        <Text style={styles.detailValue}>
+                          {item.createdAt instanceof Date
+                            ? item.createdAt.toLocaleDateString() + ', ' + item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : 'N/A'}
+                        </Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Status:</Text>
+                        <View style={[styles.priorityBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                          <MaterialIcons name={getStatusIcon(item.status)} size={12} color="#fff" />
+                          <Text style={styles.badgeText}>{item.status}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Priority:</Text>
+                        <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
+                          <MaterialIcons name={getPriorityIcon(item.priority)} size={12} color="#fff" />
+                          <Text style={styles.badgeText}>{item.priority}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.complaintText}>
+                        <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
+                        <Text style={styles.complaintTextContent}>{item.description}</Text>
+                      </View>
+
+                      {item.status !== 'resolved' && item.status !== 'closed' && (
+                        <View style={styles.actionButtons}>
+                          {item.status !== 'inProgress' && (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.progressBtn]}
+                              onPress={() => handleUpdateStatus(item.id, 'inProgress')}
+                            >
+                              <MaterialIcons name="progress-clock" size={16} color="#fff" />
+                              <Text style={styles.actionBtnText}>In Progress</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.resolveBtn]}
+                            onPress={() => handleUpdateStatus(item.id, 'resolved')}
+                          >
+                            <MaterialIcons name="check" size={16} color="#fff" />
+                            <Text style={styles.actionBtnText}>Resolve</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.closeBtn]}
+                            onPress={() => handleUpdateStatus(item.id, 'closed')}
+                          >
+                            <MaterialIcons name="close" size={16} color="#fff" />
+                            <Text style={styles.actionBtnText}>Deny/Close</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {(item.status === 'resolved' || item.status === 'closed') && (
+                        <View style={[styles.resolvedMessage, item.status === 'closed' && { backgroundColor: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : '#F1F5F9', borderColor: theme === 'dark' ? 'rgba(148, 163, 184, 0.2)' : '#E2E8F0' }]}>
+                          <MaterialIcons name={item.status === 'resolved' ? "check-circle" : "close-circle"} size={20} color={item.status === 'resolved' ? "#4CAF50" : "#94A3B8"} />
+                          <Text style={[styles.resolvedMessageText, item.status === 'closed' && { color: theme === 'dark' ? '#94A3B8' : '#475569' }]}>
+                            This complaint is {item.status}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </Swipeable>
+            )}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', padding: 40 }}>
+                <Image
+                  source={require('../../assets/images/empty-complaints.png')}
+                  style={{ width: 220, height: 220, resizeMode: 'contain', marginBottom: 16 }}
+                />
+                <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '600' }}>No complaints found</Text>
+              </View>
+            }
+          />
+        )}
+      </ScrollView>
+
+
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#f8f9fa',
-    paddingBottom: 20,
-  },
-  header: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backBtn: {
-    padding: 8,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: '#E11D48',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#E11D48',
-    marginTop: 6,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  filterContainer: {
-    paddingHorizontal: 12,
-    marginBottom: 16,
-  },
-  filterScroll: {
-    flexDirection: 'row',
-  },
-  filterBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  filterBtnActive: {
-    backgroundColor: '#E11D48',
-    borderColor: '#E11D48',
-  },
-  filterBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-  },
-  filterBtnTextActive: {
-    color: '#fff',
-  },
-  listHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  listTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  listContent: {
-    paddingHorizontal: 12,
-  },
-  complaintCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 10,
-    overflow: 'hidden',
-    borderLeftWidth: 4,
-    borderLeftColor: '#E11D48',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  complaintCardActive: {
-    shadowOpacity: 0.12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-  },
-  studentInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  studentAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  studentInitial: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  textInfo: {
-    flex: 1,
-  },
-  studentName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  complaintPreview: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  statusBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  expandedContent: {
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  detailLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  detailValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  priorityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  complaintText: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
-  },
-  complaintTextLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 6,
-  },
-  complaintTextContent: {
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 18,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  progressBtn: {
-    backgroundColor: '#F59E0B',
-  },
-  resolveBtn: {
-    backgroundColor: '#10B981',
-  },
-  actionBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  resolvedMessage: {
-    backgroundColor: '#ECFDF5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  resolvedMessageText: {
-    color: '#047857',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});
+

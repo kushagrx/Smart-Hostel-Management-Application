@@ -54,21 +54,40 @@ export const deallocateRoom = async (db: any, roomNo: string, studentId: string)
 
         const data = roomDoc.data();
         const occupants = data.occupants || [];
-
-        const newOccupants = occupants.filter((id: string) => id !== studentId);
-
-        if (newOccupants.length === occupants.length) return; // Not found
-
         const currentDetails = data.occupantDetails || [];
+
+        // Filter both arrays independent of each other to handle inconsistencies
+        const newOccupants = occupants.filter((id: string) => id !== studentId);
         const newDetails = currentDetails.filter((d: any) => d.id !== studentId);
+
+        // If nothing changed in either array, we can exit
+        if (newOccupants.length === occupants.length && newDetails.length === currentDetails.length) {
+            return;
+        }
 
         const newStatus = newOccupants.length === 0 ? 'vacant' : 'occupied';
 
         transaction.update(roomRef, {
             occupants: newOccupants,
-            occupantDetails: newDetails,
+            occupantDetails: newDetails, // This controls the displayed names
             status: newStatus,
             updatedAt: new Date()
         });
     });
+};
+
+export const deleteRoom = async (db: any, roomNo: string) => {
+    if (!roomNo) return;
+    const { doc, deleteDoc, getDoc } = await import('firebase/firestore');
+    const roomRef = doc(db, 'rooms', roomNo);
+
+    const roomSnap = await getDoc(roomRef);
+    if (!roomSnap.exists()) throw new Error("Room does not exist");
+
+    const data = roomSnap.data();
+    if (data.occupants && data.occupants.length > 0) {
+        throw new Error("Cannot delete an occupied room. Please remove students first.");
+    }
+
+    await deleteDoc(roomRef);
 };

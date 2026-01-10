@@ -1,50 +1,125 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { useColorScheme } from 'react-native';
 
 type Theme = 'light' | 'dark';
+
+interface ThemeColors {
+  background: string;
+  card: string;
+  text: string;
+  textSecondary: string;
+  border: string;
+  primary: string;
+  secondary: string;
+  accent: string;
+  success: string;
+  error: string;
+  warning: string;
+  info: string;
+  inputBackground: string;
+  icon: string;
+  shadow: string;
+}
 
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
-  colors: {
-    background: string;
-    text: string;
-    cardBackground: string;
-    border: string;
-    primary: string;
-    secondary: string;
-    icon: string;
-  };
+  setTheme: (theme: Theme) => void;
+  colors: ThemeColors;
+  isDark: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const lightColors: ThemeColors = {
+  background: '#F8FAFC', // Slate 50
+  card: '#FFFFFF',
+  text: '#0F172A',      // Slate 900
+  textSecondary: '#64748B', // Slate 500
+  border: '#E2E8F0',    // Slate 200
+  primary: '#004e92',   // Royal Blue (Brand)
+  secondary: '#475569', // Slate 600
+  accent: '#3B82F6',
+  success: '#10B981',
+  error: '#EF4444',
+  warning: '#F59E0B',
+  info: '#3B82F6',
+  inputBackground: '#F8FAFC',
+  icon: '#64748B',
+  shadow: '#64748B',
+};
+
+const darkColors: ThemeColors = {
+  background: '#0F172A', // Slate 900
+  card: '#1E293B',      // Slate 800
+  text: '#F8FAFC',      // Slate 50
+  textSecondary: '#94A3B8', // Slate 400
+  border: '#334155',    // Slate 700
+  primary: '#3B82F6',   // Brighter Blue for Dark Mode readability
+  secondary: '#94A3B8', // Slate 400
+  accent: '#60A5FA',
+  success: '#34D399',
+  error: '#F87171',
+  warning: '#FBBF24',
+  info: '#60A5FA',
+  inputBackground: '#020617', // Slate 950
+  icon: '#94A3B8',
+  shadow: '#000000',
+};
+
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>('light');
+  const systemScheme = useColorScheme();
+  const [theme, setThemeState] = useState<Theme>('light');
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  useEffect(() => {
+    loadTheme();
+  }, []);
+
+  const loadTheme = async () => {
+    try {
+      const storedTheme = await AsyncStorage.getItem('app_theme');
+      if (storedTheme) {
+        setThemeState(storedTheme as Theme);
+      } else if (systemScheme) {
+        setThemeState(systemScheme as Theme);
+      }
+    } catch (e) {
+      console.error('Failed to load theme', e);
+    } finally {
+      setIsLoaded(true);
+    }
   };
 
-  const colors = theme === 'light' ? {
-    background: '#f8f9fa',
-    text: '#2d3436',
-    cardBackground: '#fff',
-    border: '#e0e0e0',
-    primary: '#FF8C00',
-    secondary: '#636e72',
-    icon: '#666',
-  } : {
-    background: '#1a1a1a',
-    text: '#e0e0e0',
-    cardBackground: '#2d2d2d',
-    border: '#404040',
-    primary: '#FF8C00',
-    secondary: '#b0b0b0',
-    icon: '#999',
+  const toggleTheme = async () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setThemeState(newTheme);
+    try {
+      await AsyncStorage.setItem('app_theme', newTheme);
+    } catch (e) {
+      console.error('Failed to save theme', e);
+    }
   };
+
+  const setTheme = async (newTheme: Theme) => {
+    setThemeState(newTheme);
+    try {
+      await AsyncStorage.setItem('app_theme', newTheme);
+    } catch (e) {
+      console.error('Failed to save theme', e);
+    }
+  };
+
+  const colors = theme === 'light' ? lightColors : darkColors;
+  const isDark = theme === 'dark';
+
+  if (!isLoaded) {
+    return null; // Or a splash screen loader
+  }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, colors }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, colors, isDark }}>
       {children}
     </ThemeContext.Provider>
   );
