@@ -2,9 +2,10 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getTodaysDinner } from '../../utils/messUtils';
+import { LaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
+import { MenuItem, subscribeToMenu, WeekMenu } from '../../utils/messSyncUtils';
 import { fetchUserData, getInitial, StudentData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
@@ -12,27 +13,60 @@ export default function Index() {
   const router = useRouter();
   const { colors, theme } = useTheme();
   const [student, setStudent] = useState<StudentData | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [laundry, setLaundry] = useState<LaundrySettings | null>(null);
+  const [fullMenu, setFullMenu] = useState<WeekMenu>({});
+
+  const loadUserData = useCallback(async () => {
+    try {
+      const data = await fetchUserData();
+      setStudent(data);
+    } catch (error) {
+      console.error('Failed to load user data:', error);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      const loadUserData = async () => {
-        try {
-          const data = await fetchUserData();
-          setStudent(data);
-        } catch (error) {
-          console.error('Failed to load user data:', error);
-        }
-      };
-
       loadUserData();
-    }, [])
+
+      const unsubscribeLaundry = subscribeToLaundry((data) => {
+        setLaundry(data);
+      });
+
+      const unsubscribeMenu = subscribeToMenu((data) => {
+        setFullMenu(data);
+      });
+
+      return () => {
+        unsubscribeLaundry();
+        unsubscribeMenu();
+      };
+    }, [loadUserData])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadUserData();
+    setRefreshing(false);
+  }, [loadUserData]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good Morning';
     if (hour < 18) return 'Good Afternoon';
     return 'Good Evening';
+  };
+
+  const getDynamicDinner = () => {
+    const today = new Date().toLocaleString('en-US', { weekday: 'long' });
+    // @ts-ignore
+    const dinnerItems = fullMenu[today]?.dinner;
+    if (!dinnerItems || dinnerItems.length === 0) return 'Loading...';
+
+    // Find highlight or first item
+    const highlight = dinnerItems.find((i: MenuItem) => i.highlight);
+    return highlight ? highlight.dish : dinnerItems[0].dish;
   };
 
   if (!student) {
@@ -52,7 +86,11 @@ export default function Index() {
 
   return (
     <View style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
+      >
         {/* Modern Header Section */}
         <View style={styles.headerWrapper}>
           <LinearGradient
@@ -115,19 +153,62 @@ export default function Index() {
               </View>
               <View style={styles.cardContent}>
                 <Text style={styles.cardLabel}>Tonight's Dinner</Text>
-                <Text style={styles.cardValue} numberOfLines={1}>{getTodaysDinner()}</Text>
+                <Text style={styles.cardValue} numberOfLines={1}>{getDynamicDinner()}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={24} color="#94A3B8" />
             </Pressable>
 
             {/* Laundry Card */}
-            <View style={[styles.highlightCard, styles.shadowProp]}>
-              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
+            <View style={[styles.highlightCard, styles.shadowProp, { alignItems: 'flex-start' }]}>
+              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4', marginTop: 4 }]}>
                 <MaterialCommunityIcons name="washing-machine" size={24} color="#16A34A" />
               </View>
               <View style={styles.cardContent}>
-                <Text style={styles.cardLabel}>Laundry Status</Text>
-                <Text style={styles.cardValue}>Pickup @ 5:00 PM</Text>
+                <Text style={styles.cardLabel}>Laundry Service</Text>
+
+                {laundry ? (
+                  <View style={{ gap: 4, marginTop: 4 }}>
+                    {/* Status Badge */}
+                    <View style={{
+                      alignSelf: 'flex-start',
+                      backgroundColor: laundry.status === 'On Schedule' ? '#DCFCE7' : '#FEE2E2',
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                      marginBottom: 4
+                    }}>
+                      <Text style={{
+                        color: laundry.status === 'On Schedule' ? '#166534' : '#991B1B',
+                        fontSize: 10,
+                        fontWeight: '700',
+                        textTransform: 'uppercase'
+                      }}>
+                        {laundry.status}
+                      </Text>
+                    </View>
+
+                    {/* Schedule Info */}
+                    {laundry.status !== 'No Service' && laundry.status !== 'Holiday' ? (
+                      <>
+                        <Text style={{ fontSize: 13, color: '#334155' }}>
+                          <Text style={{ fontWeight: '700' }}>Pickup:</Text> {laundry.pickupDay}, {laundry.pickupTime} {laundry.pickupPeriod}
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#334155' }}>
+                          <Text style={{ fontWeight: '700' }}>Drop:</Text> {laundry.dropoffDay}, {laundry.dropoffTime} {laundry.dropoffPeriod}
+                        </Text>
+                      </>
+                    ) : null}
+
+                    {/* Message */}
+                    {laundry.message ? (
+                      <Text style={{ fontSize: 11, color: colors.textSecondary, fontStyle: 'italic', marginTop: 2 }}>
+                        "{laundry.message}"
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={styles.cardValue}>Loading...</Text>
+                )}
               </View>
             </View>
           </View>
@@ -172,106 +253,115 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerWrapper: {
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
     overflow: 'hidden',
     elevation: 8,
     shadowColor: '#004e92',
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    marginBottom: 20, // Add space below header
   },
   headerContainer: {
-    paddingBottom: 24,
+    paddingBottom: 32, // More breathing room
+    paddingTop: 10,
   },
   safeArea: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginTop: 16,
-    marginBottom: 24,
+    marginTop: 20,
+    marginBottom: 32,
   },
   greeting: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
-    marginBottom: 4,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase', // Professional touch
+    letterSpacing: 1,
   },
   userName: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 32, // Larger
+    fontWeight: '800',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 12,
     letterSpacing: 0.5,
   },
   hostelBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)', // Slightly more visible
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100, // Pill shape
     alignSelf: 'flex-start',
-    gap: 6,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   hostelName: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
   profileBtn: {
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
   },
   userInitialContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    width: 64, // Slightly larger
+    height: 64,
+    borderRadius: 24, // Squircle
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    backdropFilter: 'blur(10px)', // Note: This prop doesn't work in RN natively but style implies intent
   },
   userInitial: {
-    color: '#004e92',
-    fontSize: 24,
+    color: '#fff',
+    fontSize: 28,
     fontWeight: '700',
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 24,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
   },
   statLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: 0.5,
   },
   statValue: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
   },
   statDivider: {
     width: 1,
-    height: 24,
+    height: 30, // Taller divider
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   mainContent: {

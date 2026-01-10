@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MessMenu from '../components/MessMenu';
 
@@ -30,7 +30,19 @@ export default function Mess() {
         </SafeAreaView>
       </LinearGradient>
 
-      <MessMenu />
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={() => { }} // Static content for now
+            colors={['#004e92']}
+            tintColor="#004e92"
+          />
+        }
+      >
+        <MessMenu />
+      </ScrollView>
     </View>
   );
 }

@@ -10,6 +10,8 @@ export default function AdminLayout() {
       <Stack.Screen name="complaints" options={{ headerShown: false }} />
       <Stack.Screen name="leaveRequests" options={{ headerShown: false }} />
       <Stack.Screen name="notices" options={{ headerShown: false }} />
+      <Stack.Screen name="busTimings" options={{ headerShown: false }} />
+      <Stack.Screen name="messMenu" options={{ headerShown: false }} />
     </Stack>
   );
 }

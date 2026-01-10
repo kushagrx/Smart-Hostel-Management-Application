@@ -2,8 +2,9 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StudentComplaintListSkeleton } from '../components/SkeletonLists';
 import { Complaint, subscribeToStudentComplaints } from '../utils/complaintsSyncUtils';
 
 export default function MyComplaints() {
@@ -11,6 +12,14 @@ export default function MyComplaints() {
   const [selectedTab, setSelectedTab] = useState<'active' | 'resolved'>('active');
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -127,9 +136,12 @@ export default function MyComplaints() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.complaintsList}>
+      <ScrollView
+        contentContainerStyle={styles.complaintsList}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
+      >
         {loading ? (
-          <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 40 }} />
+          <StudentComplaintListSkeleton />
         ) : filteredComplaints.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialCommunityIcons name="clipboard-text-outline" size={48} color="#CBD5E1" />

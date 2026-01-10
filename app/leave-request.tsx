@@ -3,13 +3,15 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../context/AlertContext';
 import { createLeaveRequest, getStudentLeaves, LeaveRequest } from '../utils/leavesUtils';
 import { fetchUserData } from '../utils/nameUtils';
 
 export default function LeaveRequestPage() {
     const router = useRouter();
+    const { showAlert } = useAlert();
     const [reason, setReason] = useState('');
     const [startDate, setStartDate] = useState(new Date());
     const [endDate, setEndDate] = useState(new Date());
@@ -18,6 +20,12 @@ export default function LeaveRequestPage() {
     const [loading, setLoading] = useState(false);
     const [history, setHistory] = useState<LeaveRequest[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadHistory();
+        setRefreshing(false);
+    };
 
     useEffect(() => {
         loadHistory();
@@ -37,12 +45,12 @@ export default function LeaveRequestPage() {
 
     const handleSubmit = async () => {
         if (!reason.trim()) {
-            Alert.alert('Error', 'Please provide a reason for your leave.');
+            showAlert('Error', 'Please provide a reason for your leave.', [], 'error');
             return;
         }
 
         if (endDate < startDate) {
-            Alert.alert('Error', 'End date cannot be before start date.');
+            showAlert('Error', 'End date cannot be before start date.', [], 'error');
             return;
         }
 
@@ -57,18 +65,18 @@ export default function LeaveRequestPage() {
             await createLeaveRequest({
                 studentName: user.fullName,
                 studentRoom: user.roomNo || 'N/A',
-                studentEmail: user.email,
+                studentEmail: user.email || '',
                 startDate: startDate.toISOString().split('T')[0],
                 endDate: endDate.toISOString().split('T')[0],
                 reason: reason,
                 days: diffDays,
             });
 
-            Alert.alert('Success', 'Leave request submitted successfully!');
+            showAlert('Success', 'Leave request submitted successfully!', [], 'success');
             setReason('');
             loadHistory();
         } catch (error) {
-            Alert.alert('Error', 'Failed to submit leave request. Please try again.');
+            showAlert('Error', 'Failed to submit leave request. Please try again.', [], 'error');
         } finally {
             setLoading(false);
         }
@@ -118,9 +126,7 @@ export default function LeaveRequestPage() {
                             <Text style={styles.headerTitle}>Apply for Leave</Text>
                             <Text style={styles.headerSubtitle}>Request Time Off</Text>
                         </View>
-                        <Pressable onPress={handleRefresh} style={styles.backBtn} disabled={refreshing}>
-                            <MaterialIcons name="refresh" size={24} color={refreshing ? "rgba(255,255,255,0.5)" : "#fff"} />
-                        </Pressable>
+
                     </View>
                 </SafeAreaView>
             </LinearGradient>

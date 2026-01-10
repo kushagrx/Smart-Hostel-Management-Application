@@ -1,59 +1,66 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../context/AlertContext';
+import { useUser } from '../utils/authUtils';
+import { createComplaint } from '../utils/complaintsSyncUtils';
 import { getAuthSafe, getDbSafe } from '../utils/firebase';
 import { fetchUserData } from '../utils/nameUtils';
 
-export default function NewComplaint() {
+export default function NewComplaintPage() {
+  const router = useRouter();
+  const user = useUser();
+  const { showAlert } = useAlert();
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'emergency'>('low');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (!title || !description) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      showAlert('Error', 'Please fill in all required fields', [], 'error');
       return;
     }
 
-    setIsSubmitting(true);
+    setLoading(true);
     try {
       const db = getDbSafe();
       const auth = getAuthSafe();
 
       if (!db || !auth?.currentUser?.email) {
-        Alert.alert('Error', 'Not authenticated');
-        setIsSubmitting(false);
+        showAlert('Error', 'Not authenticated', [], 'error');
+        setLoading(false);
         return;
       }
 
-      const userData = await fetchUserData();
+      const user = await fetchUserData(); // Renamed userData to user for consistency with snippet
 
-      const complaintRef = collection(db, 'complaints');
-      await addDoc(complaintRef, {
+      if (!user || !user.email) { // Added check for user data
+        showAlert('Error', 'User data not found', [], 'error');
+        setLoading(false);
+        return;
+      }
+
+      await createComplaint({
         title,
-        description,
+        description: description, // Using 'description' as per component state
         priority,
-        status: 'open',
-        category: 'general',
-        studentEmail: auth.currentUser.email,
-        studentName: userData?.fullName || 'Student',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        studentEmail: user.email,
+        studentName: user.fullName || 'Unknown Student',
+        studentRoom: user.roomNo || 'N/A'
       });
 
-      Alert.alert('Success', 'Complaint submitted successfully');
+      showAlert('Success', 'Complaint submitted successfully', [], 'success');
       router.back();
     } catch (error) {
-      console.error('Error submitting complaint:', error);
-      Alert.alert('Error', 'Failed to submit complaint');
+      console.error(error);
+      showAlert('Error', 'Failed to submit complaint', [], 'error');
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
@@ -124,7 +131,7 @@ export default function NewComplaint() {
                   style={[
                     styles.priorityButton,
                     priority === level && styles.prioritySelected,
-                    priority === level && styles[`bg${capitalize(level)}`],
+                    priority === level && (styles as any)[`bg${capitalize(level)}`],
                   ]}
                   onPress={() => setPriority(level)}
                 >
@@ -165,7 +172,7 @@ export default function NewComplaint() {
           <Pressable
             style={[styles.submitContainer, (!title || !description) && { opacity: 0.7 }]}
             onPress={handleSubmit}
-            disabled={!title || !description || isSubmitting}
+            disabled={!title || !description || loading}
           >
             <LinearGradient
               colors={['#000428', '#004e92']}
@@ -173,7 +180,7 @@ export default function NewComplaint() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              {isSubmitting ? (
+              {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
                 <View style={styles.btnContent}>

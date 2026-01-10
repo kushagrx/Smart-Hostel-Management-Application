@@ -4,15 +4,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../../context/AlertContext';
 import { setStoredUser } from '../../utils/authUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
@@ -54,27 +54,29 @@ const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, acc
 export default function Settings() {
   const router = useRouter();
   const { theme, toggleTheme, colors } = useTheme();
+  const { showAlert } = useAlert();
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
 
   const handleLogout = async () => {
-    Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out of your account?",
+    showAlert(
+      'Logout',
+      'Are you sure you want to logout?',
       [
-        { text: "Cancel", style: "cancel" },
+        { text: 'Cancel', style: 'cancel', onPress: () => { } },
         {
-          text: "Log Out",
+          text: 'Logout',
+          style: 'destructive',
           onPress: async () => {
             const { getAuthSafe } = await import('../../utils/firebase');
             const { signOut } = await import('firebase/auth');
             const auth = getAuthSafe();
-            if (auth) await signOut(auth);
-
-            await setStoredUser(null);
-            router.replace('/login');
-          },
-          style: "destructive"
+            if (auth) {
+              await signOut(auth);
+              await setStoredUser(null);
+              router.replace('/login');
+            }
+          }
         }
       ]
     );
@@ -116,7 +118,7 @@ export default function Settings() {
           <SettingItem
             icon="person"
             label="Edit Profile"
-            onPress={() => router.push('/profile/edit')}
+            onPress={() => showAlert('Coming Soon', 'Edit Profile feature is coming soon.', [], 'info')}
             accessibilityHint="Navigates to the edit profile screen"
             isLast={false}
           />

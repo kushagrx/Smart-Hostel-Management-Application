@@ -3,10 +3,11 @@ import * as Google from 'expo-auth-session/providers/google';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../context/AlertContext';
 import { useTheme } from '../utils/ThemeContext';
 import { setStoredUser } from '../utils/authUtils';
 import { getAuthSafe, getDbSafe } from '../utils/firebase';
@@ -17,6 +18,7 @@ WebBrowser.maybeCompleteAuthSession();
 export default function Login() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showAlert } = useAlert();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,46 +39,11 @@ export default function Login() {
     }
   }, [request]);
 
-  useEffect(() => {
-    const a = getAuthSafe();
-    if (!a) return;
-    const sub = onAuthStateChanged(a, async (u) => {
-      if (u && u.email) {
-        let role = 'student';
 
-        // Check Firestore first
-        const db = getDbSafe();
-        if (db) {
-          const { doc, getDoc, setDoc } = await import('firebase/firestore');
-          const userRef = doc(db, 'users', u.uid);
-          const userSnap = await getDoc(userRef);
-
-          if (userSnap.exists()) {
-            role = userSnap.data().role || 'student';
-          } else {
-            // Create new user, still respecting the hardcoded admin email
-            role = getRoleFromEmail(u.email);
-            await setDoc(userRef, {
-              email: u.email,
-              name: u.displayName || u.email,
-              role: role,
-              createdAt: new Date().toISOString(),
-            });
-          }
-        } else {
-          role = getRoleFromEmail(u.email);
-        }
-
-        await setStoredUser({ id: u.uid, name: u.displayName || u.email, role });
-        if (role === 'admin') router.replace('/admin'); else router.replace('/(tabs)');
-      }
-    });
-    return () => sub();
-  }, [router]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter both email and password');
+      showAlert('Error', 'Please enter both email and password', [], 'error');
       return;
     }
 
@@ -84,57 +51,60 @@ export default function Login() {
     try {
       const a = getAuthSafe();
       if (!a) {
-        Alert.alert('Config error', 'Firebase is not configured.');
+        showAlert('Config error', 'Firebase is not configured.', [], 'error');
         return;
       }
 
       let cred;
 
       try {
-        // Try to sign in first
+        // 1. Try to sign in first
         cred = await signInWithEmailAndPassword(a, email.trim(), password.trim());
       } catch (signInError: any) {
-        // If user doesn't exist, create account but verify Admin Generated Password first
-        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
-          // 1. Check if email is in allocations
-          const db = getDbSafe();
-          if (!db) throw new Error('Database error');
+        // 2. If user not found OR invalid-credential (email enumeration protection), try to Create Account
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
+          // Attempt creation
+          try {
+            const { createUserWithEmailAndPassword, deleteUser } = await import('firebase/auth');
+            cred = await createUserWithEmailAndPassword(a, email.trim(), password.trim());
 
-          const { doc, getDoc } = await import('firebase/firestore');
-          const allocationRef = doc(db, 'allocations', email.toLowerCase().trim());
-          const allocationSnap = await getDoc(allocationRef);
+            // We are now Authenticated. Safe to read DB.
+            const db = getDbSafe();
+            if (!db || !cred.user) throw new Error('System verification failed.');
 
-          if (!allocationSnap.exists()) {
-            // If not allotted, check if it was 'User Not Found' (Stranger) or 'Wrong Password' (Admin)
-            if (signInError.code === 'auth/user-not-found') {
-              throw new Error('Access Denied: Your email has not been allotted a room by the Admin.');
-            } else {
-              // Likely Admin or other unallocated user typing wrong password
-              throw signInError;
-            }
-          }
+            const { doc, getDoc } = await import('firebase/firestore');
+            const allocationRef = doc(db, 'allocations', email.toLowerCase().trim());
+            const allocationSnap = await getDoc(allocationRef);
 
-          const allocationData = allocationSnap.data();
-          const expectedPassword = allocationData.tempPassword;
-
-          // 2. If password matches the expected (Temp) Password, try to create account
-          if (expectedPassword && password.trim() === expectedPassword) {
-            // 3. Create Account
-            try {
-              const { createUserWithEmailAndPassword } = await import('firebase/auth');
-              cred = await createUserWithEmailAndPassword(a, email.trim(), password.trim());
-            } catch (createError: any) {
-              if (createError.code === 'auth/email-already-in-use') {
-                // Account exists, pass matched temp, but signIn failed.
-                throw new Error('Invalid Credentials.');
+            // 3. Verify Allocation
+            if (allocationSnap.exists()) {
+              const data = allocationSnap.data();
+              // Check if the entered password matches the Temp Password assigned
+              if (data.tempPassword !== password.trim()) {
+                // WRONG Temp Password. 
+                // Rollback: Delete the auth user we just created.
+                await deleteUser(cred.user);
+                throw new Error('Invalid Credentials: Password does not match your assigned temporary password.');
               }
-              throw createError;
+              // If match: Proceed (cred is valid, user is staying)
+            } else {
+              // Not Allotted (Stranger). 
+              // Rollback: Delete the auth user.
+              await deleteUser(cred.user);
+              throw new Error('Access Denied: You have not been allotted a room.');
             }
-          } else {
-            // Password doesn't match Temp Password, and signIn failed.
-            throw new Error('Invalid Credentials.');
+
+          } catch (createError: any) {
+            // If creation failed because email is in use, it means the user DID exist and 'invalid-credential' was just hiding it.
+            // So it's a wrong password case.
+            if (createError.code === 'auth/email-already-in-use') {
+              throw new Error('Invalid Credentials');
+            }
+            // For other errors (network, etc), throw them.
+            throw createError;
           }
         } else {
+          // Wrong Password (explicit) or other error for EXISTING user
           throw signInError;
         }
       }
@@ -159,7 +129,7 @@ export default function Login() {
           const { signOut } = await import('firebase/auth');
           await signOut(a);
           await setStoredUser(null);
-          Alert.alert('Access Denied', 'You have not been allotted a room yet.\nPlease contact the Admin.');
+          showAlert('Access Denied', 'You have not been allotted a room yet.\nPlease contact the Admin.', [], 'error');
           return;
         }
 
@@ -204,7 +174,7 @@ export default function Login() {
         router.replace('/admin');
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Login failed. Please try again.');
+      showAlert('Error', error.message || 'Login failed. Please try again.', [], 'error');
     } finally {
       setIsLoading(false);
     }
@@ -221,7 +191,7 @@ export default function Login() {
 
         const a = getAuthSafe();
         if (!a) {
-          Alert.alert('Config error', 'Firebase is not configured.');
+          showAlert('Config error', 'Firebase is not configured.', [], 'error');
           return;
         }
 
@@ -303,16 +273,17 @@ export default function Login() {
             // 4. Not Allotted
             const { signOut } = await import('firebase/auth');
             await signOut(a);
-            Alert.alert(
+            showAlert(
               'Access Denied',
-              'This email is not linked to any allotted student.\n\nIf this is your personal email, ask the Admin to link it to your profile.'
+              'This email is not linked to any allotted student.\n\nIf this is your personal email, ask the Admin to link it to your profile.',
+              [], 'error'
             );
           }
         }
       }
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Error', 'Google sign-in failed: ' + e.message);
+      showAlert('Error', 'Google sign-in failed: ' + e.message, [], 'error');
     }
   };
 
@@ -325,82 +296,93 @@ export default function Login() {
         style={styles.background}
       >
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.container}>
-            <View style={styles.header}>
-              <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="home-city" size={40} color="#004e92" />
-              </View>
-              <Text style={styles.title}>Smart Hostel</Text>
-              <Text style={styles.subtitle}>Welcome Back</Text>
-            </View>
-
-            <View style={styles.loginCard}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Email Address</Text>
-                <View style={styles.inputWrapper}>
-                  <MaterialCommunityIcons name="email-outline" size={20} color="#64748b" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="name@example.com"
-                    placeholderTextColor="#94a3b8"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.container}>
+                <View style={styles.header}>
+                  <View style={styles.iconContainer}>
+                    <MaterialCommunityIcons name="home-city" size={40} color="#004e92" />
+                  </View>
+                  <Text style={styles.title}>Smart Hostel</Text>
+                  <Text style={styles.subtitle}>Welcome Back</Text>
                 </View>
-              </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.inputWrapper}>
-                  <MaterialCommunityIcons name="lock-outline" size={20} color="#64748b" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="Enter your password"
-                    placeholderTextColor="#94a3b8"
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                    <MaterialCommunityIcons
-                      name={showPassword ? 'eye-off' : 'eye'}
-                      size={20}
-                      color="#64748b"
-                    />
+                <View style={styles.loginCard}>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Email Address</Text>
+                    <View style={styles.inputWrapper}>
+                      <MaterialCommunityIcons name="email-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        value={email}
+                        onChangeText={setEmail}
+                        placeholder="name@example.com"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Password</Text>
+                    <View style={styles.inputWrapper}>
+                      <MaterialCommunityIcons name="lock-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        value={password}
+                        onChangeText={setPassword}
+                        placeholder="Enter your password"
+                        placeholderTextColor="#94a3b8"
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                        <MaterialCommunityIcons
+                          name={showPassword ? 'eye-off' : 'eye'}
+                          size={20}
+                          color="#64748b"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.loginButton}
+                    onPress={handleLogin}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.loginButtonText}>Sign In</Text>
+                    )}
+                  </TouchableOpacity>
+                  <View style={styles.dividerContainer}>
+                    <View style={styles.divider} />
+                    <Text style={styles.dividerText}>or continue with</Text>
+                    <View style={styles.divider} />
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.googleButton}
+                    onPress={handleGoogleLogin}
+                    disabled={isLoading || !request}
+                  >
+                    <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
+                    <Text style={styles.googleButtonText}>Google</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-
-              <TouchableOpacity
-                style={styles.loginButton}
-                onPress={handleLogin}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.loginButtonText}>Sign In</Text>
-                )}
-              </TouchableOpacity>
-              <View style={styles.dividerContainer}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>or continue with</Text>
-                <View style={styles.divider} />
-              </View>
-
-              <TouchableOpacity
-                style={styles.googleButton}
-                onPress={handleGoogleLogin}
-                disabled={isLoading || !request}
-              >
-                <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
-                <Text style={styles.googleButtonText}>Google</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </LinearGradient>
     </View>
