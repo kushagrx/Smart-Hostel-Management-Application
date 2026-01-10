@@ -2,14 +2,83 @@ import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useAlert } from '../../context/AlertContext';
+import { useTheme } from '../../utils/ThemeContext';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { ServiceRequest, subscribeToAllServiceRequests, updateServiceStatus } from '../../utils/serviceUtils';
 
 export default function ServiceRequestsPage() {
+    const { colors, theme } = useTheme();
     const user = useUser();
     const router = useRouter();
+    const { showAlert } = useAlert();
+
+    const styles = React.useMemo(() => StyleSheet.create({
+        container: { flex: 1, backgroundColor: colors.background },
+        center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+        header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 24, paddingHorizontal: 24 },
+        backBtn: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: 'rgba(255,255,255,0.2)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 10,
+        },
+        headerTitle: { flex: 1, textAlign: 'center', fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: 0.5, marginRight: 38 },
+        list: { padding: 16 },
+        card: {
+            backgroundColor: colors.card,
+            padding: 16,
+            borderRadius: 16,
+            marginBottom: 16,
+            elevation: 2,
+            shadowColor: colors.textSecondary,
+            shadowOpacity: 0.05,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 }
+        },
+        cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+        userInfo: { flex: 1 },
+        serviceType: { fontSize: 16, fontWeight: '700', color: colors.text },
+        roomNo: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+        statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+        statusText: { fontSize: 11, fontWeight: '700' },
+        date: { fontSize: 12, color: colors.textSecondary, marginTop: 8 },
+        eta: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 4 },
+        actionRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+        btn: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+        approveBtn: { backgroundColor: '#3B82F6' },
+        denyBtn: { backgroundColor: '#EF4444' },
+        completeBtn: { backgroundColor: '#10B981', marginTop: 12 },
+        btnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+        empty: { textAlign: 'center', marginTop: 50, color: colors.textSecondary },
+        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+        modalContent: { backgroundColor: colors.card, borderRadius: 20, padding: 20 },
+        modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 20, textAlign: 'center', color: colors.text },
+        inputGroup: { marginBottom: 16 },
+        label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+        input: {
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: 10,
+            padding: 12,
+            fontSize: 14,
+            backgroundColor: theme === 'dark' ? '#1E293B' : '#F8FAFC',
+            color: colors.text
+        },
+        textArea: { height: 80, textAlignVertical: 'top' },
+        modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+        modalBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
+        cancelBtn: { backgroundColor: theme === 'dark' ? '#334155' : '#F1F5F9' },
+        confirmBtn: { backgroundColor: colors.primary },
+        cancelText: { color: colors.textSecondary, fontWeight: '600' },
+        confirmText: { color: '#fff', fontWeight: '600' }
+    }), [colors, theme]);
     const [requests, setRequests] = useState<ServiceRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedReq, setSelectedReq] = useState<ServiceRequest | null>(null);
@@ -17,6 +86,15 @@ export default function ServiceRequestsPage() {
     const [eta, setEta] = useState('');
     const [note, setNote] = useState('');
     const [actionType, setActionType] = useState<'approve' | 'deny' | null>(null);
+
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = React.useCallback(() => {
+        setRefreshing(true);
+        setTimeout(() => {
+            setRefreshing(false);
+        }, 1000);
+    }, []);
 
     useEffect(() => {
         const unsubscribe = subscribeToAllServiceRequests((data) => {
@@ -40,20 +118,32 @@ export default function ServiceRequestsPage() {
             const status = actionType === 'approve' ? 'approved' : 'rejected';
             await updateServiceStatus(selectedReq.id, status, eta, note);
             setModalVisible(false);
-            Alert.alert("Success", `Request ${status}.`);
+            showAlert("Success", `Request ${status}.`, [], 'success');
         } catch (e) {
-            Alert.alert("Error", "Failed to update request.");
+            showAlert("Error", "Failed to update request.", [], 'error');
         }
     };
 
-    const markCompleted = async (id: string) => {
-        try {
-            await updateServiceStatus(id, 'completed');
-            Alert.alert("Success", "Request marked as completed.");
-        } catch (e) {
-            Alert.alert("Error", "Failed to update.");
-        }
-    }
+    const handleStatusUpdate = (id: string, currentStatus: string, newStatus: string) => {
+        showAlert(
+            'Update Status',
+            `Mark request as ${newStatus}?`,
+            [
+                { text: 'Cancel', style: 'cancel', onPress: () => { } },
+                {
+                    text: 'Update',
+                    onPress: async () => {
+                        try {
+                            await updateServiceStatus(id, newStatus as any);
+                            showAlert('Success', `Request marked as ${newStatus}`, [], 'success');
+                        } catch (error) {
+                            showAlert('Error', "Failed to update status", [], 'error');
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
     if (!isAdmin(user)) return <View style={styles.center}><Text>Access Denied</Text></View>;
 
@@ -85,7 +175,7 @@ export default function ServiceRequestsPage() {
                 </View>
             )}
             {item.status === 'approved' && (
-                <TouchableOpacity style={[styles.btn, styles.completeBtn]} onPress={() => markCompleted(item.id)}>
+                <TouchableOpacity style={[styles.btn, styles.completeBtn]} onPress={() => handleStatusUpdate(item.id, item.status, 'completed')}>
                     <Text style={styles.btnText}>Mark Completed</Text>
                 </TouchableOpacity>
             )}
@@ -106,7 +196,7 @@ export default function ServiceRequestsPage() {
         <SafeAreaView style={styles.container} edges={['top']}>
             <LinearGradient colors={['#000428', '#004e92']} style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <MaterialIcons name="arrow-left" size={28} color="#fff" />
+                    <MaterialIcons name="chevron-left" size={32} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Service Requests</Text>
             </LinearGradient>
@@ -115,8 +205,9 @@ export default function ServiceRequestsPage() {
                 <FlatList
                     data={requests}
                     renderItem={renderItem}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={styles.list}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
                     ListEmptyComponent={<Text style={styles.empty}>No requests found.</Text>}
                 />
             )}
@@ -160,44 +251,10 @@ export default function ServiceRequestsPage() {
                     </View>
                 </View>
             </Modal>
+
+
         </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 10, paddingBottom: 20 },
-    backBtn: { padding: 8, marginRight: 10 },
-    headerTitle: { fontSize: 22, fontWeight: '700', color: '#fff' },
-    list: { padding: 16 },
-    card: { backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-    userInfo: { flex: 1 },
-    serviceType: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
-    roomNo: { fontSize: 13, color: '#64748B', marginTop: 2 },
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    statusText: { fontSize: 11, fontWeight: '700' },
-    date: { fontSize: 12, color: '#94A3B8', marginTop: 8 },
-    eta: { fontSize: 13, color: '#004e92', fontWeight: '600', marginTop: 4 },
-    actionRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-    btn: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-    approveBtn: { backgroundColor: '#3B82F6' },
-    denyBtn: { backgroundColor: '#EF4444' },
-    completeBtn: { backgroundColor: '#10B981', marginTop: 12 },
-    btnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    empty: { textAlign: 'center', marginTop: 50, color: '#94A3B8' },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: '#fff', borderRadius: 20, padding: 20 },
-    modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 20, textAlign: 'center' },
-    inputGroup: { marginBottom: 16 },
-    label: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6 },
-    input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 14, backgroundColor: '#F8FAFC' },
-    textArea: { height: 80, textAlignVertical: 'top' },
-    modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
-    modalBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
-    cancelBtn: { backgroundColor: '#F1F5F9' },
-    confirmBtn: { backgroundColor: '#004e92' },
-    cancelText: { color: '#64748B', fontWeight: '600' },
-    confirmText: { color: '#fff', fontWeight: '600' }
-});
+

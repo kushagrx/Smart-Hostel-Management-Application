@@ -1,4 +1,7 @@
 import { Stack } from "expo-router";
+import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { AlertProvider } from "../context/AlertContext";
 import { ThemeProvider } from "../utils/ThemeContext";
 
 export default function RootLayout() {
@@ -21,13 +24,18 @@ export default function RootLayout() {
   // }, []);
 
   return (
-    <ThemeProvider>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="admin" options={{ headerShown: false }} />
-      </Stack>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <StatusBar style="light" backgroundColor="transparent" translucent={true} />
+      <ThemeProvider>
+        <AlertProvider>
+          <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="admin" options={{ headerShown: false }} />
+          </Stack>
+        </AlertProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

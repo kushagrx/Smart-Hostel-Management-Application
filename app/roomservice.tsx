@@ -2,8 +2,9 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../context/AlertContext';
 import { useTheme } from '../utils/ThemeContext';
 import { roomServices } from '../utils/busTimingsUtils';
 import { fetchUserData } from '../utils/nameUtils';
@@ -12,9 +13,18 @@ import { requestService, ServiceRequest, subscribeToStudentRequests } from '../u
 export default function RoomService() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { showAlert } = useAlert();
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeToStudentRequests((data) => {
@@ -25,11 +35,11 @@ export default function RoomService() {
   }, []);
 
   const handleServiceRequest = async (serviceName: string) => {
-    Alert.alert(
+    showAlert(
       'Request Service',
       `Request ${serviceName}?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: () => { } },
         {
           text: 'Request',
           onPress: async () => {
@@ -37,18 +47,17 @@ export default function RoomService() {
               setSubmitting(true);
               const userData = await fetchUserData();
               if (!userData) {
-                Alert.alert("Error", "Could not fetch user profile.");
+                showAlert("Error", "Could not fetch user profile.", [], 'error');
                 return;
               }
               await requestService(serviceName, '', userData.fullName, userData.roomNo);
-              Alert.alert('Success', `Your request for ${serviceName} has been submitted!`);
+              showAlert('Success', `Your request for ${serviceName} has been submitted!`, [], 'success');
             } catch (error) {
-              Alert.alert('Error', "Failed to submit request.");
+              showAlert('Error', "Failed to submit request.", [], 'error');
             } finally {
               setSubmitting(false);
             }
           },
-          style: 'default'
         }
       ]
     );
@@ -89,7 +98,8 @@ export default function RoomService() {
       </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={{ padding: 20 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.sectionTitle}>AVAILABLE SERVICES</Text>

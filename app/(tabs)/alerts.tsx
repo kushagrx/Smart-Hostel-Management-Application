@@ -2,8 +2,9 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NoticeListSkeleton, StudentComplaintListSkeleton } from '../../components/SkeletonLists';
 import { useTheme } from '../../utils/ThemeContext';
 import { personalizedAlerts } from '../../utils/alertsUtils';
 import { Complaint, subscribeToStudentComplaints } from '../../utils/complaintsSyncUtils';
@@ -141,7 +142,7 @@ export default function Alerts() {
             </View>
 
             {noticesLoading ? (
-              <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 20 }} />
+              <NoticeListSkeleton />
             ) : notices.length > 0 ? (
               notices.map((notice) => (
                 <View
@@ -202,7 +203,7 @@ export default function Alerts() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>My Complaints</Text>
             {complaintsLoading ? (
-              <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 20 }} />
+              <StudentComplaintListSkeleton />
             ) : complaints.length > 0 ? (
               complaints.map((complaint) => (
                 <View

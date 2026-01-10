@@ -1,11 +1,30 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { busTimings } from '../utils/busTimingsUtils';
+import { BusRoute, subscribeToBusTimings } from '../utils/busTimingsSyncUtils';
 
 export default function BusTimings() {
+  const [routes, setRoutes] = useState<BusRoute[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToBusTimings((data) => {
+      setRoutes(data);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    // Real-time listener handles updates
+    setTimeout(() => setRefreshing(false), 1000);
+  };
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -30,51 +49,65 @@ export default function BusTimings() {
         </SafeAreaView>
       </LinearGradient>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {busTimings.map((route, index) => (
-          <View key={route.id || index} style={styles.section}>
-            <View style={styles.routeHeader}>
-              <View style={styles.routeIconBox}>
-                <MaterialCommunityIcons name="bus-stop" size={22} color="#004e92" />
-              </View>
-              <Text style={styles.routeTitle}>{route.route}</Text>
-            </View>
-
-            <View style={[styles.timingsCard, styles.shadowProp]}>
-              {route.times.map((item, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.timeItem,
-                    idx !== route.times.length - 1 && styles.borderBottom
-                  ]}
-                >
-                  <View style={styles.timeIconBox}>
-                    <MaterialCommunityIcons name="clock-time-four-outline" size={18} color="#64748B" />
+      {loading ? (
+        <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 50 }} />
+      ) : (
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#004e92']}
+              tintColor="#004e92"
+            />
+          }
+        >
+          {routes.length === 0 ? (
+            <Text style={{ textAlign: 'center', color: '#64748B', marginTop: 40 }}>
+              No bus timings available at the moment.
+            </Text>
+          ) : (
+            routes.map((route) => (
+              <View key={route.id} style={styles.section}>
+                <View style={styles.routeHeader}>
+                  <View style={styles.routeIconBox}>
+                    <MaterialCommunityIcons name="bus-stop" size={22} color="#004e92" />
                   </View>
-                  <Text style={styles.timeText}>{item}</Text>
-                  {idx === 0 && (
-                    <View style={styles.nextBadge}>
-                      <Text style={styles.nextBadgeText}>Next</Text>
-                    </View>
-                  )}
+                  <Text style={styles.routeTitle}>{route.route}</Text>
                 </View>
-              ))}
-            </View>
-          </View>
-        ))}
 
-        <View style={styles.infoCard}>
-          <MaterialCommunityIcons name="information" size={24} color="#004e92" />
-          <Text style={styles.infoText}>
-            Please arrive 5 minutes before the scheduled time at the pickup point. Timings may vary slightly due to traffic.
-          </Text>
-        </View>
-      </ScrollView>
+                <View style={[styles.timingsCard, styles.shadowProp]}>
+                  {route.times.map((item, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.timeItem,
+                        idx !== route.times.length - 1 && styles.borderBottom
+                      ]}
+                    >
+                      <View style={styles.timeIconBox}>
+                        <MaterialCommunityIcons name="clock-time-four-outline" size={18} color="#64748B" />
+                      </View>
+                      <Text style={styles.timeText}>{item}</Text>
+                      {/* We could implement complex logic to show "Next" based on current time here */}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))
+          )}
+
+          <View style={styles.infoCard}>
+            <MaterialCommunityIcons name="information" size={24} color="#004e92" />
+            <Text style={styles.infoText}>
+              Please arrive 5 minutes before the scheduled time at the pickup point. Timings are managed by the administration.
+            </Text>
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -180,18 +213,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#334155',
-  },
-  nextBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 'auto',
-  },
-  nextBadgeText: {
-    color: '#16A34A',
-    fontSize: 12,
-    fontWeight: '700',
   },
   infoCard: {
     flexDirection: 'row',

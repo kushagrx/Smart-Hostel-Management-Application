@@ -61,6 +61,8 @@ export const subscribeToNotices = (
     });
 
     callback(notices);
+  }, (error) => {
+    console.error("Error subscribing to notices:", error);
   });
 
   return unsubscribe;

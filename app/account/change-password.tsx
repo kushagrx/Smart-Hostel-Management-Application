@@ -6,7 +6,6 @@ import { doc, updateDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,13 +13,15 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../../context/AlertContext';
 import { getAuthSafe, getDbSafe } from '../../utils/firebase';
 
 export default function ChangePassword() {
   const router = useRouter();
+  const { showAlert } = useAlert();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,62 +31,65 @@ export default function ChangePassword() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const changePassword = async (currentPass: string, newPass: string) => {
+    const auth = getAuthSafe();
+    const db = getDbSafe();
+
+    if (!auth?.currentUser || !db) {
+      throw new Error('Connection error. Please try again.');
+    }
+
+    const user = auth.currentUser;
+    const userEmail = user.email;
+
+    if (!userEmail) {
+      throw new Error('User email not found.');
+    }
+
+    // 1. Re-authenticate
+    const credential = EmailAuthProvider.credential(userEmail, currentPass);
+    await reauthenticateWithCredential(user, credential);
+
+    // 2. Update Firebase Auth Password
+    await updatePassword(user, newPass);
+
+    // 3. Update Sync in Firestore (allocations)
+    // This ensures the Admin can still see/manage the current password if needed
+    // Try updating allocation if it exists (for students)
+    const allocationRef = doc(db, 'allocations', userEmail);
+    try {
+      await updateDoc(allocationRef, {
+        tempPassword: newPass,
+        updatedAt: new Date().toISOString() // Using string for safety
+      });
+    } catch (e) {
+      console.log("Could not sync to allocations (might be admin): ", e);
+    }
+  };
+
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlert('Error', 'Please fill in all fields', [], 'error');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'New passwords do not match');
+      showAlert('Error', 'New passwords do not match', [], 'error');
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      showAlert('Error', 'Password must be at least 6 characters long', [], 'error');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const auth = getAuthSafe();
-      const db = getDbSafe();
-
-      if (!auth?.currentUser || !db) {
-        Alert.alert('Error', 'Connection error. Please try again.');
-        return;
-      }
-
-      const user = auth.currentUser;
-      const userEmail = user.email;
-
-      // 1. Re-authenticate
-      const credential = EmailAuthProvider.credential(userEmail!, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-
-      // 2. Update Firebase Auth Password
-      await updatePassword(user, newPassword);
-
-      // 3. Update Sync in Firestore (allocations)
-      // This ensures the Admin can still see/manage the current password if needed
-      if (userEmail) {
-        // Try updating allocation if it exists (for students)
-        const allocationRef = doc(db, 'allocations', userEmail);
-        try {
-          await updateDoc(allocationRef, {
-            tempPassword: newPassword,
-            updatedAt: new Date().toISOString() // Using string for safety
-          });
-        } catch (e) {
-          console.log("Could not sync to allocations (might be admin): ", e);
-        }
-      }
-
-      Alert.alert('Success', 'Password updated successfully!', [
+      await changePassword(currentPassword, newPassword);
+      showAlert('Success', 'Password updated successfully!', [
         { text: 'OK', onPress: () => router.back() }
-      ]);
-
+      ], 'success');
     } catch (error: any) {
       console.error(error);
       let msg = 'Failed to update password.';
@@ -93,8 +97,10 @@ export default function ChangePassword() {
         msg = 'Current password is incorrect.';
       } else if (error.code === 'auth/requires-recent-login') {
         msg = 'For security, please logout and login again before changing password.';
+      } else if (error.message) {
+        msg = error.message;
       }
-      Alert.alert('Error', msg);
+      showAlert('Error', msg, [], 'error');
     } finally {
       setIsLoading(false);
     }

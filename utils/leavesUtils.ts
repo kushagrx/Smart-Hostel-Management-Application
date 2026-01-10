@@ -100,7 +100,10 @@ export const updateLeaveStatus = async (id: string, status: 'approved' | 'reject
 };
 
 // Subscribe to pending leave requests
-export const subscribeToPendingLeaves = (callback: (leaves: LeaveRequest[]) => void) => {
+export const subscribeToPendingLeaves = (
+    callback: (leaves: LeaveRequest[]) => void,
+    onError?: (error: any) => void
+) => {
     const db = getDbSafe();
     if (!db) return () => { };
 
@@ -117,9 +120,13 @@ export const subscribeToPendingLeaves = (callback: (leaves: LeaveRequest[]) => v
                 ...doc.data()
             } as LeaveRequest));
             callback(leaves);
+        }, (error) => {
+            console.error("Error subscribing to pending leaves:", error);
+            if (onError) onError(error);
         });
     } catch (error) {
         console.error("Error subscribing to pending leaves:", error);
+        if (onError) onError(error);
         return () => { };
     }
 };

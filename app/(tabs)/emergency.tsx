@@ -1,13 +1,22 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { emergencyContacts } from '../../utils/complaintsUtils';
+import { EmergencyContact, subscribeToContacts } from '../../utils/emergencySyncUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
 export default function Emergency() {
   const { colors } = useTheme();
+  const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToContacts((data) => {
+      setContacts(data);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleCall = (phoneNumber: string) => {
     Linking.openURL(`tel:${phoneNumber}`);
@@ -52,23 +61,23 @@ export default function Emergency() {
         </View>
 
         <View style={styles.contactsContainer}>
-          {emergencyContacts.map((contact, index) => (
+          {contacts.map((contact, index) => (
             <Pressable
-              key={index}
+              key={contact.id}
               style={[styles.contactCard, styles.shadowProp]}
               onPress={() => handleCall(contact.number)}
             >
               <View style={styles.cardInner}>
                 <View style={[styles.iconBox, { backgroundColor: index === 0 ? '#FEF2F2' : '#EFF6FF' }]}>
-                  <MaterialIcons
-                    name={index === 0 ? "local-police" : "phone-in-talk"}
+                  <MaterialCommunityIcons
+                    name={contact.icon as any || 'phone-in-talk'}
                     size={24}
                     color={index === 0 ? "#EF4444" : "#004e92"}
                   />
                 </View>
 
                 <View style={styles.contactInfo}>
-                  <Text style={styles.contactName}>{contact.name}</Text>
+                  <Text style={styles.contactName}>{contact.title} {contact.name ? `• ${contact.name}` : ''}</Text>
                   <Text style={styles.contactNumber}>{contact.number}</Text>
                 </View>
 
@@ -80,23 +89,7 @@ export default function Emergency() {
           ))}
         </View>
 
-        {/* SOS Button (Optional Visual) */}
-        <Pressable
-          style={[styles.sosButton, styles.shadowProp]}
-          onPress={() => handleCall('100')} // Defaulting to Police/Emergency
-        >
-          <LinearGradient
-            colors={['#EF4444', '#DC2626']}
-            style={styles.sosGradient}
-          >
-            <MaterialCommunityIcons name="alert-decagram" size={32} color="#fff" />
-            <View>
-              <Text style={styles.sosTitle}>Quick SOS</Text>
-              <Text style={styles.sosSubtitle}>Call Police immediately</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={32} color="rgba(255,255,255,0.6)" />
-          </LinearGradient>
-        </Pressable>
+
 
       </ScrollView>
     </View>

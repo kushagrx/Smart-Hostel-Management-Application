@@ -69,6 +69,8 @@ export const subscribeToStudentRequests = (
             updatedAt: doc.data().updatedAt?.toDate() || new Date(),
         } as ServiceRequest));
         callback(data);
+    }, (error) => {
+        console.error("Error subscribing to student service requests:", error);
     });
 };
 
@@ -92,6 +94,8 @@ export const subscribeToAllServiceRequests = (
             updatedAt: doc.data().updatedAt?.toDate() || new Date(),
         } as ServiceRequest));
         callback(data);
+    }, (error) => {
+        console.error("Error subscribing to all service requests:", error);
     });
 };
 
