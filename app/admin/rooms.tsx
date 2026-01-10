@@ -1,22 +1,58 @@
+
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAlert } from '../../context/AlertContext';
 import { isAdmin, useUser } from '../../utils/authUtils';
 
-
+import { useTheme } from '../../utils/ThemeContext';
 
 export default function RoomsPage() {
+  const { colors, theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const user = useUser();
   const router = useRouter();
+  const { showAlert } = useAlert();
+  const { search, openRoomId } = useLocalSearchParams();
+
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [rooms, setRooms] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  }, []);
+
   React.useEffect(() => {
+    if (search) {
+      setSearchQuery(search as string);
+    }
+  }, [search]);
+
+  // Auto-expand room if openRoomId is provided and exists in loaded rooms
+  React.useEffect(() => {
+    if (openRoomId && rooms.length > 0) {
+      const exists = rooms.some(r => r.id === openRoomId);
+      if (exists) {
+        setSelectedRoom(openRoomId as string);
+      }
+    }
+  }, [openRoomId, rooms]);
+
+  React.useEffect(() => {
+    // Wait for user to be verified as admin
+    if (!isAdmin(user)) return;
+
     let unsubscribe: () => void;
 
     const fetchRooms = async () => {
@@ -31,6 +67,9 @@ export default function RoomsPage() {
           const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setRooms(list);
           setLoading(false);
+        }, (error) => {
+          console.error("Error subscribing to rooms:", error);
+          setLoading(false);
         });
       } catch (e) {
         console.error(e);
@@ -42,14 +81,9 @@ export default function RoomsPage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [user]);
 
-  if (!isAdmin(user))
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Access denied.</Text>
-      </View>
-    );
+
 
   const occupiedRooms = rooms.filter((r) => r.status === 'full' || r.status === 'occupied').length; // full is also occupied
   const vacantRooms = rooms.filter((r) => r.status === 'vacant').length;
@@ -94,21 +128,275 @@ export default function RoomsPage() {
     return 'Vacant';
   };
 
+  const handleDeleteRoom = async (roomNo: string) => {
+    showAlert(
+      'Confirm Delete',
+      `Are you sure you want to delete Room ${roomNo}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => { },
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { getDbSafe } = await import('../../utils/firebase');
+              const { deleteRoom } = await import('../../utils/roomUtils');
+              const db = getDbSafe();
+              if (db) {
+                await deleteRoom(db, roomNo);
+                showAlert('Success', `Room ${roomNo} deleted.`, [], 'success');
+              }
+            } catch (e: any) {
+              showAlert('Error', e.message, [], 'error');
+            }
+          },
+        },
+      ],
+      'warning'
+    );
+  };
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    container: {
+      backgroundColor: colors.background,
+      paddingBottom: 20,
+      minHeight: '100%',
+    },
+    header: {
+      paddingVertical: 24,
+      paddingHorizontal: 24,
+      marginBottom: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: colors.primary,
+      shadowOpacity: 0.25,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    headerContent: {
+      flex: 1,
+      alignItems: 'center',
+      marginRight: 28,
+    },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: '#fff',
+      letterSpacing: 0.5,
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    statsContainer: {
+      flexDirection: 'row',
+      paddingHorizontal: 20,
+      marginBottom: 24,
+      gap: 12,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 16,
+      alignItems: 'center',
+      shadowColor: colors.textSecondary,
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      elevation: 3,
+    },
+    statValue: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: colors.text,
+      marginTop: 8,
+    },
+    statLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginTop: 2,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: 20,
+      marginBottom: 20,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      shadowColor: colors.textSecondary,
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    searchIcon: {
+      marginRight: 10,
+      opacity: 0.5,
+      color: colors.textSecondary,
+    },
+    searchInput: {
+      flex: 1,
+      paddingVertical: 14,
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    listContent: {
+      paddingHorizontal: 20,
+      paddingBottom: 40,
+    },
+    roomCard: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      marginBottom: 16,
+      overflow: 'hidden',
+      shadowColor: colors.textSecondary,
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    roomCardActive: {
+      borderColor: colors.primary,
+      borderWidth: 1.5,
+      shadowColor: colors.primary,
+      shadowOpacity: 0.15,
+    },
+    roomHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 18,
+      justifyContent: 'space-between',
+    },
+    roomNumber: {
+      backgroundColor: theme === 'dark' ? '#1E293B' : '#F1F5F9', // Matches border/slight offset
+      borderRadius: 14,
+      width: 52,
+      height: 52,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    roomNumberText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.text, // Updated from #334155
+    },
+    roomInfo: {
+      flex: 1,
+      marginLeft: 16,
+      justifyContent: 'center',
+    },
+    roomTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    roomCapacity: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    statusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+    },
+    statusText: {
+      color: '#fff',
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    expandedContent: {
+      backgroundColor: theme === 'dark' ? '#1E293B' : '#F8FAFC',
+      padding: 20,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    detailLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    detailValue: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    actionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: 12,
+      gap: 8,
+    },
+    deleteBtn: {
+      backgroundColor: theme === 'dark' ? 'rgba(239, 68, 68, 0.2)' : '#EF4444',
+      borderWidth: 1,
+      borderColor: theme === 'dark' ? 'rgba(239, 68, 68, 0.5)' : 'transparent',
+    },
+    actionBtnText: {
+      color: theme === 'dark' ? '#EF4444' : '#fff',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+  }), [colors, theme]);
+
+  if (!isAdmin(user))
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Access denied.</Text>
+      </View>
+    );
+
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={['#0891B2', '#06B6D4']} style={styles.header}>
+        <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: 24 + insets.top }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="chevron-left" size={28} color="#fff" />
+            <MaterialIcons name="chevron-left" size={32} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>Manage Rooms</Text>
           </View>
         </LinearGradient>
 
+
+
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <MaterialIcons name="door-closed" size={24} color="#0891B2" />
+            <MaterialIcons name="door-closed" size={24} color="#6366F1" />
             <Text style={styles.statValue}>{rooms.length}</Text>
             <Text style={styles.statLabel}>Total Rooms</Text>
           </View>
@@ -118,18 +406,23 @@ export default function RoomsPage() {
             <Text style={styles.statLabel}>Occupied</Text>
           </View>
           <View style={styles.statCard}>
-            <MaterialIcons name="home-outline" size={24} color="#14B8A6" />
+            <MaterialIcons name="home-outline" size={24} color="#10B981" />
             <Text style={styles.statValue}>{vacantRooms}</Text>
             <Text style={styles.statLabel}>Vacant</Text>
           </View>
         </View>
 
+        {/* Action Button Styles (Defining here for convenience as they were removed/missing in styles object) */}
+        {/* We will add them to the StyleSheet at the bottom instead in a separate edit if needed, or use inline/existing styles if compatible. */}
+        {/* Let's double check styles. actionBtn and deleteBtn seem missing from Step 357 view. */}
+        {/* I'll add the function first. */}
+
         <View style={styles.searchContainer}>
-          <MaterialIcons name="magnify" size={20} color="#999" style={styles.searchIcon} />
+          <MaterialIcons name="magnify" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by room number..."
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -183,223 +476,30 @@ export default function RoomsPage() {
                       {(item.capacity || 2) - (item.occupants?.length || 0)} spots left
                     </Text>
                   </View>
-
-                  {/* Removed Action Buttons since Room Editing is done via Student Allotment mostly */}
+                  {(!item.occupants || item.occupants.length === 0) && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.deleteBtn, { marginTop: 16 }]}
+                      onPress={() => handleDeleteRoom(item.number)}
+                    >
+                      <MaterialIcons name="delete" size={20} color={theme === 'dark' ? '#EF4444' : '#fff'} />
+                      <Text style={styles.actionBtnText}>Delete Room</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </TouchableOpacity>
           )}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
           ListEmptyComponent={
-            <Text style={{ textAlign: 'center', marginTop: 20, color: '#666' }}>No rooms found. Allot students to create rooms.</Text>
+            <Text style={{ textAlign: 'center', marginTop: 20, color: colors.textSecondary }}>No rooms found. Allot students to create rooms.</Text>
           }
         />
       </ScrollView>
+
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#f8f9fa',
-    paddingBottom: 20,
-  },
-  header: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backBtn: {
-    padding: 8,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: '#0891B2',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0891B2',
-    marginTop: 6,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 12,
-    marginBottom: 16,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0891B2',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#333',
-  },
-  listHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  listTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  listContent: {
-    paddingHorizontal: 12,
-  },
-  roomCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 10,
-    overflow: 'hidden',
-    borderLeftWidth: 4,
-    borderLeftColor: '#0891B2',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  roomCardActive: {
-    borderLeftColor: '#0891B2',
-    shadowOpacity: 0.15,
-  },
-  roomHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    justifyContent: 'space-between',
-  },
-  roomNumber: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 8,
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderLeftWidth: 3,
-    borderLeftColor: '#0891B2',
-  },
-  roomNumberText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0891B2',
-  },
-  roomInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  roomTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  roomCapacity: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  expandedContent: {
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  detailLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  detailValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  primaryBtn: {
-    backgroundColor: '#0891B2',
-  },
-  dangerBtn: {
-    backgroundColor: '#EC4899',
-  },
-  actionBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});
+

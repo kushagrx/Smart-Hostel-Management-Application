@@ -11,7 +11,6 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getStoredUser } from '../utils/authUtils';
 
 export default function Index() {
   const router = useRouter();
@@ -26,25 +25,27 @@ export default function Index() {
 
     textOpacity.value = withDelay(300, withTiming(1, { duration: 800 }));
 
-    // 2. Check Auth in Parallel
+    // 2. Force Logout and Redirect to Login
     const checkAuthAndNavigate = async () => {
       // Extended wait time for the premium feel
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       try {
-        const user = await getStoredUser();
-        if (!user) {
-          router.replace('/login');
-        } else {
-          if (user.role === 'admin') {
-            router.replace('/admin');
-          } else {
-            router.replace('/(tabs)');
-          }
-        }
+        // Clear Firebase Auth
+        const { getAuthSafe } = await import('../utils/firebase');
+        const { signOut } = await import('firebase/auth');
+        const auth = getAuthSafe();
+        if (auth) await signOut(auth);
+
+        // Clear Local Storage
+        const { setStoredUser } = await import('../utils/authUtils');
+        await setStoredUser(null);
       } catch (error) {
-        router.replace('/login');
+        console.log("Error clearing session:", error);
       }
+
+      // Always navigate to Login
+      router.replace('/login');
     };
 
     checkAuthAndNavigate();

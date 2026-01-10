@@ -1,96 +1,185 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Stack } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { emergencyContacts } from '../../utils/complaintsUtils';
+import { EmergencyContact, subscribeToContacts } from '../../utils/emergencySyncUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
 export default function Emergency() {
   const { colors } = useTheme();
+  const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToContacts((data) => {
+      setContacts(data);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleCall = (phoneNumber: string) => {
     Linking.openURL(`tel:${phoneNumber}`);
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.header}>
-          <MaterialCommunityIcons name="phone-alert" size={32} color="#FF8C00" />
-          <Text style={[styles.headerTitle, { color: colors.text }]}>24/7 Emergency Contacts</Text>
+    <View style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Header */}
+      <LinearGradient
+        colors={['#000428', '#004e92']}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView edges={['top', 'left', 'right']}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.headerTitle}>Emergency</Text>
+              <Text style={styles.headerSubtitle}>24/7 Support & Help</Text>
+            </View>
+            <View style={styles.sosIconContainer}>
+              <MaterialCommunityIcons name="alarm-light" size={28} color="#EF4444" />
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* Helper Banner */}
+        <View style={styles.banner}>
+          <MaterialCommunityIcons name="information-outline" size={24} color="#004e92" />
+          <Text style={styles.bannerText}>
+            Tap on any contact card below to initiate an immediate call.
+          </Text>
         </View>
 
         <View style={styles.contactsContainer}>
-          {emergencyContacts.map((contact, index) => (
-            <Pressable 
-              key={index}
-              style={[styles.contactCard, styles.shadowProp, { backgroundColor: colors.cardBackground }]}
+          {contacts.map((contact, index) => (
+            <Pressable
+              key={contact.id}
+              style={[styles.contactCard, styles.shadowProp]}
               onPress={() => handleCall(contact.number)}
             >
-              <View style={styles.contactLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: colors.theme === 'dark' ? '#4d2e0a' : '#FFF3E0' }]}>
-                  <MaterialCommunityIcons name="phone" size={24} color="#FF8C00" />
+              <View style={styles.cardInner}>
+                <View style={[styles.iconBox, { backgroundColor: index === 0 ? '#FEF2F2' : '#EFF6FF' }]}>
+                  <MaterialCommunityIcons
+                    name={contact.icon as any || 'phone-in-talk'}
+                    size={24}
+                    color={index === 0 ? "#EF4444" : "#004e92"}
+                  />
                 </View>
+
                 <View style={styles.contactInfo}>
-                  <Text style={[styles.contactName, { color: colors.text }]}>{contact.name}</Text>
-                  <Text style={[styles.contactNumber, { color: colors.secondary }]}>{contact.number}</Text>
+                  <Text style={styles.contactName}>{contact.title} {contact.name ? `• ${contact.name}` : ''}</Text>
+                  <Text style={styles.contactNumber}>{contact.number}</Text>
+                </View>
+
+                <View style={[styles.callBtn, { backgroundColor: index === 0 ? '#EF4444' : '#10B981' }]}>
+                  <MaterialIcons name="call" size={20} color="#fff" />
                 </View>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.icon} />
             </Pressable>
           ))}
         </View>
 
-        <View style={[styles.infoBox, { backgroundColor: colors.theme === 'dark' ? '#4d2e0a' : '#FFF3E0' }]}>
-          <MaterialCommunityIcons name="information" size={24} color="#FF8C00" />
-          <Text style={[styles.infoText, { color: colors.theme === 'dark' ? '#FFB84D' : '#FF8C00' }]}>
-            Tap on any contact to call immediately
-          </Text>
-        </View>
+
+
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    padding: 20,
   },
   header: {
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: "#004e92",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  headerContent: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 20,
-    gap: 10,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700' as const,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  sosIconContainer: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    padding: 24,
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    gap: 12,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1E40AF',
+    lineHeight: 20,
+    fontWeight: '500',
   },
   contactsContainer: {
-    paddingHorizontal: 0,
-    gap: 12,
-    marginBottom: 20,
+    gap: 16,
+    marginBottom: 24,
   },
   contactCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  cardInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 16,
-    borderRadius: 12,
+    gap: 16,
   },
-  contactLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  iconCircle: {
+  iconBox: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -99,33 +188,57 @@ const styles = StyleSheet.create({
   },
   contactName: {
     fontSize: 16,
-    fontWeight: '600' as const,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 4,
   },
   contactNumber: {
     fontSize: 14,
-    marginTop: 4,
+    color: '#64748B',
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
-  infoBox: {
+  callBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sosButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  sosGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
+    padding: 20,
+    gap: 16,
   },
-  infoText: {
-    flex: 1,
-    fontWeight: '500' as const,
-    fontSize: 14,
+  sosTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  sosSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
   },
   shadowProp: {
-    shadowColor: '#000',
+    shadowColor: '#64748B',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
 });
