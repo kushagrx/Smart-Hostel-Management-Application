@@ -56,38 +56,80 @@ export default function LeaveRequestsPage() {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    statsContainer: {
-      flexDirection: 'row',
+    statsGrid: {
       paddingHorizontal: 20,
       marginBottom: 24,
       gap: 12,
     },
-    statCard: {
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    heroCard: {
+      borderRadius: 24,
+      padding: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#D97706',
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+      overflow: 'hidden',
+      height: 100,
+    },
+    miniCard: {
       flex: 1,
-      backgroundColor: colors.card,
       borderRadius: 20,
       padding: 16,
-      alignItems: 'center',
-      shadowColor: colors.textSecondary,
-      shadowOpacity: 0.08,
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 16,
-      elevation: 3,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+      overflow: 'hidden',
+      height: 110,
+      justifyContent: 'space-between',
     },
-    statValue: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: colors.text,
-      marginTop: 8,
+    cardWatermark: {
+      position: 'absolute',
+      right: -10,
+      bottom: -10,
+      opacity: 0.15,
+      transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
     },
-    statLabel: {
-      fontSize: 11,
+    heroLabel: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 14,
       fontWeight: '600',
-      color: colors.textSecondary,
-      marginTop: 2,
-      textAlign: 'center',
+      marginBottom: 4,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 1,
+    },
+    heroValue: {
+      color: '#fff',
+      fontSize: 36,
+      fontWeight: '800',
+      letterSpacing: -1,
+    },
+    miniLabel: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700',
+      opacity: 0.9,
+    },
+    miniValue: {
+      color: '#fff',
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+    miniHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
     },
     listContent: {
       paddingHorizontal: 20,
@@ -438,21 +480,58 @@ export default function LeaveRequestsPage() {
 
 
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <MaterialIcons name="calendar-clock" size={22} color="#D97706" />
-            <Text style={styles.statValue}>{requests.length}</Text>
-            <Text style={styles.statLabel}>Total Requests</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
-            <Text style={styles.statValue}>{pendingCount}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="check-circle" size={22} color="#10B981" />
-            <Text style={styles.statValue}>{approvedCount}</Text>
-            <Text style={styles.statLabel}>Approved</Text>
+        <View style={styles.statsGrid}>
+          {/* Hero Card: Pending Leaves */}
+          <LinearGradient
+            colors={['#D97706', '#B45309']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View>
+              <Text style={styles.heroLabel}>Pending Request{pendingCount !== 1 ? 's' : ''}</Text>
+              <Text style={styles.heroValue}>{pendingCount}</Text>
+            </View>
+            <MaterialIcons name="clock-outline" size={48} color="rgba(255,255,255,0.9)" />
+            <View style={styles.cardWatermark}>
+              <MaterialIcons name="clock-outline" size={100} color="#fff" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.statsRow}>
+            {/* Approved */}
+            <LinearGradient
+              colors={['#059669', '#064E3B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="check-circle-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Approved</Text>
+              </View>
+              <Text style={styles.miniValue}>{approvedCount}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="check-circle-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+
+            {/* Total */}
+            <LinearGradient
+              colors={['#4F46E5', '#312E81']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="calendar-month" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Total</Text>
+              </View>
+              <Text style={styles.miniValue}>{requests.length}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="calendar-month" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
           </View>
         </View>
 

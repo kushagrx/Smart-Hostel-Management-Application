@@ -63,6 +63,9 @@ export default function StudentAllotmentPage() {
   const [personalEmail, setPersonalEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const [hostelFee, setHostelFee] = useState('');
+  const [messFee, setMessFee] = useState('');
+  const [feeFrequency, setFeeFrequency] = useState<'Monthly' | 'Quarterly' | 'Yearly'>('Monthly');
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
@@ -116,6 +119,11 @@ export default function StudentAllotmentPage() {
           tempPassword: generatedPassword,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          feeStructure: {
+            hostelFee: parseFloat(hostelFee) || 0,
+            messFee: parseFloat(messFee) || 0,
+            frequency: feeFrequency
+          }
         });
       } catch (allocError: any) {
         // Rollback room allocation if saving student data fails
@@ -321,6 +329,51 @@ export default function StudentAllotmentPage() {
               required
               hasSubmitted={hasSubmitted}
             />
+
+            <View style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Fee Structure</Text>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <InputField
+                  label="Hostel Fee"
+                  icon="bed"
+                  value={hostelFee}
+                  onChangeText={setHostelFee}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  hasSubmitted={hasSubmitted}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <InputField
+                  label="Mess Fee"
+                  icon="food"
+                  value={messFee}
+                  onChangeText={setMessFee}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  hasSubmitted={hasSubmitted}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Payment Frequency</Text>
+              <View style={styles.inputWrapper}>
+                <MaterialIcons name="calendar-clock" size={20} color={feeFrequency ? '#004e92' : '#64748B'} style={styles.inputIcon} />
+                <Picker
+                  selectedValue={feeFrequency}
+                  style={{ flex: 1, color: '#1E293B', marginLeft: -8 }}
+                  onValueChange={(v) => setFeeFrequency(v)}
+                >
+                  <Picker.Item label="Monthly" value="Monthly" />
+                  <Picker.Item label="Quarterly" value="Quarterly" />
+                  <Picker.Item label="Yearly" value="Yearly" />
+                </Picker>
+              </View>
+            </View>
 
             <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
               <LinearGradient

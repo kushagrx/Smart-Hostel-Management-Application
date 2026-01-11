@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache } from 'firebase/firestore';
 
 const extra = (Constants.expoConfig?.extra as any) || {};
 
@@ -33,7 +33,9 @@ if (app) {
     console.log('Firebase Auth already initialized, using existing instance.');
     authInstance = getAuth(app);
   }
-  dbInstance = getFirestore(app);
+  dbInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache()
+  });
 }
 
 export function getAuthSafe() {

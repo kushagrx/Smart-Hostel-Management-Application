@@ -6,6 +6,7 @@ import { Dimensions, FlatList, KeyboardAvoidingView, Platform, ScrollView, Style
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import InputField from '../../components/InputField';
+import StudentDetailsModal from '../../components/StudentDetailsModal';
 import { useAlert } from '../../context/AlertContext';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { useTheme } from '../../utils/ThemeContext';
@@ -86,43 +87,80 @@ export default function StudentsPage() {
       color: colors.primary,
       fontWeight: '700',
     },
-    statsContainer: {
-      flexDirection: 'row',
-      paddingHorizontal: 16,
-      marginBottom: 20,
+    statsGrid: {
+      paddingHorizontal: 20,
+      marginBottom: 24,
       gap: 12,
     },
-    statCard: {
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    heroCard: {
+      borderRadius: 24,
+      padding: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#4F46E5',
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+      overflow: 'hidden',
+      height: 100,
+    },
+    miniCard: {
       flex: 1,
-      backgroundColor: colors.card,
-      borderRadius: 16,
-      padding: 12,
-      alignItems: 'center',
-      shadowColor: colors.textSecondary,
-      shadowOpacity: 0.05,
+      borderRadius: 20,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
       shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+      overflow: 'hidden',
+      height: 110,
+      justifyContent: 'space-between',
     },
-    statIconBg: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 8,
+    cardWatermark: {
+      position: 'absolute',
+      right: -10,
+      bottom: -10,
+      opacity: 0.15,
+      transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
     },
-    statValue: {
-      fontSize: 20,
-      fontWeight: '800',
-      marginBottom: 2,
-    },
-    statLabel: {
-      fontSize: 10,
+    heroLabel: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 14,
       fontWeight: '600',
-      color: colors.textSecondary,
+      marginBottom: 4,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 1,
+    },
+    heroValue: {
+      color: '#fff',
+      fontSize: 36,
+      fontWeight: '800',
+      letterSpacing: -1,
+    },
+    miniLabel: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700',
+      opacity: 0.9,
+    },
+    miniValue: {
+      color: '#fff',
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+    miniHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
     },
     searchContainer: {
       flexDirection: 'row',
@@ -540,9 +578,10 @@ export default function StudentsPage() {
   // Auto-expand student if openId is provided and exists in loaded students
   React.useEffect(() => {
     if (openId && students.length > 0) {
-      const exists = students.some(s => s.id === openId);
-      if (exists) {
-        setSelectedId(openId as string);
+      const student = students.find(s => s.id === openId);
+      if (student) {
+        setViewingStudent(student);
+        setDetailsModalVisible(true);
       }
     }
   }, [openId, students]);
@@ -569,6 +608,10 @@ export default function StudentsPage() {
   // Edit Modal State
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
+
+  // View Details Modal State
+  const [viewingStudent, setViewingStudent] = useState<any>(null);
+  const [isDetailsModalVisible, setDetailsModalVisible] = useState(false);
 
   // Form State (Edit)
   const [editName, setEditName] = useState('');
@@ -704,9 +747,12 @@ export default function StudentsPage() {
     };
   }, [user]);
 
+  const [editEmail, setEditEmail] = useState(''); // Add state for ID/Email editing
+
   const handleEdit = (student: any) => {
     setEditingStudent(student);
     setEditName(student.name || '');
+    setEditEmail(student.id || student.email || ''); // Initialize with ID/Effective Email
     setEditRollNo(student.rollNo || '');
     setEditRoom(student.room || '');
     setEditCollege(student.collegeName || '');
@@ -724,7 +770,7 @@ export default function StudentsPage() {
 
     try {
       const { getDbSafe } = await import('../../utils/firebase');
-      const { doc, updateDoc, collection, query, where, getDocs, writeBatch } = await import('firebase/firestore');
+      const { doc, updateDoc, collection, query, where, getDocs, writeBatch, setDoc, deleteDoc, getDoc } = await import('firebase/firestore');
       const { allocateRoom, deallocateRoom } = await import('../../utils/roomUtils');
 
       const db = getDbSafe();
@@ -735,27 +781,60 @@ export default function StudentsPage() {
 
       setLoading(true);
 
+      const oldEmail = editingStudent.id;
+      const newEmail = editEmail.toLowerCase().trim();
+      const emailChanged = oldEmail !== newEmail;
       const roomChanged = editRoom !== editingStudent.room;
 
-      // 1. If room changed, reserve the new room first (checks capacity)
-      if (roomChanged) {
-        try {
-          await allocateRoom(db, editRoom, editingStudent.id, editName);
-        } catch (err: any) {
-          showAlert('Room Assignment Failed', err.message, [], 'error');
+      // 1. If Email Changed: Ensure new email doesn't already exist
+      if (emailChanged) {
+        const newEmailDoc = await getDoc(doc(db, 'allocations', newEmail));
+        if (newEmailDoc.exists()) {
+          showAlert('Error', 'Student with this email already exists!', [], 'error');
           setLoading(false);
           return;
         }
       }
 
+      // 2. Room Allocation Logic
+      // If room changed, we need to allocate the new room to the CORRECT ID (new or old)
+      // If email changed, we technically need to deallocate the old ID from the old room (or current room) and allocate the NEW ID
+
+      const targetRoom = roomChanged ? editRoom : editingStudent.room;
+      const targetId = newEmail; // We effectively want the room to be assigned to the new ID
+
+      // If room changed OR email changed, we need to update room records
+      // Because Room stores the Occupant ID. Even if room is same, ID changed, so we must update room.
+      const needsRoomUpdate = roomChanged || emailChanged;
+
+      if (needsRoomUpdate && targetRoom) {
+        try {
+          // If we are changing room, check capacity of new room
+          // Logic is complex: 
+          // A. Deallocate Old ID from Old Room
+          // B. Allocate New ID to New Room (or Old Room)
+
+          // Simplest safe approach:
+          // 1. Deallocate Old Room / Old ID
+          if (editingStudent.room) {
+            await deallocateRoom(db, editingStudent.room, oldEmail);
+          }
+          // 2. Allocate Target Room / New ID
+          await allocateRoom(db, targetRoom, newEmail, editName);
+
+        } catch (err: any) {
+          showAlert('Allocation Update Failed', err.message, [], 'error');
+          setLoading(false);
+          return; // Stop if room ops fail
+        }
+      }
+
       const batch = writeBatch(db);
 
-      // 2. Update Allocation Document
-      const allocationRef = doc(db, 'allocations', editingStudent.id); // ID is official email
       const updates = {
         name: editName,
         rollNo: editRollNo,
-        room: editRoom,
+        room: targetRoom,
         collegeName: editCollege,
         hostelName: editHostelName,
         age: editAge,
@@ -763,44 +842,66 @@ export default function StudentsPage() {
         personalEmail: editPersonalEmail,
         status: editStatus,
         tempPassword: editPassword,
+        email: newEmail, // Ensure internal email field matches ID
       };
-      batch.update(allocationRef, updates);
 
-      // 3. Find and Update User Profile (if exists) via Official Email
+      if (emailChanged) {
+        // MIGRATION: Create New, Delete Old
+        const newDocRef = doc(db, 'allocations', newEmail);
+        const oldDocRef = doc(db, 'allocations', oldEmail);
+
+        // Copy old data + updates
+        const docData = {
+          ...editingStudent,
+          ...updates,
+          // Preserve tracking
+          updatedAt: new Date(),
+          // If we want to keep createdAt of original, we can, but new doc usually gets new createdAt. 
+          // Better to keep original createdAt if possible or just let it be new. 
+          // Let's keep original if valid, else new.
+          createdAt: editingStudent.createdAt || new Date()
+        };
+        delete docData.id; // Don't save ID field in doc data
+
+        batch.set(newDocRef, docData);
+        batch.delete(oldDocRef);
+
+      } else {
+        // Normal Update
+        const allocationRef = doc(db, 'allocations', oldEmail);
+        batch.update(allocationRef, updates);
+      }
+
+      // 3. Update User Profile (Sync)
+      // We search for users with the OLD officialEmail and update them to NEW officialEmail
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('officialEmail', '==', editingStudent.id));
+      const q = query(usersRef, where('officialEmail', '==', oldEmail));
       const querySnap = await getDocs(q);
 
       querySnap.forEach((userDoc) => {
-        batch.update(userDoc.ref, updates);
+        batch.update(userDoc.ref, {
+          ...updates,
+          officialEmail: newEmail // Sync the link
+        });
       });
 
+      // Fallback: Check 'email' field in users collection too if different scheme
       if (querySnap.empty) {
-        const q2 = query(usersRef, where('email', '==', editingStudent.id));
+        const q2 = query(usersRef, where('email', '==', oldEmail));
         const snap2 = await getDocs(q2);
         snap2.forEach((userDoc) => {
+          // If user signed in with this email, updating 'email' field might handle logic elsewhere
+          // But 'email' is usually auth provider linked. We update descriptive fields.
           batch.update(userDoc.ref, updates);
         });
       }
 
-      try {
-        await batch.commit();
+      await batch.commit();
 
-        // 4. If commit successful AND room changed, release the old room
-        if (roomChanged && editingStudent.room) {
-          await deallocateRoom(db, editingStudent.room, editingStudent.id);
-        }
-
-        showAlert('Success', 'Student details updated successfully.', [], 'success');
-        setEditModalVisible(false);
-        setEditingStudent(null);
-      } catch (commitError: any) {
-        // 5. If batch failed, rollback the new room allocation
-        if (roomChanged) {
-          await deallocateRoom(db, editRoom, editingStudent.id);
-        }
-        throw commitError;
-      }
+      showAlert('Success', 'Student details updated successfully.', [], 'success');
+      setEditModalVisible(false);
+      setEditingStudent(null);
+      setEditEmail('');
 
     } catch (e: any) {
       console.error(e);
@@ -894,9 +995,16 @@ export default function StudentsPage() {
                 <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
                   <View style={styles.formSection}>
                     <Text style={styles.modalLabel}>Official Email (ID)</Text>
-                    <View style={[styles.modalInputWrapper, styles.disabledInputWrapper]}>
-                      <MaterialIcons name="email-lock" size={20} color="#94A3B8" style={styles.inputIcon} />
-                      <TextInput style={[styles.modalInput, styles.disabledInput]} value={editingStudent?.id} editable={false} />
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="email" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editEmail}
+                        onChangeText={setEditEmail}
+                        placeholder="official@college.edu"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
                     </View>
                   </View>
 
@@ -1000,6 +1108,15 @@ export default function StudentsPage() {
         )
         }
 
+        {/* View Details Modal */}
+        <StudentDetailsModal
+          visible={isDetailsModalVisible}
+          student={viewingStudent}
+          onClose={() => setDetailsModalVisible(false)}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+
         <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
           <LinearGradient
             colors={['#000428', '#004e92']}
@@ -1036,27 +1153,58 @@ export default function StudentsPage() {
 
           {activeTab === 'list' ? (
             <>
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconBg, { backgroundColor: '#E0E7FF' }]}>
-                    <MaterialIcons name="account-group" size={24} color="#004e92" />
+              <View style={styles.statsGrid}>
+                {/* Hero Card: Total Students */}
+                <LinearGradient
+                  colors={['#4F46E5', '#312E81']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.heroCard}
+                >
+                  <View>
+                    <Text style={styles.heroLabel}>Total Students</Text>
+                    <Text style={styles.heroValue}>{students.length}</Text>
                   </View>
-                  <Text style={[styles.statValue, { color: '#004e92' }]}>{students.length}</Text>
-                  <Text style={styles.statLabel}>Total Students</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconBg, { backgroundColor: '#DCFCE7' }]}>
-                    <MaterialIcons name="check-circle" size={24} color="#16A34A" />
+                  <MaterialIcons name="account-group" size={48} color="rgba(255,255,255,0.9)" />
+                  <View style={styles.cardWatermark}>
+                    <MaterialIcons name="account-group" size={100} color="#fff" />
                   </View>
-                  <Text style={[styles.statValue, { color: '#16A34A' }]}>{activeStudents}</Text>
-                  <Text style={styles.statLabel}>Active</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconBg, { backgroundColor: '#F3E8FF' }]}>
-                    <MaterialIcons name="door-closed" size={24} color="#9333EA" />
-                  </View>
-                  <Text style={[styles.statValue, { color: '#9333EA' }]}>{students.length}</Text>
-                  <Text style={styles.statLabel}>Rooms</Text>
+                </LinearGradient>
+
+                <View style={styles.statsRow}>
+                  {/* Active Students */}
+                  <LinearGradient
+                    colors={['#059669', '#064E3B']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.miniCard}
+                  >
+                    <View style={styles.miniHeader}>
+                      <MaterialIcons name="check-circle" size={18} color="rgba(255,255,255,0.9)" />
+                      <Text style={styles.miniLabel}>Active</Text>
+                    </View>
+                    <Text style={styles.miniValue}>{activeStudents}</Text>
+                    <View style={styles.cardWatermark}>
+                      <MaterialIcons name="check-circle" size={80} color="#fff" />
+                    </View>
+                  </LinearGradient>
+
+                  {/* Rooms Occupied */}
+                  <LinearGradient
+                    colors={['#7E22CE', '#581C87']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.miniCard}
+                  >
+                    <View style={styles.miniHeader}>
+                      <MaterialIcons name="door-closed" size={18} color="rgba(255,255,255,0.9)" />
+                      <Text style={styles.miniLabel}>Rooms</Text>
+                    </View>
+                    <Text style={styles.miniValue}>{students.length}</Text>
+                    <View style={styles.cardWatermark}>
+                      <MaterialIcons name="door-closed" size={80} color="#fff" />
+                    </View>
+                  </LinearGradient>
                 </View>
               </View>
 
@@ -1085,9 +1233,12 @@ export default function StudentsPage() {
                   <TouchableOpacity
                     style={[
                       styles.studentCard,
-                      selectedId === item.id && styles.studentCardActive,
+                      // selectedId === item.id && styles.studentCardActive, // No longer highlighting in place
                     ]}
-                    onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
+                    onPress={() => {
+                      setViewingStudent(item);
+                      setDetailsModalVisible(true);
+                    }}
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.studentAvatarContainer}>
@@ -1117,126 +1268,6 @@ export default function StudentsPage() {
                         <MaterialIcons name={getStatusIcon(item.status)} size={18} color={getStatusColor(item.status)} />
                       </View>
                     </View>
-
-                    {selectedId === item.id && (
-                      <View style={styles.expandedContent}>
-                        <View style={styles.infoSection}>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="account" size={16} color="#6366F1" />
-                              <Text style={styles.detailLabel}>Full Name</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.name}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="card-account-details" size={16} color="#6366F1" />
-                              <Text style={styles.detailLabel}>Roll No</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.rollNo}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="school" size={16} color="#8B5CF6" />
-                              <Text style={styles.detailLabel}>College</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.collegeName || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="home-city" size={16} color="#8B5CF6" />
-                              <Text style={styles.detailLabel}>Hostel</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.hostelName || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="cake" size={16} color="#EC4899" />
-                              <Text style={styles.detailLabel}>Age</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.age || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="door-closed" size={16} color="#8B5CF6" />
-                              <Text style={styles.detailLabel}>Room</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.room}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="email" size={16} color="#06B6D4" />
-                              <Text style={styles.detailLabel}>Official Email</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.email}</Text>
-                          </View>
-                          {item.personalEmail && (
-                            <View style={styles.detailRow}>
-                              <View style={styles.detailLeft}>
-                                <MaterialIcons name="gmail" size={16} color="#DB4437" />
-                                <Text style={styles.detailLabel}>Linked Gmail</Text>
-                              </View>
-                              <Text style={styles.detailValue}>{item.personalEmail}</Text>
-                            </View>
-                          )}
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="phone" size={16} color="#EC4899" />
-                              <Text style={styles.detailLabel}>Phone</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.phone}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="check-circle" size={16} color={getStatusColor(item.status)} />
-                              <Text style={styles.detailLabel}>Status</Text>
-                            </View>
-                            <Text style={[styles.detailValue, { color: getStatusColor(item.status), fontWeight: '700' }]}>
-                              {item.status.toUpperCase()}
-                            </Text>
-                          </View>
-
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="calendar-clock" size={16} color="#64748B" />
-                              <Text style={styles.detailLabel}>Joined On</Text>
-                            </View>
-                            <Text style={styles.detailValue}>
-                              {item.createdAt?.seconds
-                                ? new Date(item.createdAt.seconds * 1000).toLocaleString('en-IN', {
-                                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                                })
-                                : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'N/A')}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.detailRow}>
-                          <View style={styles.detailLeft}>
-                            <MaterialIcons name="key" size={16} color="#F59E0B" />
-                            <Text style={styles.detailLabel}>Password</Text>
-                          </View>
-                          <Text style={[styles.detailValue, { fontFamily: 'monospace', color: '#D97706' }]}>
-                            {item.tempPassword || 'N/A'}
-                          </Text>
-                        </View>
-
-                        <View style={styles.actionButtons}>
-                          <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={() => handleEdit(item)}>
-                            <MaterialIcons name="pencil" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Edit</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.actionBtn, styles.deleteBtn]}
-                            onPress={() => handleDelete(item.id, item.name, item.room)}
-                          >
-                            <MaterialIcons name="delete" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Delete</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
                   </TouchableOpacity>
                 )}
                 contentContainerStyle={styles.listContent}

@@ -1,17 +1,21 @@
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
 import { LaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
 import { MenuItem, subscribeToMenu, WeekMenu } from '../../utils/messSyncUtils';
 import { fetchUserData, getInitial, StudentData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
+const { width } = Dimensions.get('window');
+const SPACING = 20;
+
 export default function Index() {
   const router = useRouter();
-  const { colors, theme } = useTheme();
+  const { colors } = useTheme();
   const [student, setStudent] = useState<StudentData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [laundry, setLaundry] = useState<LaundrySettings | null>(null);
@@ -29,15 +33,8 @@ export default function Index() {
   useFocusEffect(
     useCallback(() => {
       loadUserData();
-
-      const unsubscribeLaundry = subscribeToLaundry((data) => {
-        setLaundry(data);
-      });
-
-      const unsubscribeMenu = subscribeToMenu((data) => {
-        setFullMenu(data);
-      });
-
+      const unsubscribeLaundry = subscribeToLaundry(setLaundry);
+      const unsubscribeMenu = subscribeToMenu(setFullMenu);
       return () => {
         unsubscribeLaundry();
         unsubscribeMenu();
@@ -53,6 +50,7 @@ export default function Index() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
+    if (hour < 5) return 'Good Night';
     if (hour < 12) return 'Good Morning';
     if (hour < 18) return 'Good Afternoon';
     return 'Good Evening';
@@ -62,181 +60,167 @@ export default function Index() {
     const today = new Date().toLocaleString('en-US', { weekday: 'long' });
     // @ts-ignore
     const dinnerItems = fullMenu[today]?.dinner;
-    if (!dinnerItems || dinnerItems.length === 0) return 'Loading...';
-
-    // Find highlight or first item
+    if (!dinnerItems || dinnerItems.length === 0) return 'Not Available';
     const highlight = dinnerItems.find((i: MenuItem) => i.highlight);
     return highlight ? highlight.dish : dinnerItems[0].dish;
   };
 
   if (!student) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <LinearGradient
-          colors={['#000428', '#004e92']}
-          style={styles.loadingHeader}
-        >
-          <SafeAreaView edges={['top']}>
-            <Text style={styles.title}>Loading...</Text>
-          </SafeAreaView>
-        </LinearGradient>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#004e92" />
+        <Text style={styles.loadingText}>Loading Dashboard...</Text>
       </View>
     );
   }
 
+  const QuickAction = ({ icon, label, route, color, bg }: any) => (
+    <View style={styles.gridItemWrapper}>
+      <Pressable
+        style={({ pressed }) => [styles.actionCard, pressed && styles.actionCardPressed]}
+        onPress={() => router.push(route)}
+      >
+        <View style={[styles.actionIconBox, { backgroundColor: bg }]}>
+          <MaterialCommunityIcons name={icon} size={26} color={color} />
+        </View>
+        <View style={styles.actionTextBox}>
+          <Text style={styles.actionLabel}>{label}</Text>
+          <Text style={styles.actionSubtext}>View Details</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+
   return (
-    <View style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
+    <View style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
+        contentContainerStyle={{ paddingBottom: 60 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
       >
-        {/* Modern Header Section */}
-        <View style={styles.headerWrapper}>
+        {/* TOP HERO SECTION */}
+        <View style={styles.heroWrapper}>
           <LinearGradient
             colors={['#000428', '#004e92']}
-            style={styles.headerContainer}
+            style={styles.heroGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <SafeAreaView edges={['top']} style={styles.safeArea}>
-              <View style={styles.headerContent}>
+              <View style={styles.headerTop}>
                 <View>
-                  <Text style={styles.greeting}>{getGreeting()},</Text>
-                  <Text style={styles.userName}>{student.fullName}</Text>
-                  <View style={styles.hostelBadge}>
-                    <MaterialCommunityIcons name="office-building-marker" size={14} color="rgba(255,255,255,0.9)" />
-                    <Text style={styles.hostelName}>{student.hostelName || 'Smart Hostel'}</Text>
-                  </View>
+                  <Text style={styles.welcomeText}>{getGreeting()},</Text>
+                  <Text style={styles.studentName}>{student.fullName?.split(' ')[0]}</Text>
                 </View>
-                <Pressable onPress={() => router.push('/profile')} style={styles.profileBtn}>
-                  <View style={styles.userInitialContainer}>
-                    <Text style={styles.userInitial}>{getInitial(student.fullName)}</Text>
+                <Pressable onPress={() => router.push('/profile')} style={styles.profileBox}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{getInitial(student.fullName)}</Text>
                   </View>
                 </Pressable>
               </View>
 
-              {/* Stat Cards */}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Room</Text>
-                  <Text style={styles.statValue}>{student.roomNo || '--'}</Text>
+              <View style={styles.hostelInfo}>
+                <View style={styles.infoBadge}>
+                  <MaterialCommunityIcons name="office-building" size={14} color="#E0F2FE" />
+                  <Text style={styles.infoBadgeText}>{student.hostelName || 'Smart Hostel'}</Text>
                 </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Status</Text>
-                  <Text style={styles.statValue}>{student.status?.toUpperCase() || 'ACTIVE'}</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>College</Text>
-                  <Text style={styles.statValue} numberOfLines={1}>{student.collegeName || 'N/A'}</Text>
+                <View style={[styles.infoBadge, { backgroundColor: 'rgba(52, 211, 153, 0.2)' }]}>
+                  <View style={styles.onlineDot} />
+                  <Text style={[styles.infoBadgeText, { color: '#6EE7B7' }]}>Active Resident</Text>
                 </View>
               </View>
-
             </SafeAreaView>
           </LinearGradient>
+          <View style={styles.curveOverlay} />
         </View>
 
-        <View style={styles.mainContent}>
-          {/* Daily Highlights */}
-          <Text style={styles.sectionTitle}>TODAY'S HIGHLIGHTS</Text>
-
-          <View style={styles.highlightsContainer}>
-            {/* Dinner Card */}
-            <Pressable
-              style={[styles.highlightCard, styles.shadowProp]}
-              onPress={() => router.push('/mess')}
-            >
-              <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
-                <MaterialCommunityIcons name="silverware-fork-knife" size={24} color="#004e92" />
+        {/* LIVE STATUS CARDS */}
+        <View style={styles.carouselContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carouselScroll}
+            snapToInterval={width * 0.7 + 16}
+            decelerationRate="fast"
+          >
+            {/* ROOM STATUS */}
+            <View style={styles.statusCard}>
+              <View style={styles.cardTop}>
+                <View style={[styles.cardIconBox, { backgroundColor: '#EFF6FF' }]}>
+                  <MaterialCommunityIcons name="door-open" size={24} color="#3B82F6" />
+                </View>
+                <Text style={styles.cardTag}>Room Info</Text>
               </View>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardLabel}>Tonight's Dinner</Text>
-                <Text style={styles.cardValue} numberOfLines={1}>{getDynamicDinner()}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color="#94A3B8" />
-            </Pressable>
-
-            {/* Laundry Card */}
-            <View style={[styles.highlightCard, styles.shadowProp, { alignItems: 'flex-start' }]}>
-              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4', marginTop: 4 }]}>
-                <MaterialCommunityIcons name="washing-machine" size={24} color="#16A34A" />
-              </View>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardLabel}>Laundry Service</Text>
-
-                {laundry ? (
-                  <View style={{ gap: 4, marginTop: 4 }}>
-                    {/* Status Badge */}
-                    <View style={{
-                      alignSelf: 'flex-start',
-                      backgroundColor: laundry.status === 'On Schedule' ? '#DCFCE7' : '#FEE2E2',
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
-                      borderRadius: 6,
-                      marginBottom: 4
-                    }}>
-                      <Text style={{
-                        color: laundry.status === 'On Schedule' ? '#166534' : '#991B1B',
-                        fontSize: 10,
-                        fontWeight: '700',
-                        textTransform: 'uppercase'
-                      }}>
-                        {laundry.status}
-                      </Text>
-                    </View>
-
-                    {/* Schedule Info */}
-                    {laundry.status !== 'No Service' && laundry.status !== 'Holiday' ? (
-                      <>
-                        <Text style={{ fontSize: 13, color: '#334155' }}>
-                          <Text style={{ fontWeight: '700' }}>Pickup:</Text> {laundry.pickupDay}, {laundry.pickupTime} {laundry.pickupPeriod}
-                        </Text>
-                        <Text style={{ fontSize: 13, color: '#334155' }}>
-                          <Text style={{ fontWeight: '700' }}>Drop:</Text> {laundry.dropoffDay}, {laundry.dropoffTime} {laundry.dropoffPeriod}
-                        </Text>
-                      </>
-                    ) : null}
-
-                    {/* Message */}
-                    {laundry.message ? (
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, fontStyle: 'italic', marginTop: 2 }}>
-                        "{laundry.message}"
-                      </Text>
-                    ) : null}
-                  </View>
-                ) : (
-                  <Text style={styles.cardValue}>Loading...</Text>
-                )}
+              <View style={styles.cardMain}>
+                <Text style={styles.cardTitle}>{student.roomNo || '--'}</Text>
+                <Text style={styles.cardDesc}>Your assigned room</Text>
               </View>
             </View>
-          </View>
 
-          {/* Quick Actions Grid */}
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>QUICK ACCESS</Text>
-          <View style={styles.gridContainer}>
-            {[
-              { icon: "bullhorn", label: "Notices", route: '/(tabs)/alerts', color: '#3B82F6', bg: '#EFF6FF' },
-              { icon: "alert-circle", label: "Complaint", route: '/complaints', color: '#EF4444', bg: '#FEF2F2' },
-              { icon: "broom", label: "Cleaning", route: '/roomservice', color: '#F59E0B', bg: '#FFFBEB' },
-              { icon: "bus-clock", label: "Timings", route: '/bustimings', color: '#10B981', bg: '#ECFDF5' },
-              { icon: "calendar-account-outline", label: "Leave", route: '/leave-request', color: '#7C3AED', bg: '#F5F3FF' }, // Added Leave
-              { icon: "phone", label: "Support", route: '/(tabs)/emergency', color: '#EC4899', bg: '#FDF2F8' },
-            ].map((item, index) => (
-              <Pressable
-                key={index}
-                style={[styles.gridItem, styles.shadowProp]}
-                onPress={() => router.push(item.route as any)}
-              >
-                <View style={[styles.gridIconBox, { backgroundColor: item.bg }]}>
-                  <MaterialCommunityIcons name={item.icon as any} size={28} color={item.color} />
+            {/* MESS STATUS */}
+            <Pressable onPress={() => router.push('/mess')} style={styles.statusCard}>
+              <View style={styles.cardTop}>
+                <View style={[styles.cardIconBox, { backgroundColor: '#FFF7ED' }]}>
+                  <MaterialCommunityIcons name="silverware-fork-knife" size={24} color="#EA580C" />
                 </View>
-                <Text style={styles.gridLabel}>{item.label}</Text>
-              </Pressable>
-            ))}
-          </View>
+                <Text style={[styles.cardTag, { color: '#EA580C' }]}>Next Meal</Text>
+              </View>
+              <View style={styles.cardMain}>
+                <Text style={[styles.cardTitle, { fontSize: 22 }]} numberOfLines={1}>{getDynamicDinner()}</Text>
+                <Text style={styles.cardDesc}>Tonight's Menu</Text>
+              </View>
+            </Pressable>
 
+            {/* LAUNDRY STATUS */}
+            <View style={styles.statusCard}>
+              <View style={styles.cardTop}>
+                <View style={[styles.cardIconBox, { backgroundColor: '#F0FDF4' }]}>
+                  <MaterialCommunityIcons name="washing-machine" size={24} color="#16A34A" />
+                </View>
+                <Text style={[styles.cardTag, { color: '#16A34A' }]}>Laundry</Text>
+              </View>
+              <View style={styles.cardMain}>
+                <Text style={styles.cardTitle}>{laundry?.status === 'On Schedule' ? 'On Time' : (laundry?.status || '--')}</Text>
+                <Text style={styles.cardDesc}>{laundry?.pickupDay ? `Pickup: ${laundry.pickupDay}` : 'System Live'}</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* SERVICES GRID (2 COLUMNS) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Campus Services</Text>
+          <View style={styles.gridContainer}>
+            <QuickAction icon="bullhorn" label="Notices" route="/(tabs)/alerts" color="#3B82F6" bg="#EFF6FF" />
+            <QuickAction icon="alert-circle" label="Complaints" route="/complaints" color="#EF4444" bg="#FEF2F2" />
+            <QuickAction icon="broom" label="Room Service" route="/roomservice" color="#F59E0B" bg="#FFFBEB" />
+            <QuickAction icon="bus-clock" label="Bus Timings" route="/bustimings" color="#10B981" bg="#ECFDF5" />
+            <QuickAction icon="calendar-account" label="Leave App" route="/leave-request" color="#8B5CF6" bg="#F5F3FF" />
+            <QuickAction icon="phone-in-talk" label="Support" route="/(tabs)/emergency" color="#EC4899" bg="#FDF2F8" />
+          </View>
+        </View>
+
+        {/* PAYMENTS BANNER */}
+        <View style={styles.bannerSection}>
+          <Pressable onPress={() => router.push('/payments')}>
+            <LinearGradient
+              colors={['#1e293b', '#0f172a']}
+              style={styles.financeBanner}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <View style={styles.bannerLeft}>
+                <View style={styles.bannerIcon}>
+                  <FontAwesome5 name="wallet" size={20} color="#38bdf8" />
+                </View>
+                <View>
+                  <Text style={styles.bannerTitle}>Payments & Fees</Text>
+                  <Text style={styles.bannerSub}>Manage your transactions</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward-circle" size={28} color="rgba(255,255,255,0.4)" />
+            </LinearGradient>
+          </Pressable>
         </View>
       </ScrollView>
     </View>
@@ -246,208 +230,259 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
   },
-  loadingHeader: {
-    height: 300,
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  headerWrapper: {
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#004e92',
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    marginBottom: 20, // Add space below header
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  headerContainer: {
-    paddingBottom: 32, // More breathing room
-    paddingTop: 10,
+  heroWrapper: {
+    height: 280,
+    backgroundColor: '#F8FAFC',
+  },
+  heroGradient: {
+    height: 240,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   safeArea: {
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
+    paddingTop: 10,
   },
-  headerContent: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 20,
-    marginBottom: 32,
-  },
-  greeting: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase', // Professional touch
-    letterSpacing: 1,
-  },
-  userName: {
-    fontSize: 32, // Larger
-    fontWeight: '800',
-    color: '#fff',
-    marginBottom: 12,
-    letterSpacing: 0.5,
-  },
-  hostelBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)', // Slightly more visible
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 100, // Pill shape
-    alignSelf: 'flex-start',
-    gap: 8,
+    marginBottom: 20,
+  },
+  welcomeText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  studentName: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  profileBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  hostelName: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  profileBtn: {
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-  },
-  userInitialContainer: {
-    width: 64, // Slightly larger
-    height: 64,
-    borderRadius: 24, // Squircle
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    backdropFilter: 'blur(10px)', // Note: This prop doesn't work in RN natively but style implies intent
   },
-  userInitial: {
+  avatarText: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '700',
   },
-  statsRow: {
+  hostelInfo: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 24,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    gap: 12,
   },
-  statItem: {
+  infoBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  statLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+  infoBadgeText: {
+    color: '#E2E8F0',
+    fontSize: 13,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 6,
-    letterSpacing: 0.5,
   },
-  statValue: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
   },
-  statDivider: {
-    width: 1,
-    height: 30, // Taller divider
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  curveOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 50,
   },
-  mainContent: {
-    padding: 24,
+
+  // Carousel
+  carouselContainer: {
+    marginTop: -40,
+    marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 16,
-    letterSpacing: 1,
-  },
-  highlightsContainer: {
+  carouselScroll: {
+    paddingHorizontal: 24,
     gap: 16,
+    paddingBottom: 10,
   },
-  highlightCard: {
+  statusCard: {
+    width: width * 0.7,
     backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    elevation: 8,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
-  iconBox: {
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  cardIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardTag: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#3B82F6',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cardMain: {},
+  cardTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  cardDesc: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+
+  // Grid
+  section: {
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 20,
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridItemWrapper: {
+    width: '48%',
+    marginBottom: 16,
+  },
+  actionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  actionCardPressed: {
+    backgroundColor: '#F8FAFC',
+    transform: [{ scale: 0.98 }],
+  },
+  actionIconBox: {
     width: 48,
     height: 48,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  cardContent: {
-    flex: 1,
-  },
-  cardLabel: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  cardValue: {
-    fontSize: 16,
+  actionTextBox: {},
+  actionLabel: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#1E293B',
+    marginBottom: 2,
+  },
+  actionSubtext: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+
+  // Banner
+  bannerSection: {
+    paddingHorizontal: 24,
+    marginTop: 10,
+  },
+  financeBanner: {
+    borderRadius: 24,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  bannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  bannerIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerTitle: {
+    color: '#fff',
+    fontSize: 17,
     fontWeight: '700',
   },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  gridItem: {
-    width: '30%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    aspectRatio: 1,
-    justifyContent: 'center',
-  },
-  gridIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gridLabel: {
+  bannerSub: {
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-    textAlign: 'center',
-  },
-  shadowProp: {
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "white",
+    marginTop: 2,
   },
 });
