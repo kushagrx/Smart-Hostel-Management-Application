@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
@@ -12,6 +12,7 @@ import { ServiceRequest, subscribeToAllServiceRequests, updateServiceStatus } fr
 
 export default function ServiceRequestsPage() {
     const { colors, theme } = useTheme();
+    const insets = useSafeAreaInsets();
     const user = useUser();
     const router = useRouter();
     const { showAlert } = useAlert();
@@ -193,8 +194,8 @@ export default function ServiceRequestsPage() {
     };
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
-            <LinearGradient colors={['#000428', '#004e92']} style={styles.header}>
+        <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+            <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: insets.top + 18 }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <MaterialIcons name="chevron-left" size={32} color="#fff" />
                 </TouchableOpacity>

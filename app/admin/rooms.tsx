@@ -198,37 +198,80 @@ export default function RoomsPage() {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    statsContainer: {
-      flexDirection: 'row',
+    statsGrid: {
       paddingHorizontal: 20,
       marginBottom: 24,
       gap: 12,
     },
-    statCard: {
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    heroCard: {
+      borderRadius: 24,
+      padding: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#7C3AED',
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+      overflow: 'hidden',
+      height: 100,
+    },
+    miniCard: {
       flex: 1,
-      backgroundColor: colors.card,
       borderRadius: 20,
       padding: 16,
-      alignItems: 'center',
-      shadowColor: colors.textSecondary,
-      shadowOpacity: 0.08,
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 16,
-      elevation: 3,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+      overflow: 'hidden',
+      height: 110,
+      justifyContent: 'space-between',
     },
-    statValue: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: colors.text,
-      marginTop: 8,
+    cardWatermark: {
+      position: 'absolute',
+      right: -10,
+      bottom: -10,
+      opacity: 0.15,
+      transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
     },
-    statLabel: {
-      fontSize: 11,
+    heroLabel: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 14,
       fontWeight: '600',
-      color: colors.textSecondary,
-      marginTop: 2,
+      marginBottom: 4,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 1,
+    },
+    heroValue: {
+      color: '#fff',
+      fontSize: 36,
+      fontWeight: '800',
+      letterSpacing: -1,
+    },
+    miniLabel: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700',
+      opacity: 0.9,
+    },
+    miniValue: {
+      color: '#fff',
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+    miniHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
     },
     searchContainer: {
       flexDirection: 'row',
@@ -394,21 +437,58 @@ export default function RoomsPage() {
 
 
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <MaterialIcons name="door-closed" size={24} color="#6366F1" />
-            <Text style={styles.statValue}>{rooms.length}</Text>
-            <Text style={styles.statLabel}>Total Rooms</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="check-circle" size={24} color="#06B6D4" />
-            <Text style={styles.statValue}>{occupiedRooms}</Text>
-            <Text style={styles.statLabel}>Occupied</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="home-outline" size={24} color="#10B981" />
-            <Text style={styles.statValue}>{vacantRooms}</Text>
-            <Text style={styles.statLabel}>Vacant</Text>
+        <View style={styles.statsGrid}>
+          {/* Hero Card: Total Rooms */}
+          <LinearGradient
+            colors={['#7C3AED', '#5B21B6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View>
+              <Text style={styles.heroLabel}>Total Rooms</Text>
+              <Text style={styles.heroValue}>{rooms.length}</Text>
+            </View>
+            <MaterialIcons name="door-closed" size={48} color="rgba(255,255,255,0.9)" />
+            <View style={styles.cardWatermark}>
+              <MaterialIcons name="door-closed" size={100} color="#fff" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.statsRow}>
+            {/* Occupied */}
+            <LinearGradient
+              colors={['#06B6D4', '#0E7490']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard} // Using same style as Vacant for consistency
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="check-circle" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Occupied</Text>
+              </View>
+              <Text style={styles.miniValue}>{occupiedRooms}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="check-circle" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+
+            {/* Vacant */}
+            <LinearGradient
+              colors={['#10B981', '#047857']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="home-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Vacant</Text>
+              </View>
+              <Text style={styles.miniValue}>{vacantRooms}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="home-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
           </View>
         </View>
 

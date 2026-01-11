@@ -14,18 +14,19 @@ export const performGlobalSearch = async (searchText: string): Promise<SearchRes
     if (!db || !searchText || searchText.length < 1) return [];
 
     const term = searchText.trim();
+    // 1. Original term (exactly as typed)
     const searchEnd = term + '\uf8ff';
+
+    // 2. Title Cased term (e.g. "shas" -> "Shas") - covers common name storage
+    const titleTerm = term.charAt(0).toUpperCase() + term.slice(1).toLowerCase();
+    const titleSearchEnd = titleTerm + '\uf8ff';
 
     try {
         const results: SearchResult[] = [];
 
-        // 1. Search Students (Allocations) - by Name (Prefix)
-        // Note: This relies on 'name' being indexed or simple enough.
-        // Case sensitivity is an issue with Firestore. We assume names are stored as is.
-        // Ideally update this to leverage a lowercase index or search 'rollNo'.
-
-        // Search by Name
-        const studentsNameQuery = query(
+        // Queries
+        // A. Students by Name (Original Term)
+        const studentsNameQueryOriginal = query(
             collection(db, 'allocations'),
             orderBy('name'),
             startAt(term),
@@ -33,8 +34,20 @@ export const performGlobalSearch = async (searchText: string): Promise<SearchRes
             limit(3)
         );
 
-        // Search by RollNo (if term looks like a number or mixed)
-        // We can run these in parallel
+        // B. Students by Name (Title Cased Term)
+        // Only run this if it's different from original to avoid duplicate DB calls
+        let studentsNameQueryTitle = null;
+        if (titleTerm !== term) {
+            studentsNameQueryTitle = query(
+                collection(db, 'allocations'),
+                orderBy('name'),
+                startAt(titleTerm),
+                endAt(titleSearchEnd),
+                limit(3)
+            );
+        }
+
+        // C. Students by RollNo (Original Term)
         const studentsRollQuery = query(
             collection(db, 'allocations'),
             orderBy('rollNo'),
@@ -43,7 +56,7 @@ export const performGlobalSearch = async (searchText: string): Promise<SearchRes
             limit(3)
         );
 
-        // 2. Search Rooms - by Number
+        // D. Search Rooms - by Number
         const roomsQuery = query(
             collection(db, 'rooms'),
             orderBy('number'),
@@ -52,25 +65,26 @@ export const performGlobalSearch = async (searchText: string): Promise<SearchRes
             limit(3)
         );
 
-        // 3. Execute Queries in Parallel
-        const [nameSnap, rollSnap, roomsSnap] = await Promise.all([
-            getDocs(studentsNameQuery),
+        // Execute Queries in Parallel
+        const promises = [
+            getDocs(studentsNameQueryOriginal),
             getDocs(studentsRollQuery),
             getDocs(roomsQuery)
-        ]);
+        ];
+        if (studentsNameQueryTitle) {
+            promises.push(getDocs(studentsNameQueryTitle));
+        }
 
-        // Process Students
-        const studentMap = new Map(); // Deduplicate
-        nameSnap.forEach(doc => {
-            studentMap.set(doc.id, {
-                id: doc.id,
-                type: 'student',
-                title: doc.data().name,
-                subtitle: `Roll: ${doc.data().rollNo} • Room: ${doc.data().room}`,
-                data: doc.data()
-            });
-        });
-        rollSnap.forEach(doc => {
+        const snapshots = await Promise.all(promises);
+        const nameSnapOriginal = snapshots[0];
+        const rollSnap = snapshots[1];
+        const roomsSnap = snapshots[2];
+        const nameSnapTitle = studentsNameQueryTitle ? snapshots[3] : { empty: true, docs: [] };
+
+        // Process Students (Deduplicate)
+        const studentMap = new Map();
+
+        const addStudent = (doc: any) => {
             if (!studentMap.has(doc.id)) {
                 studentMap.set(doc.id, {
                     id: doc.id,
@@ -80,7 +94,14 @@ export const performGlobalSearch = async (searchText: string): Promise<SearchRes
                     data: doc.data()
                 });
             }
-        });
+        };
+
+        nameSnapOriginal.forEach(addStudent);
+        if (!nameSnapTitle.empty) {
+            nameSnapTitle.docs.forEach(addStudent);
+        }
+        rollSnap.forEach(addStudent);
+
         results.push(...studentMap.values());
 
         // Process Rooms
@@ -95,21 +116,6 @@ export const performGlobalSearch = async (searchText: string): Promise<SearchRes
                 data: data
             });
         });
-
-        // 4. Client-side filter for Complaints (hard to query by title prefix effectively without index cost)
-        // For now, let's skip expensive text search on complaints or do a simple fetch if requested.
-        // The user asked for "find a complaint", likely by student name or just browsing.
-        // Let's rely on Students/Rooms mostly, or check if query matches a 'title'.
-        // Adding a simple limit 5 query on 'complaints' might be okay if we have 'title' field, but it's often user input.
-        // Let's try searching complaints by studentName prefix?
-        // Or just simple prefix on 'title' (assuming we add orderBy title)
-        // For now, let's omit complaints text search to rely on finding the student first.
-        // BUT the user explicit asked for "find a ... complaint".
-        // Let's add partial title search if possible? No, Firestore strictly needs an index for that.
-        // Let's assume searching the student who made the complaint is the primary flow, 
-        // OR we just fetch 'recent' complaints client side and filter? No that's bad for scaling.
-
-        // Let's return what we have. It covers Students and Rooms well.
 
         return results as SearchResult[];
 

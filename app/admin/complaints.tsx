@@ -54,38 +54,80 @@ export default function ComplaintsPage() {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    statsContainer: {
-      flexDirection: 'row',
+    statsGrid: {
       paddingHorizontal: 20,
       marginBottom: 24,
       gap: 12,
     },
-    statCard: {
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    heroCard: {
+      borderRadius: 24,
+      padding: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#EF4444',
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+      overflow: 'hidden',
+      height: 100,
+    },
+    miniCard: {
       flex: 1,
-      backgroundColor: colors.card,
       borderRadius: 20,
       padding: 16,
-      alignItems: 'center',
-      shadowColor: colors.textSecondary,
-      shadowOpacity: 0.08,
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 16,
-      elevation: 3,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+      overflow: 'hidden',
+      height: 110,
+      justifyContent: 'space-between',
     },
-    statValue: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: colors.text,
-      marginTop: 8,
+    cardWatermark: {
+      position: 'absolute',
+      right: -10,
+      bottom: -10,
+      opacity: 0.15,
+      transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
     },
-    statLabel: {
-      fontSize: 11,
+    heroLabel: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 14,
       fontWeight: '600',
-      color: colors.textSecondary,
-      marginTop: 2,
-      textAlign: 'center',
+      marginBottom: 4,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 1,
+    },
+    heroValue: {
+      color: '#fff',
+      fontSize: 36,
+      fontWeight: '800',
+      letterSpacing: -1,
+    },
+    miniLabel: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700',
+      opacity: 0.9,
+    },
+    miniValue: {
+      color: '#fff',
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+    miniHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
     },
     filterContainer: {
       paddingHorizontal: 20,
@@ -184,11 +226,19 @@ export default function ComplaintsPage() {
       fontWeight: '500',
     },
     statusBadge: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      justifyContent: 'center',
+      flexDirection: 'row',
       alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+      gap: 6,
+    },
+    statusText: {
+      color: '#fff',
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     expandedContent: {
       backgroundColor: theme === 'dark' ? colors.background : '#F8FAFC',
@@ -497,21 +547,58 @@ export default function ComplaintsPage() {
 
 
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <MaterialIcons name="alert-circle" size={22} color="#EF4444" />
-            <Text style={styles.statValue}>{openCount}</Text>
-            <Text style={styles.statLabel}>Open</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="clock-outline" size={22} color="#F59E0B" />
-            <Text style={styles.statValue}>{inProgressCount}</Text>
-            <Text style={styles.statLabel}>In Progress</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="check-circle" size={22} color="#10B981" />
-            <Text style={styles.statValue}>{resolvedCount}</Text>
-            <Text style={styles.statLabel}>Resolved</Text>
+        <View style={styles.statsGrid}>
+          {/* Hero Card: Open Complaints */}
+          <LinearGradient
+            colors={['#DC2626', '#991B1B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View>
+              <Text style={styles.heroLabel}>Open Issues</Text>
+              <Text style={styles.heroValue}>{openCount}</Text>
+            </View>
+            <MaterialIcons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.9)" />
+            <View style={styles.cardWatermark}>
+              <MaterialIcons name="alert-circle-outline" size={100} color="#fff" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.statsRow}>
+            {/* In Progress */}
+            <LinearGradient
+              colors={['#D97706', '#B45309']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="clock-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>In Progress</Text>
+              </View>
+              <Text style={styles.miniValue}>{inProgressCount}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="clock-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+
+            {/* Resolved */}
+            <LinearGradient
+              colors={['#059669', '#064E3B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="check-circle-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Resolved</Text>
+              </View>
+              <Text style={styles.miniValue}>{resolvedCount}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="check-circle-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
           </View>
         </View>
 
@@ -608,6 +695,9 @@ export default function ComplaintsPage() {
                       ]}
                     >
                       <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
+                      <Text style={styles.statusText}>
+                        {item.status === 'inProgress' ? 'In Progress' : item.status}
+                      </Text>
                     </View>
                   </View>
 
