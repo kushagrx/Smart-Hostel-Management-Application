@@ -5,9 +5,12 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MessMenu from '../components/MessMenu';
 
+import { useTheme } from '../utils/ThemeContext';
+
 export default function Mess() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
@@ -50,10 +53,9 @@ export default function Mess() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
-    paddingBottom: 20,
+    paddingBottom: 24,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     shadowColor: "#004e92",

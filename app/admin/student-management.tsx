@@ -15,7 +15,9 @@ const ITEM_WIDTH = (width - 48 - GAP) / COLUMN_count; // 48 = paddingHorizontal 
 
 const functionalities = [
     { id: 'students', label: 'Students', icon: 'account-group', color: '#6366F1', path: '/admin/students', desc: 'Manage profiles & allocations' },
+    { id: 'contacts', label: 'Student Contacts', icon: 'contacts', color: '#10B981', path: '/admin/contacts', desc: 'Directory & Quick Actions' },
     { id: 'rooms', label: 'Rooms', icon: 'door-closed', color: '#8B5CF6', path: '/admin/rooms', desc: 'Occupancy & availability' },
+    { id: 'services', label: 'Room Services', icon: 'room-service', color: '#F59E0B', path: '/admin/services', desc: 'Housekeeping & repairs' },
     { id: 'complaints', label: 'Complaints', icon: 'alert-circle', color: '#EC4899', path: '/admin/complaints', desc: 'Track & resolve issues' },
     { id: 'leaves', label: 'Leaves', icon: 'calendar-clock', color: '#06B6D4', path: '/admin/leaveRequests', desc: 'Approve student leaves' },
     { id: 'notices', label: 'Notices', icon: 'bullhorn', color: '#3B82F6', path: '/admin/notices', desc: 'Broadcast updates' },
@@ -100,6 +102,7 @@ export default function StudentManagementPage() {
         },
         content: {
             padding: 24,
+            paddingBottom: 40,
         },
         card: {
             width: ITEM_WIDTH,

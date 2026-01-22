@@ -12,7 +12,7 @@ import { requestService, ServiceRequest, subscribeToStudentRequests } from '../u
 
 export default function RoomService() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { showAlert } = useAlert();
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +74,7 @@ export default function RoomService() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
@@ -102,9 +102,9 @@ export default function RoomService() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionTitle}>AVAILABLE SERVICES</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>AVAILABLE SERVICES</Text>
 
-        {submitting && <ActivityIndicator size="large" color="#004e92" style={{ marginBottom: 20 }} />}
+        {submitting && <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 20 }} />}
 
         <View style={styles.servicesGrid}>
           {roomServices.map((service) => (
@@ -112,47 +112,53 @@ export default function RoomService() {
               key={service.id}
               style={[
                 styles.serviceCard,
-                !service.available && styles.serviceCardDisabled
+                { backgroundColor: colors.card, borderColor: colors.border },
+                !service.available && [styles.serviceCardDisabled, { backgroundColor: isDark ? '#1e293b' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0' }]
               ]}
               onPress={() => service.available && handleServiceRequest(service.name)}
               disabled={!service.available || submitting}
             >
-              <View style={[
-                styles.iconBox,
-                !service.available && styles.iconBoxDisabled
-              ]}>
+              <LinearGradient
+                colors={
+                  service.available
+                    ? (isDark ? ['#1e3a8a', '#172554'] : ['#e0f2fe', '#dbeafe'])
+                    : (isDark ? ['#334155', '#1e293b'] : ['#f1f5f9', '#e2e8f0'])
+                }
+                style={[styles.iconBox]}
+              >
                 <MaterialCommunityIcons
                   name={service.icon as any}
-                  size={28}
-                  color={service.available ? '#004e92' : '#94A3B8'}
+                  size={32}
+                  color={service.available ? (isDark ? '#60A5FA' : '#004e92') : (isDark ? '#64748B' : '#94A3B8')}
                 />
-              </View>
+              </LinearGradient>
 
               <View style={styles.cardContent}>
                 <Text style={[
                   styles.serviceName,
-                  !service.available && styles.serviceNameDisabled
+                  { color: colors.text },
+                  !service.available && [styles.serviceNameDisabled, { color: colors.textSecondary }]
                 ]}>
                   {service.name}
                 </Text>
 
-                <Text style={styles.serviceDescription}>
+                <Text style={[styles.serviceDescription, { color: colors.textSecondary }]}>
                   {service.description}
                 </Text>
 
                 {!service.available && (
-                  <View style={styles.unavailableBadge}>
-                    <Text style={styles.unavailableText}>Coming Soon</Text>
+                  <View style={[styles.unavailableBadge, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                    <Text style={[styles.unavailableText, { color: colors.textSecondary }]}>Coming Soon</Text>
                   </View>
                 )}
               </View>
 
               {service.available && (
-                <View style={styles.actionIcon}>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={24}
-                    color="#CBD5E1"
+                <View style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : '#f0f9ff' }]}>
+                  <MaterialIcons
+                    name="arrow-forward"
+                    size={20}
+                    color={colors.primary}
                   />
                 </View>
               )}
@@ -160,37 +166,40 @@ export default function RoomService() {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>MY REQUESTS</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>MY REQUESTS</Text>
         {loading ? (
-          <ActivityIndicator size="small" color="#004e92" />
+          <ActivityIndicator size="small" color={colors.primary} />
         ) : requests.length === 0 ? (
-          <Text style={{ textAlign: 'center', color: '#94A3B8', marginBottom: 20 }}>No active requests</Text>
+          <Text style={{ textAlign: 'center', color: colors.textSecondary, marginBottom: 20 }}>No active requests</Text>
         ) : (
           <View style={styles.historyList}>
             {requests.map(req => (
-              <View key={req.id} style={styles.historyCard}>
+              <View key={req.id} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.historyHeader}>
-                  <Text style={styles.historyTitle}>{req.serviceType}</Text>
+                  <Text style={[styles.historyTitle, { color: colors.text }]}>{req.serviceType}</Text>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(req.status) + '20' }]}>
                     <Text style={[styles.statusText, { color: getStatusColor(req.status) }]}>{req.status.toUpperCase()}</Text>
                   </View>
                 </View>
-                <Text style={styles.historyDate}>{req.createdAt instanceof Date ? req.createdAt.toLocaleDateString() : ''}</Text>
+                <Text style={[styles.historyDate, { color: colors.textSecondary }]}>{req.createdAt instanceof Date ? req.createdAt.toLocaleDateString() : ''}</Text>
                 {req.estimatedTime && (
-                  <Text style={styles.etaText}>ETA: {req.estimatedTime}</Text>
+                  <Text style={[styles.etaText, { color: colors.primary }]}>ETA: {req.estimatedTime}</Text>
                 )}
               </View>
             ))}
           </View>
         )}
 
-        <View style={styles.infoCard}>
-          <View style={styles.infoIconBox}>
+        <View style={[styles.infoCard, {
+          backgroundColor: isDark ? '#172554' : '#EFF6FF',
+          borderColor: isDark ? '#1e40af' : '#DBEAFE'
+        }]}>
+          <View style={[styles.infoIconBox, { backgroundColor: isDark ? '#1e40af' : '#3B82F6' }]}>
             <MaterialCommunityIcons name="phone-in-talk" size={20} color="#fff" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.infoTitle}>Urgent Assistance</Text>
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoTitle, { color: isDark ? '#93c5fd' : '#1E3A8A' }]}>Urgent Assistance</Text>
+            <Text style={[styles.infoText, { color: isDark ? '#bfdbfe' : '#1E40AF' }]}>
               For emergencies, call hostel office directly at +91 98765 43210
             </Text>
           </View>
@@ -203,7 +212,6 @@ export default function RoomService() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
     paddingBottom: 24,
@@ -259,32 +267,27 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   serviceCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 20,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
     shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
   serviceCardDisabled: {
     opacity: 0.8,
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
     shadowOpacity: 0,
     elevation: 0,
   },
   iconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#EFF6FF',
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -295,10 +298,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   serviceName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: '#1E293B',
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   serviceNameDisabled: {
     color: '#64748B',
@@ -321,9 +325,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  actionIcon: {
-    width: 32,
-    height: 32,
+  actionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -361,11 +366,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   historyCard: {
-    backgroundColor: 'white',
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   historyHeader: {
     flexDirection: 'row',

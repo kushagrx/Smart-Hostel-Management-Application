@@ -85,14 +85,17 @@ export default function FinancePage() {
 
         // Fetch History
         const pData = await getRecentPayments(50);
-        setPayments(pData);
-        const total = pData.reduce((sum, p) => sum + p.amount, 0);
+        const filteredPData = pData.filter(p => p.amount !== 20);
+        setPayments(filteredPData);
+        const total = filteredPData.reduce((sum, p) => sum + p.amount, 0);
         setTotalCollected(total);
 
         // Fetch Pending Requests
         const rData = await getAllRequests('paid_unverified'); // Prioritize unverified
         const allPending = await getAllRequests('pending');
-        setRequests([...rData, ...allPending]); // Show unverified first
+
+        const combinedRequests = [...rData, ...allPending].filter(r => r.amount !== 20);
+        setRequests(combinedRequests); // Show unverified first
 
         setLoading(false);
     };
@@ -123,10 +126,11 @@ export default function FinancePage() {
         try {
             const { getStudentPayments } = await import('../../utils/financeUtils');
             const data = await getStudentPayments(s.id);
-            setPayments(data);
+            const filteredData = data.filter(p => p.amount !== 20);
+            setPayments(filteredData);
             // Don't update total collected maybe? Or update it to show student total?
             // Let's update it to reflect the CURRENT VIEW.
-            const total = data.reduce((sum, p) => sum + p.amount, 0);
+            const total = filteredData.reduce((sum, p) => sum + p.amount, 0);
             setTotalCollected(total);
         } catch (e: any) {
             showAlert('Error', 'Failed to fetch history', [], 'error');
@@ -319,86 +323,95 @@ export default function FinancePage() {
             backgroundColor: colors.background,
         },
         header: {
-            paddingBottom: 24,
+            paddingVertical: 24,
             paddingHorizontal: 24,
-            borderBottomLeftRadius: 32,
-            borderBottomRightRadius: 32,
-        },
-        headerTop: {
             flexDirection: 'row',
             alignItems: 'center',
-            marginBottom: 20,
+            gap: 12,
         },
         backBtn: {
             width: 40,
             height: 40,
-            borderRadius: 12,
+            borderRadius: 20,
             backgroundColor: 'rgba(255,255,255,0.2)',
             justifyContent: 'center',
             alignItems: 'center',
-            marginRight: 16,
         },
         headerTitle: {
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: '800',
             color: '#fff',
-            flex: 1,
+            letterSpacing: 0.5,
         },
-        settingsBtn: {
-            width: 40,
-            height: 40,
-            borderRadius: 12,
-            backgroundColor: 'rgba(255,255,255,0.2)',
-            justifyContent: 'center',
-            alignItems: 'center',
-        },
-        tabBar: {
+        navBar: {
             flexDirection: 'row',
-            paddingHorizontal: 20,
-            marginTop: 16,
-            gap: 12,
-        },
-        tab: {
-            flex: 1,
-            paddingVertical: 12,
-            alignItems: 'center',
             backgroundColor: colors.card,
+            marginHorizontal: 16,
+            marginTop: 20,
+            marginBottom: 20,
+            borderRadius: 16,
+            padding: 6,
+            shadowColor: colors.textSecondary,
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 3,
+        },
+        navItem: {
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            paddingVertical: 12,
             borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
         },
-        tabActive: {
-            backgroundColor: colors.primary,
-            borderColor: colors.primary,
+        navItemActive: {
+            backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : '#EFF6FF',
         },
-        tabText: {
+        navItemLabel: {
+            fontSize: 13,
             fontWeight: '600',
             color: colors.textSecondary,
         },
-        tabTextActive: {
-            color: '#fff',
+        navItemLabelActive: {
+            color: colors.primary,
+            fontWeight: '700',
         },
         listContent: {
             padding: 20,
             paddingBottom: 100,
         },
+        // Card Styles
         card: {
             backgroundColor: colors.card,
-            borderRadius: 16,
-            padding: 16,
+            borderRadius: 20,
             marginBottom: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
-            elevation: 2,
+            shadowColor: colors.textSecondary,
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 3,
+            overflow: 'hidden',
         },
-        row: {
+        cardHeader: {
             flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
+            alignItems: 'center',
+            padding: 16,
+            backgroundColor: colors.card,
+        },
+        iconContainer: {
+            marginRight: 14,
+        },
+        iconBox: {
+            width: 50,
+            height: 50,
+            borderRadius: 18,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        info: {
+            flex: 1,
         },
         name: {
             fontSize: 16,
@@ -406,10 +419,22 @@ export default function FinancePage() {
             color: colors.text,
             marginBottom: 4,
         },
-        meta: {
-            fontSize: 12,
+        metaContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+        },
+        pill: {
+            backgroundColor: theme === 'dark' ? '#1E293B' : '#F1F5F9',
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            borderRadius: 6,
+        },
+        detailSmall: {
+            fontSize: 11,
             color: colors.textSecondary,
-            fontWeight: '500',
+            fontWeight: '700',
         },
         amount: {
             fontSize: 16,
@@ -499,12 +524,10 @@ export default function FinancePage() {
             fontSize: 16,
         },
         verifyBtn: {
-            marginTop: 12,
             backgroundColor: colors.primary,
             paddingVertical: 8,
             paddingHorizontal: 12,
             borderRadius: 8,
-            alignSelf: 'flex-end',
         },
     }), [colors, theme]);
 
@@ -519,33 +542,30 @@ export default function FinancePage() {
 
     return (
         <View style={styles.container}>
-            <LinearGradient
-                colors={['#000428', '#004e92']}
-                style={[styles.header, { paddingTop: insets.top + 20 }]}
-            >
-                <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <MaterialIcons name="arrow-left" size={24} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Finance</Text>
-                    <TouchableOpacity onPress={() => setSettingsModalVisible(true)} style={styles.settingsBtn}>
-                        <MaterialIcons name="cog" size={24} color="#fff" />
-                    </TouchableOpacity>
-                </View>
+            <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: 24 + insets.top }]}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <MaterialIcons name="chevron-left" size={32} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Finance</Text>
+                <TouchableOpacity onPress={() => setSettingsModalVisible(true)} style={[styles.backBtn, { marginLeft: 'auto', backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                    <MaterialIcons name="cog" size={24} color="#fff" />
+                </TouchableOpacity>
             </LinearGradient>
 
-            <View style={styles.tabBar}>
+            <View style={styles.navBar}>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'requests' && styles.tabActive]}
+                    style={[styles.navItem, activeTab === 'requests' && styles.navItemActive]}
                     onPress={() => setActiveTab('requests')}
                 >
-                    <Text style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>Requests & Verify</Text>
+                    <MaterialIcons name="clipboard-check-outline" size={20} color={activeTab === 'requests' ? colors.primary : colors.textSecondary} />
+                    <Text style={[styles.navItemLabel, activeTab === 'requests' && styles.navItemLabelActive]}>Requests & Verify</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'history' && styles.tabActive]}
+                    style={[styles.navItem, activeTab === 'history' && styles.navItemActive]}
                     onPress={() => setActiveTab('history')}
                 >
-                    <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>Payment History</Text>
+                    <MaterialIcons name="history" size={20} color={activeTab === 'history' ? colors.primary : colors.textSecondary} />
+                    <Text style={[styles.navItemLabel, activeTab === 'history' && styles.navItemLabelActive]}>Payment History</Text>
                 </TouchableOpacity>
             </View>
 
@@ -645,33 +665,43 @@ export default function FinancePage() {
                         )}
                         renderItem={({ item }) => (
                             <View style={styles.card}>
-                                <View style={styles.row}>
-                                    <View>
+                                <View style={styles.cardHeader}>
+                                    <View style={styles.iconContainer}>
+                                        <View style={[styles.iconBox, { backgroundColor: '#ECFEFF' }]}>
+                                            <MaterialIcons name="cash" size={24} color="#06B6D4" />
+                                        </View>
+                                    </View>
+                                    <View style={styles.info}>
                                         <Text style={styles.name}>{item.studentName}</Text>
-                                        <Text style={styles.meta}>{item.type} • {item.method}</Text>
-                                        <Text style={[styles.meta, { fontSize: 10, marginTop: 2, opacity: 0.7 }]}>
+                                        <View style={styles.metaContainer}>
+                                            <View style={styles.pill}>
+                                                <Text style={styles.detailSmall}>{item.type}</Text>
+                                            </View>
+                                            <Text style={[styles.detailSmall, { opacity: 0.7 }]}>• {item.method}</Text>
+                                        </View>
+                                        <Text style={[styles.detailSmall, { marginTop: 2, opacity: 0.5 }]}>
                                             {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </Text>
                                     </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
+                                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                         <Text style={styles.amount}>₹{item.amount.toLocaleString()}</Text>
-                                        <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                                        <View style={{ flexDirection: 'row' }}>
                                             <TouchableOpacity
                                                 onPress={() => handleDeletePayment(item)}
-                                                style={{ padding: 8, marginRight: 4 }}
+                                                style={{ padding: 6 }}
                                             >
-                                                <MaterialIcons name="trash-can-outline" size={24} color="#EF4444" />
+                                                <MaterialIcons name="trash-can-outline" size={20} color="#EF4444" />
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
                                                 onPress={() => handleDownloadReceipt(item)}
                                                 disabled={generatingReceiptId === item.id}
-                                                style={{ padding: 8 }}
+                                                style={{ padding: 6 }}
                                             >
                                                 {generatingReceiptId === item.id ? (
                                                     <ActivityIndicator size="small" color={colors.primary} />
                                                 ) : (
-                                                    <MaterialIcons name="file-document-outline" size={24} color={colors.primary} />
+                                                    <MaterialIcons name="file-document-outline" size={20} color={colors.primary} />
                                                 )}
                                             </TouchableOpacity>
                                         </View>
@@ -695,27 +725,43 @@ export default function FinancePage() {
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
                     ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: colors.textSecondary }}>No pending requests.</Text>}
                     renderItem={({ item }) => (
-                        <View style={[styles.card, item.status === 'paid_unverified' && { borderColor: '#F59E0B', borderWidth: 2 }]}>
-                            <View style={styles.row}>
-                                <View>
-                                    <Text style={styles.name}>{item.studentName}</Text>
-                                    <Text style={styles.meta}>{item.type}</Text>
-                                    <View style={[styles.statusBadge, { backgroundColor: item.status === 'paid_unverified' ? '#FEF3C7' : '#E2E8F0' }]}>
-                                        <Text style={{ fontSize: 10, fontWeight: '700', color: item.status === 'paid_unverified' ? '#D97706' : '#64748B' }}>
-                                            {item.status === 'paid_unverified' ? 'NEEDS VERIFICATION' : 'PENDING'}
-                                        </Text>
+                        <View style={[styles.card, item.status === 'paid_unverified' && { borderColor: '#F59E0B', borderWidth: 1 }]}>
+                            <View style={styles.cardHeader}>
+                                <View style={styles.iconContainer}>
+                                    <View style={[styles.iconBox, { backgroundColor: item.status === 'paid_unverified' ? '#FFFBEB' : '#F1F5F9' }]}>
+                                        <MaterialIcons
+                                            name={item.status === 'paid_unverified' ? 'alert-circle' : 'clock-outline'}
+                                            size={24}
+                                            color={item.status === 'paid_unverified' ? '#D97706' : '#64748B'}
+                                        />
                                     </View>
                                 </View>
-                                <Text style={styles.amount}>₹{item.amount.toLocaleString()}</Text>
-                            </View>
-                            {item.status === 'paid_unverified' && (
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>Ref: {item.transactionId || 'N/A'}</Text>
-                                    <TouchableOpacity onPress={() => handleVerify(item)} style={styles.verifyBtn}>
-                                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Verify & Generate Receipt</Text>
-                                    </TouchableOpacity>
+                                <View style={styles.info}>
+                                    <Text style={styles.name}>{item.studentName}</Text>
+                                    <View style={styles.metaContainer}>
+                                        <View style={styles.pill}>
+                                            <Text style={styles.detailSmall}>{item.type}</Text>
+                                        </View>
+                                    </View>
+                                    {item.status === 'paid_unverified' && (
+                                        <Text style={[styles.detailSmall, { color: '#D97706', marginTop: 4 }]}>
+                                            Ref: {item.transactionId || 'N/A'}
+                                        </Text>
+                                    )}
                                 </View>
-                            )}
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={styles.amount}>₹{item.amount.toLocaleString()}</Text>
+                                    {item.status === 'paid_unverified' ? (
+                                        <TouchableOpacity onPress={() => handleVerify(item)} style={styles.verifyBtn}>
+                                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Verify</Text>
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <View style={[styles.pill, { marginTop: 4, backgroundColor: '#E2E8F0' }]}>
+                                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>PENDING</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
                         </View>
                     )}
                 />

@@ -8,9 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
 import { createLeaveRequest, getStudentLeaves, LeaveRequest } from '../utils/leavesUtils';
 import { fetchUserData } from '../utils/nameUtils';
+import { useTheme } from '../utils/ThemeContext';
 
 export default function LeaveRequestPage() {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const { showAlert } = useAlert();
     const [reason, setReason] = useState('');
     const [startDate, setStartDate] = useState(new Date());
@@ -107,7 +109,7 @@ export default function LeaveRequestPage() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
             {/* Header */}
@@ -134,15 +136,15 @@ export default function LeaveRequestPage() {
             <ScrollView contentContainerStyle={styles.content}>
 
                 {/* Form Section */}
-                <View style={styles.formCard}>
-                    <Text style={styles.sectionTitle}>NEW REQUEST</Text>
+                <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>NEW REQUEST</Text>
 
                     <View style={styles.dateRow}>
                         <View style={styles.dateField}>
-                            <Text style={styles.label}>From Date</Text>
-                            <Pressable onPress={() => setShowStartPicker(true)} style={styles.dateInput}>
-                                <MaterialCommunityIcons name="calendar" size={20} color="#64748B" />
-                                <Text style={styles.dateText}>{startDate.toLocaleDateString()}</Text>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>From Date</Text>
+                            <Pressable onPress={() => setShowStartPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                                <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
+                                <Text style={[styles.dateText, { color: colors.text }]}>{startDate.toLocaleDateString()}</Text>
                             </Pressable>
                             {showStartPicker && (
                                 <DateTimePicker
@@ -156,10 +158,10 @@ export default function LeaveRequestPage() {
                         </View>
 
                         <View style={styles.dateField}>
-                            <Text style={styles.label}>To Date</Text>
-                            <Pressable onPress={() => setShowEndPicker(true)} style={styles.dateInput}>
-                                <MaterialCommunityIcons name="calendar" size={20} color="#64748B" />
-                                <Text style={styles.dateText}>{endDate.toLocaleDateString()}</Text>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>To Date</Text>
+                            <Pressable onPress={() => setShowEndPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                                <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
+                                <Text style={[styles.dateText, { color: colors.text }]}>{endDate.toLocaleDateString()}</Text>
                             </Pressable>
                             {showEndPicker && (
                                 <DateTimePicker
@@ -173,11 +175,11 @@ export default function LeaveRequestPage() {
                         </View>
                     </View>
 
-                    <Text style={[styles.label, { marginTop: 16 }]}>Reason</Text>
+                    <Text style={[styles.label, { marginTop: 16, color: colors.textSecondary }]}>Reason</Text>
                     <TextInput
-                        style={styles.textArea}
+                        style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                         placeholder="e.g. Visiting home for festival..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={colors.textSecondary}
                         multiline
                         numberOfLines={3}
                         value={reason}
@@ -204,21 +206,21 @@ export default function LeaveRequestPage() {
                 </View>
 
                 {/* History Section */}
-                <Text style={[styles.sectionTitle, { marginTop: 24, marginLeft: 4 }]}>PAST REQUESTS</Text>
+                <Text style={[styles.sectionTitle, { marginTop: 24, marginLeft: 4, color: colors.textSecondary }]}>PAST REQUESTS</Text>
                 {history.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <MaterialCommunityIcons name="calendar-blank-outline" size={48} color="#CBD5E1" />
-                        <Text style={styles.emptyText}>No leave history found</Text>
+                        <MaterialCommunityIcons name="calendar-blank-outline" size={48} color={colors.textSecondary} />
+                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No leave history found</Text>
                     </View>
                 ) : (
                     <View style={styles.historyList}>
                         {history.map((item) => (
-                            <View key={item.id} style={styles.historyCard}>
+                            <View key={item.id} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                                 <View style={styles.historyHeader}>
                                     <View style={styles.dateInfo}>
-                                        <Text style={styles.historyDate}>{item.startDate}</Text>
-                                        <MaterialCommunityIcons name="arrow-right" size={16} color="#94A3B8" />
-                                        <Text style={styles.historyDate}>{item.endDate}</Text>
+                                        <Text style={[styles.historyDate, { color: colors.text }]}>{item.startDate}</Text>
+                                        <MaterialCommunityIcons name="arrow-right" size={16} color={colors.textSecondary} />
+                                        <Text style={[styles.historyDate, { color: colors.text }]}>{item.endDate}</Text>
                                     </View>
                                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
                                         <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
@@ -226,8 +228,8 @@ export default function LeaveRequestPage() {
                                         </Text>
                                     </View>
                                 </View>
-                                <Text style={styles.historyReason}>{item.reason}</Text>
-                                <Text style={styles.durationText}>{item.days} days</Text>
+                                <Text style={[styles.historyReason, { color: colors.textSecondary }]}>{item.reason}</Text>
+                                <Text style={[styles.durationText, { color: colors.textSecondary }]}>{item.days} days</Text>
                             </View>
                         ))}
                     </View>
@@ -241,7 +243,6 @@ export default function LeaveRequestPage() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
     },
     header: {
         paddingBottom: 24,
@@ -285,7 +286,6 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     formCard: {
-        backgroundColor: '#fff',
         borderRadius: 20,
         padding: 20,
         borderWidth: 1,
@@ -319,9 +319,7 @@ const styles = StyleSheet.create({
     dateInput: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
         borderRadius: 12,
         padding: 12,
         gap: 8,
@@ -331,13 +329,10 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     textArea: {
-        backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
         borderRadius: 12,
         padding: 12,
         height: 80,
-        color: '#1E293B',
         marginBottom: 20,
     },
     submitBtn: {
@@ -357,7 +352,6 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     historyCard: {
-        backgroundColor: '#fff',
         borderRadius: 16,
         padding: 16,
         borderWidth: 1,

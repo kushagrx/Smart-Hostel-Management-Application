@@ -1,7 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import {
-    addDoc,
     collection,
     deleteDoc,
     doc,
@@ -94,7 +93,12 @@ export const createPaymentRequest = async (
     const db = getDbSafe();
     if (!db) throw new Error("Database not initialized");
 
-    await addDoc(collection(db, REQUESTS_COL), {
+    const batch = (await import('firebase/firestore')).writeBatch(db);
+    const requestRef = doc(collection(db, REQUESTS_COL));
+    const studentRef = doc(db, ALLOCATIONS_COL, studentId);
+
+    // 1. Create Request
+    batch.set(requestRef, {
         studentId,
         studentName,
         amount,
@@ -104,6 +108,13 @@ export const createPaymentRequest = async (
         status: 'pending',
         createdAt: serverTimestamp()
     });
+
+    // 2. Update Student Dues (Increment)
+    batch.update(studentRef, {
+        dues: (await import('firebase/firestore')).increment(amount)
+    });
+
+    await batch.commit();
 };
 
 /**
@@ -229,8 +240,16 @@ export const recordPayment = async (
                 lastPaymentDate: serverTimestamp()
             };
 
-            // 1. Update Student Doc
-            transaction.update(studentRef, { feeDetails: updatedFeeDetails });
+            // 1. Update Student Doc: Decrement Dues and Update feeDetails (legacy)
+            // Ideally we rely on 'dues' field now.
+            const currentDues = studentData.dues || 0;
+            const newDues = Math.max(0, currentDues - amount);
+
+            transaction.update(studentRef, {
+                dues: newDues,
+                // Keep feeDetails for backward compatibility if needed, else redundant
+                feeDetails: updatedFeeDetails
+            });
 
             // 2. Create Payment Record (We can't use addDoc in transaction directly for new ref, need doc ref)
             // But we can just create a ref with auto-id first if needed, or use a subcollection.

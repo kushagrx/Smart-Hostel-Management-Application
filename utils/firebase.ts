@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
-import { getFirestore, initializeFirestore, persistentLocalCache } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 
 const extra = (Constants.expoConfig?.extra as any) || {};
 
@@ -34,7 +34,7 @@ if (app) {
     authInstance = getAuth(app);
   }
   dbInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache()
+    localCache: memoryLocalCache()
   });
 }
 
