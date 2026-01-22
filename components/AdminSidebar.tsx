@@ -145,8 +145,7 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
           </View>
           <Text style={[
             styles.navText,
-            isActive && { color: item.color, fontWeight: '700' },
-            { flex: 1 }
+            { color: isActive ? item.color : colors.textSecondary, fontWeight: isActive ? '700' : '600', flex: 1 }
           ]}>
             {item.label}
           </Text>
@@ -248,8 +247,6 @@ const styles = StyleSheet.create({
   },
   navText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#64748B', // Default text color will be overridden by ThemeContext values if handled there, but here hardcoded fallback
   },
   logoutBtn: {
     flexDirection: 'row',

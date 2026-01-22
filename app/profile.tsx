@@ -1,9 +1,10 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
 import { setStoredUser } from '../utils/authUtils';
 import { getAuthSafe } from '../utils/firebase';
@@ -11,7 +12,8 @@ import { fetchUserData, getInitial, StudentData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
 
 export default function ProfilePage() {
-  const { colors, theme } = useTheme();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
   const [student, setStudent] = useState<StudentData | null>(null);
@@ -20,8 +22,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadUserData();
-    const interval = setInterval(loadUserData, 10000); // Relaxed interval since we have pull-to-refresh
-    return () => clearInterval(interval);
   }, []);
 
   const loadUserData = async () => {
@@ -41,6 +41,29 @@ export default function ProfilePage() {
     setRefreshing(false);
   };
 
+  // Fetch Pending Dues (Dynamic)
+  const [pendingDues, setPendingDues] = useState<number>(0);
+
+  useEffect(() => {
+    if (student?.email) {
+      loadPendingDues(student.email);
+    }
+  }, [student]);
+
+  const loadPendingDues = async (email: string) => {
+    try {
+      const { getStudentRequests } = await import('../utils/financeUtils');
+      const requests = await getStudentRequests(email);
+      // Sum up amounts of requests that are 'pending' or 'overdue'
+      const totalPending = requests
+        .filter(r => r.status === 'pending' || r.status === 'overdue')
+        .reduce((sum, r) => sum + r.amount, 0);
+      setPendingDues(totalPending);
+    } catch (err) {
+      console.error("Failed to load pending dues:", err);
+    }
+  };
+
   const handleSignOut = () => {
     showAlert(
       'Sign Out',
@@ -56,7 +79,7 @@ export default function ProfilePage() {
               if (auth) {
                 await signOut(auth);
               }
-              await setStoredUser(null); // Clear stored user on successful sign out
+              await setStoredUser(null);
               router.replace('/login');
             } catch (error: any) {
               console.error('Error signing out:', error);
@@ -70,247 +93,363 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={{ color: colors.text }}>Loading profile...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!student) {
-    return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={{ color: colors.text }}>No profile data found</Text>
-        </View>
-      </SafeAreaView>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Text style={{ color: colors.textSecondary }}>Loading Profile...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <Stack.Screen
-        options={{
-          headerShown: false,
-        }}
-      />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen options={{ headerShown: false }} />
+
       <ScrollView
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
+        {/* Modern Gradient Header */}
+        <View style={styles.headerContainer}>
+          <LinearGradient
+            colors={['#000428', '#004e92']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.headerGradient, { paddingTop: insets.top + 20 }]}
+          >
+            <View style={styles.headerContent}>
+              <Pressable onPress={() => router.back()} style={styles.backButton}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
+              </Pressable>
+              <Text style={styles.headerTitle}>My Profile</Text>
+              <Pressable style={styles.editButton}>
+                {/* Placeholder for Edit or Settings action */}
+                <MaterialCommunityIcons name="dots-vertical" size={24} color="rgba(255,255,255,0.8)" />
+              </Pressable>
+            </View>
 
-        <View style={styles.profileSection}>
-          <View style={styles.profilePic}>
-            <Text style={styles.profileInitial}>{getInitial(student.fullName)}</Text>
-          </View>
-          <Text style={[styles.name, { color: colors.text }]}>{student.fullName}</Text>
-          <Text style={[styles.roomNo, { color: colors.secondary }]}>Room {student.roomNo}</Text>
-          {student.rollNo && (
-            <Text style={[styles.rollNo, { color: colors.secondary }]}>Roll No: {student.rollNo}</Text>
-          )}
+            <View style={styles.profileCard}>
+              <View style={styles.avatarContainer}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{getInitial(student?.fullName || 'U')}</Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: student?.status === 'active' ? '#10B981' : '#EF4444' }]}>
+                  <MaterialIcons name={student?.status === 'active' ? 'check-circle' : 'cancel'} size={12} color="#fff" />
+                  <Text style={styles.statusText}>{student?.status === 'active' ? 'Active' : 'Inactive'}</Text>
+                </View>
+              </View>
+              <Text style={styles.studentName}>{student?.fullName || 'Student Name'}</Text>
+              <Text style={styles.studentRoll}>{student?.rollNo || 'Roll No. --'}</Text>
+
+              <View style={styles.roomTag}>
+                <MaterialCommunityIcons name="door-open" size={16} color="#fff" />
+                <Text style={styles.roomText}>Room {student?.roomNo}</Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <View style={[styles.curveBlock, { backgroundColor: colors.background }]} />
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Info</Text>
-        <View style={[styles.infoCard, { backgroundColor: theme === 'dark' ? '#1e3a5f' : '#E3F2FD' }]}>
-          <View style={styles.infoItem}>
-            <MaterialCommunityIcons name="cash" size={24} color="#2196F3" />
-            <View>
-              <Text style={[styles.infoLabel, { color: colors.secondary }]}>Current Dues:</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>₹{student.dues || 0}</Text>
+        {/* Quick Stats Grid */}
+        <View style={styles.statsContainer}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#1e293b' : '#eff6ff', borderColor: isDark ? '#334155' : '#dbeafe' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#3B82F6' }]}>
+              <MaterialCommunityIcons name="wifi" size={20} color="#fff" />
             </View>
-            <Pressable style={styles.payButton}>
-              <Text style={styles.payButtonText}>Pay Now</Text>
-            </Pressable>
-          </View>
-          <View style={styles.infoItem}>
-            <MaterialCommunityIcons name="wifi" size={24} color="#2196F3" />
             <View>
-              <Text style={[styles.infoLabel, { color: colors.secondary }]}>Wi-Fi:</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>{student.wifiSSID}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>WiFi SSID</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{student?.wifiSSID || 'Hostel_WiFi'}</Text>
             </View>
           </View>
-        </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Details</Text>
-        <View style={[styles.detailsCard, { backgroundColor: colors.cardBackground }]}>
-          {student.collegeName && (
-            <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
-              <MaterialCommunityIcons name="school" size={24} color={colors.icon} />
-              <View style={styles.detailContent}>
-                <Text style={[styles.detailLabel, { color: colors.secondary }]}>College</Text>
-                <Text style={[styles.detailText, { color: colors.text }]}>{student.collegeName}</Text>
-              </View>
-            </Pressable>
-          )}
-          {student.phone && (
-            <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
-              <MaterialCommunityIcons name="phone" size={24} color={colors.icon} />
-              <View style={styles.detailContent}>
-                <Text style={[styles.detailLabel, { color: colors.secondary }]}>Phone</Text>
-                <Text style={[styles.detailText, { color: colors.text }]}>{student.phone}</Text>
-              </View>
-            </Pressable>
-          )}
-          {student.age && (
-            <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
-              <MaterialCommunityIcons name="calendar" size={24} color={colors.icon} />
-              <View style={styles.detailContent}>
-                <Text style={[styles.detailLabel, { color: colors.secondary }]}>Age</Text>
-                <Text style={[styles.detailText, { color: colors.text }]}>{student.age}</Text>
-              </View>
-            </Pressable>
-          )}
-          {student.hostelName && (
-            <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
-              <MaterialCommunityIcons name="home-city" size={24} color={colors.icon} />
-              <View style={styles.detailContent}>
-                <Text style={[styles.detailLabel, { color: colors.secondary }]}>Hostel Name</Text>
-                <Text style={[styles.detailText, { color: colors.text }]}>{student.hostelName}</Text>
-              </View>
-            </Pressable>
-          )}
-          <Pressable style={[styles.detailItem, { borderBottomColor: colors.border }]}>
-            <MaterialCommunityIcons name="email" size={24} color={colors.icon} />
-            <View style={styles.detailContent}>
-              <Text style={[styles.detailLabel, { color: colors.secondary }]}>Email</Text>
-              <Text style={[styles.detailText, { color: colors.text }]}>{student.personalEmail}</Text>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#1e293b' : '#eff6ff', borderColor: isDark ? '#334155' : '#dbeafe' }]}>
+            <View style={[styles.statIcon, { backgroundColor: pendingDues > 0 ? '#EF4444' : '#10B981' }]}>
+              <MaterialCommunityIcons name="cash" size={20} color="#fff" />
             </View>
-          </Pressable>
-          <Pressable style={styles.detailItem}>
-            <MaterialCommunityIcons name="check-circle" size={24} color={student.status === 'active' ? '#4CAF50' : '#FF5252'} />
-            <View style={styles.detailContent}>
-              <Text style={[styles.detailLabel, { color: colors.secondary }]}>Status</Text>
-              <Text style={[styles.detailText, { color: colors.text }]}>
-                {student.status ? (student.status.charAt(0).toUpperCase() + student.status.slice(1)) : 'Unknown'}
+            <View>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending Dues</Text>
+              <Text style={[styles.statValue, { color: pendingDues > 0 ? '#EF4444' : colors.text }]}>
+                {pendingDues > 0 ? `₹${pendingDues}` : 'No Dues'}
               </Text>
             </View>
-          </Pressable>
+          </View>
         </View>
 
-        <Pressable style={styles.logoutButton} onPress={handleSignOut}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </Pressable>
+
+        {/* Detailed Info Section */}
+        <View style={styles.detailsSection}>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>Personal Details</Text>
+
+          <View style={[styles.infoBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <InfoRow icon="school" label="College" value={student?.collegeName} colors={colors} isLast={false} />
+            <InfoRow icon="office-building" label="Hostel" value={student?.hostelName} colors={colors} isLast={false} />
+            <InfoRow icon="email" label="Email" value={student?.personalEmail || student?.email} colors={colors} isLast={false} />
+            <InfoRow icon="phone" label="Phone" value={student?.phone} colors={colors} isLast={false} />
+            <InfoRow icon="map-marker" label="Address" value={student?.address} colors={colors} isLast={false} />
+            <InfoRow icon="account-tie" label="Father Name" value={student?.fatherName} colors={colors} isLast={false} />
+            <InfoRow icon="phone" label="Father Phone" value={student?.fatherPhone} colors={colors} isLast={false} />
+            <InfoRow icon="face-woman" label="Mother Name" value={student?.motherName} colors={colors} isLast={false} />
+            <InfoRow icon="phone" label="Mother Phone" value={student?.motherPhone} colors={colors} isLast={false} />
+            <InfoRow icon="calendar-account" label="Date of Birth" value={student?.dob} colors={colors} isLast={false} />
+            <InfoRow icon="wifi" label="WiFi Name" value={student?.wifiSSID} colors={colors} isLast={false} />
+            <InfoRow icon="wifi-lock" label="WiFi Password" value={student?.wifiPassword || 'Not Set'} colors={colors} isLast={true} />
+          </View>
+        </View>
+
+        {/* Medical & Emergency Section */}
+        <View style={styles.detailsSection}>
+          <Text style={[styles.sectionHeader, { color: colors.text, marginTop: 12 }]}>Medical & Emergency</Text>
+          <View style={[styles.infoBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <InfoRow icon="water" label="Blood Group" value={student?.bloodGroup} colors={colors} isLast={false} />
+            <InfoRow icon="account-alert" label="Emergency Contact" value={student?.emergencyContactName} colors={colors} isLast={false} />
+            <InfoRow icon="phone-alert" label="Emergency Phone" value={student?.emergencyContactPhone} colors={colors} isLast={false} />
+            <InfoRow icon="medical-bag" label="Medical History" value={student?.medicalHistory} colors={colors} isLast={true} />
+          </View>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionSection}>
+          <Pressable
+            style={({ pressed }) => [styles.signOutBtn, pressed && styles.btnPressed]}
+            onPress={handleSignOut}
+          >
+            <MaterialCommunityIcons name="logout" size={20} color="#EF4444" />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </Pressable>
+
+          <Text style={[styles.versionText, { color: colors.textSecondary }]}>App Version 1.0.2</Text>
+        </View>
+
       </ScrollView>
-    </SafeAreaView>
-  )
+    </View>
+  );
 }
 
+const InfoRow = ({ icon, label, value, colors, isLast }: any) => (
+  <View style={[styles.infoRow, !isLast && { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+    <View style={styles.infoIconWrapper}>
+      <MaterialCommunityIcons name={icon} size={22} color={colors.textSecondary} />
+    </View>
+    <View style={styles.infoTextWrapper}>
+      <Text style={[styles.infoRowLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.infoRowValue, { color: colors.text }]}>{value || 'Not provided'}</Text>
+    </View>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  safeArea: {
+  loadingContainer: {
     flex: 1,
-  },
-  container: {
-    flex: 1,
-    padding: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700' as const,
-    marginBottom: 30,
-  },
-  profileSection: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  profilePic: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#2196F3',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
   },
-  profileInitial: {
-    color: 'white',
-    fontSize: 32,
-    fontWeight: '600' as const,
+  headerContainer: {
+    position: 'relative',
+    marginBottom: 20,
   },
-  name: {
-    fontSize: 24,
-    fontWeight: '600' as const,
-    marginBottom: 5,
-  },
-  roomNo: {
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  rollNo: {
-    fontSize: 14,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    marginBottom: 15,
-  },
-  infoCard: {
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 25,
-  },
-  infoItem: {
-    flexDirection: 'row',
+  headerGradient: {
+    paddingBottom: 50,
     alignItems: 'center',
-    paddingVertical: 10,
-    gap: 15,
   },
-  infoLabel: {
-    marginBottom: 2,
-    fontSize: 12,
+  headerContent: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
-  infoValue: {
-    fontWeight: '500' as const,
-    fontSize: 14,
-  },
-  payButton: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
+  backButton: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    marginLeft: 'auto',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  payButtonText: {
-    color: 'white',
-    fontWeight: '500' as const,
-    fontSize: 12,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
   },
-  detailsCard: {
-    borderRadius: 15,
-    marginBottom: 25,
-    overflow: 'hidden',
+  editButton: {
+    width: 40,
+    alignItems: 'flex-end',
   },
-  detailItem: {
+  profileCard: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  avatarText: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#004e92',
+  },
+  statusBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    gap: 15,
-    borderBottomWidth: 1,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#004e92', // Matches gradient
   },
-  detailContent: {
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+    textTransform: 'uppercase',
+  },
+  studentName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  studentRoll: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+  },
+  roomTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  roomText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  curveBlock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+  },
+
+  // Stats
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 16,
+    marginBottom: 24,
+  },
+  statCard: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 20,
+    gap: 12,
+    borderWidth: 1,
   },
-  detailLabel: {
-    fontSize: 12,
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
     marginBottom: 2,
   },
-  detailText: {
-    fontSize: 14,
-    fontWeight: '500' as const,
+  statValue: {
+    fontSize: 15,
+    fontWeight: '700',
   },
-  logoutButton: {
-    backgroundColor: '#FF5252',
-    padding: 15,
-    borderRadius: 15,
-    alignItems: 'center',
+
+  // Details
+  detailsSection: {
+    paddingHorizontal: 20,
     marginBottom: 30,
   },
-  logoutText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600' as const,
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  infoBlock: {
+    borderRadius: 24,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 16,
+  },
+  infoIconWrapper: {
+    width: 36,
+    alignItems: 'center',
+  },
+  infoTextWrapper: {
+    flex: 1,
+  },
+  infoRowLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  infoRowValue: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  // Actions
+  actionSection: {
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 20,
+  },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 100,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  btnPressed: {
+    opacity: 0.7,
+  },
+  signOutText: {
+    color: '#EF4444',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  versionText: {
+    fontSize: 12,
   },
 });
-

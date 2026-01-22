@@ -5,8 +5,10 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BusRoute, subscribeToBusTimings } from '../utils/busTimingsSyncUtils';
+import { useTheme } from '../utils/ThemeContext';
 
 export default function BusTimings() {
+  const { colors, isDark } = useTheme();
   const [routes, setRoutes] = useState<BusRoute[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,7 +28,7 @@ export default function BusTimings() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
@@ -50,7 +52,7 @@ export default function BusTimings() {
       </LinearGradient>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 50 }} />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
       ) : (
         <ScrollView
           style={styles.content}
@@ -66,20 +68,20 @@ export default function BusTimings() {
           }
         >
           {routes.length === 0 ? (
-            <Text style={{ textAlign: 'center', color: '#64748B', marginTop: 40 }}>
+            <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 40 }}>
               No bus timings available at the moment.
             </Text>
           ) : (
             routes.map((route) => (
               <View key={route.id} style={styles.section}>
                 <View style={styles.routeHeader}>
-                  <View style={styles.routeIconBox}>
-                    <MaterialCommunityIcons name="bus-stop" size={22} color="#004e92" />
+                  <View style={[styles.routeIconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
+                    <MaterialCommunityIcons name="bus-stop" size={22} color={isDark ? '#60A5FA' : '#004e92'} />
                   </View>
-                  <Text style={styles.routeTitle}>{route.route}</Text>
+                  <Text style={[styles.routeTitle, { color: colors.text }]}>{route.route}</Text>
                 </View>
 
-                <View style={[styles.timingsCard, styles.shadowProp]}>
+                <View style={[styles.timingsCard, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   {route.times.map((item, idx) => (
                     <View
                       key={idx}
@@ -88,10 +90,10 @@ export default function BusTimings() {
                         idx !== route.times.length - 1 && styles.borderBottom
                       ]}
                     >
-                      <View style={styles.timeIconBox}>
-                        <MaterialCommunityIcons name="clock-time-four-outline" size={18} color="#64748B" />
+                      <View style={[styles.timeIconBox, { backgroundColor: isDark ? colors.background : '#F8FAFC' }]}>
+                        <MaterialCommunityIcons name="clock-time-four-outline" size={18} color={colors.textSecondary} />
                       </View>
-                      <Text style={styles.timeText}>{item}</Text>
+                      <Text style={[styles.timeText, { color: colors.text }]}>{item}</Text>
                       {/* We could implement complex logic to show "Next" based on current time here */}
                     </View>
                   ))}
@@ -115,7 +117,7 @@ export default function BusTimings() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    // backgroundColor handled dynamically
   },
   header: {
     paddingBottom: 24,
@@ -184,11 +186,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   timingsCard: {
-    backgroundColor: '#fff',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   timeItem: {
     flexDirection: 'row',
@@ -199,13 +199,12 @@ const styles = StyleSheet.create({
   },
   borderBottom: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(148, 163, 184, 0.2)',
   },
   timeIconBox: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -217,13 +216,11 @@ const styles = StyleSheet.create({
   infoCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF',
     padding: 16,
     borderRadius: 16,
     gap: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
   },
   infoText: {
     flex: 1,

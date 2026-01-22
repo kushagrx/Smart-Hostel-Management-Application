@@ -173,17 +173,17 @@ export default function StudentAllotmentPage() {
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Navigation Tabs */}
-          <View style={styles.tabContainer}>
+          <View style={styles.navBar}>
             <TouchableOpacity
-              style={styles.tabItem}
+              style={styles.navItem}
               onPress={() => router.replace('/admin/students')}
             >
               <MaterialIcons name="account-group" size={20} color="#64748B" />
-              <Text style={styles.tabText}>Students</Text>
+              <Text style={styles.navItemLabel}>Students</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabItem, styles.activeTab]}>
+            <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
               <MaterialIcons name="account-plus" size={20} color="#004e92" />
-              <Text style={[styles.tabText, styles.activeTabText]}>Allotment</Text>
+              <Text style={[styles.navItemLabel, styles.navItemLabelActive]}>Allotment</Text>
             </TouchableOpacity>
           </View>
 
@@ -413,7 +413,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    marginBottom: 10,
   },
   backButton: {
     width: 40,
@@ -432,11 +431,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
   },
-  tabContainer: {
+  navBar: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 6,
+    marginTop: 20,
     marginBottom: 20,
     elevation: 2,
     shadowColor: '#000',
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
-  tabItem: {
+  navItem: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -453,15 +453,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  activeTab: {
+  navItemActive: {
     backgroundColor: '#EFF6FF',
   },
-  tabText: {
+  navItemLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#64748B',
   },
-  activeTabText: {
+  navItemLabelActive: {
     color: '#004e92',
     fontWeight: '700',
   },

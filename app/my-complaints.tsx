@@ -6,9 +6,11 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StudentComplaintListSkeleton } from '../components/SkeletonLists';
 import { Complaint, subscribeToStudentComplaints } from '../utils/complaintsSyncUtils';
+import { useTheme } from '../utils/ThemeContext';
 
 export default function MyComplaints() {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
   const [selectedTab, setSelectedTab] = useState<'active' | 'resolved'>('active');
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ export default function MyComplaints() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
@@ -119,18 +121,18 @@ export default function MyComplaints() {
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <Pressable
-          style={[styles.tab, selectedTab === 'active' && styles.activeTab]}
+          style={[styles.tab, { backgroundColor: colors.card, borderColor: colors.border }, selectedTab === 'active' && [styles.activeTab, { backgroundColor: colors.primary, borderColor: colors.primary }]]}
           onPress={() => setSelectedTab('active')}
         >
-          <Text style={[styles.tabText, selectedTab === 'active' && styles.activeTabText]}>
+          <Text style={[styles.tabText, { color: colors.textSecondary }, selectedTab === 'active' && styles.activeTabText]}>
             Active
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.tab, selectedTab === 'resolved' && styles.activeTab]}
+          style={[styles.tab, { backgroundColor: colors.card, borderColor: colors.border }, selectedTab === 'resolved' && [styles.activeTab, { backgroundColor: colors.primary, borderColor: colors.primary }]]}
           onPress={() => setSelectedTab('resolved')}
         >
-          <Text style={[styles.tabText, selectedTab === 'resolved' && styles.activeTabText]}>
+          <Text style={[styles.tabText, { color: colors.textSecondary }, selectedTab === 'resolved' && styles.activeTabText]}>
             Resolved
           </Text>
         </Pressable>
@@ -144,11 +146,11 @@ export default function MyComplaints() {
           <StudentComplaintListSkeleton />
         ) : filteredComplaints.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="clipboard-text-outline" size={48} color="#CBD5E1" />
-            <Text style={styles.emptyText}>
+            <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={colors.textSecondary} />
+            <Text style={[styles.emptyText, { color: colors.text }]}>
               No {selectedTab} complaints
             </Text>
-            <Text style={styles.subEmptyText}>
+            <Text style={[styles.subEmptyText, { color: colors.textSecondary }]}>
               {selectedTab === 'active'
                 ? "You don't have any open complaints."
                 : "No closed or resolved complaints found."}
@@ -158,10 +160,10 @@ export default function MyComplaints() {
           filteredComplaints.map((complaint) => (
             <View
               key={complaint.id}
-              style={styles.complaintCard}
+              style={[styles.complaintCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.complaintTitle}>{complaint.title}</Text>
+                <Text style={[styles.complaintTitle, { color: colors.text }]}>{complaint.title}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(complaint.status) + '20' }]}>
                   <MaterialCommunityIcons name={getStatusIcon(complaint.status)} size={14} color={getStatusColor(complaint.status)} />
                   <Text style={[styles.statusText, { color: getStatusColor(complaint.status) }]}>
@@ -170,16 +172,16 @@ export default function MyComplaints() {
                 </View>
               </View>
 
-              <Text style={styles.description}>
+              <Text style={[styles.description, { color: colors.textSecondary }]}>
                 {complaint.description}
               </Text>
 
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
               <View style={styles.cardFooter}>
                 <View style={styles.footerRow}>
-                  <MaterialCommunityIcons name="calendar-clock" size={14} color="#94A3B8" />
-                  <Text style={styles.date}>
+                  <MaterialCommunityIcons name="calendar-clock" size={14} color={colors.textSecondary} />
+                  <Text style={[styles.date, { color: colors.textSecondary }]}>
                     {formatDate(complaint.createdAt)}
                   </Text>
                 </View>
@@ -222,7 +224,6 @@ export default function MyComplaints() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
     paddingBottom: 24,
@@ -270,18 +271,14 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#fff',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   activeTab: {
-    backgroundColor: '#004e92',
-    borderColor: '#004e92',
+    // backgroundColor: '#004e92', // handled inline
   },
   tabText: {
     fontWeight: '600',
-    color: '#64748B',
     fontSize: 13,
   },
   activeTabText: {
@@ -293,12 +290,10 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   complaintCard: {
-    backgroundColor: 'white',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
     shadowColor: '#64748B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -315,7 +310,6 @@ const styles = StyleSheet.create({
   complaintTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E293B',
     flex: 1,
     lineHeight: 22,
   },
@@ -332,14 +326,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   description: {
-    color: '#64748B',
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 12,
   },
   divider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
     marginBottom: 12,
   },
   cardFooter: {
@@ -353,7 +345,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   date: {
-    color: '#94A3B8',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -373,13 +364,11 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyText: {
-    color: '#1E293B',
     marginTop: 16,
     fontSize: 16,
     fontWeight: '600',
   },
   subEmptyText: {
-    color: '#94A3B8',
     fontSize: 13,
     marginTop: 4,
     textAlign: 'center',

@@ -1,126 +1,168 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { StyleSheet, Text } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming
-} from 'react-native-reanimated';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const { width, height } = Dimensions.get('window');
+
+// Import the sober logo
+const LOGO_SOURCE = require('../assets/sober_smart_hostel_logo.png');
 
 export default function Index() {
   const router = useRouter();
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.5);
-  const textOpacity = useSharedValue(0);
 
   useEffect(() => {
-    // Professional Smooth Easing (No Spring)
-    opacity.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.exp) });
-    scale.value = withTiming(1, { duration: 1200, easing: Easing.out(Easing.back(1.0)) });
-
-    textOpacity.value = withDelay(300, withTiming(1, { duration: 800 }));
-
-    // 2. Force Logout and Redirect to Login
-    const checkAuthAndNavigate = async () => {
-      // Extended wait time for the premium feel
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Simple navigation logic
+    const navigate = async () => {
+      // Wait 3 seconds then navigate
+      await new Promise(r => setTimeout(r, 1500));
 
       try {
-        // Clear Firebase Auth
         const { getAuthSafe } = await import('../utils/firebase');
         const { signOut } = await import('firebase/auth');
         const auth = getAuthSafe();
         if (auth) await signOut(auth);
 
-        // Clear Local Storage
         const { setStoredUser } = await import('../utils/authUtils');
         await setStoredUser(null);
       } catch (error) {
         console.log("Error clearing session:", error);
       }
-
-      // Always navigate to Login
       router.replace('/login');
     };
 
-    checkAuthAndNavigate();
+    navigate();
   }, []);
 
-  const logoStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { scale: scale.value },
-      { translateY: (1 - opacity.value) * -50 } // Slide down slightly
-    ],
-  }));
-
-  const textStyle = useAnimatedStyle(() => ({
-    opacity: textOpacity.value,
-    transform: [
-      { translateY: (1 - textOpacity.value) * 20 } // Slide up
-    ],
-  }));
-
   return (
-    <LinearGradient
-      colors={['#000428', '#004e92']} // Deep Royal Blue / Night Sky
-      style={styles.container}
-    >
+    <View style={styles.container}>
+      {/* BACKGROUND LAYERS */}
+      <LinearGradient
+        colors={['#000310', '#000924', '#001e50']}
+        locations={[0, 0.6, 1]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
+
+      <LinearGradient
+        colors={['rgba(0, 210, 255, 0.1)', 'transparent']}
+        style={[StyleSheet.absoluteFill, { top: -height * 0.2 }]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 0.6 }}
+      />
+
+      {/* CONTENT LAYER - High Z-Index to prevent hiding */}
       <SafeAreaView style={styles.content}>
-        <Animated.View style={[styles.logoContainer, logoStyle]}>
-          <MaterialCommunityIcons name="shield-home" size={90} color="#fff" />
-        </Animated.View>
-        <Animated.View style={[styles.textContainer, textStyle]}>
-          <Text style={styles.title}>SMART HOSTEL</Text>
-          <Text style={styles.subtitle}>Secure • Modern • Efficient</Text>
-        </Animated.View>
+
+        <View style={styles.centerWrapper}>
+          {/* Logo Container */}
+          <View style={styles.logoWrapper}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.01)']}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.borderStroke} />
+            <Image
+              source={LOGO_SOURCE}
+              style={styles.logoImage}
+              contentFit="contain"
+            />
+          </View>
+
+          {/* Text Container */}
+          <View style={styles.textContainer}>
+            <Text style={styles.title}>SMART HOSTEL</Text>
+            <View style={styles.divider} />
+            <Text style={styles.subtitle}>The Future of Hostel Living</Text>
+          </View>
+        </View>
+
       </SafeAreaView>
-    </LinearGradient>
+
+      <View style={styles.footer}>
+        <Text style={styles.version}>v2.0 Universal</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000428', // Fallback color
   },
   content: {
     flex: 1,
+    zIndex: 100, // Force on top
+    elevation: 100,
+  },
+  centerWrapper: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingBottom: height * 0.15,
   },
-  logoContainer: {
-    marginBottom: 30,
-    padding: 24,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 50,
+  logoWrapper: {
+    width: width * 0.5,
+    height: width * 0.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
+    borderRadius: 45,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    position: 'relative', // Ensure sizing works
+  },
+  borderStroke: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 45,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 210, 255, 0.25)',
+  },
+  logoImage: {
+    width: '65%',
+    height: '65%',
+    zIndex: 10,
   },
   textContainer: {
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 8,
-    letterSpacing: 3,
+    color: '#ffffff',
+    marginBottom: 12,
+    letterSpacing: 4,
+    textAlign: 'center',
+  },
+  divider: {
+    width: 30,
+    height: 2,
+    backgroundColor: 'rgba(0, 210, 255, 0.5)',
+    borderRadius: 1,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 1,
+    color: '#90CAF9',
+    letterSpacing: 1.5,
     fontWeight: '400',
+    fontStyle: 'italic',
   },
+  footer: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    zIndex: 100,
+  },
+  version: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 10,
+    letterSpacing: 1,
+  }
 });
-
-
-
-
-
-

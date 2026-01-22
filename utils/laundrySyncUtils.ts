@@ -1,5 +1,15 @@
-import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDbSafe } from './firebase';
+
+export interface LaundryRequestDisplay {
+    id: string;
+    roomNo: string;
+    studentName: string;
+    clothesDetails: string;
+    totalClothes: number;
+    status: string;
+    createdAt: any;
+}
 
 export interface LaundrySettings {
     pickupDay: string;
@@ -60,4 +70,26 @@ export const updateLaundrySettings = async (settings: LaundrySettings) => {
         ...settings,
         lastUpdated: serverTimestamp()
     }, { merge: true });
+};
+
+/**
+ * Subscribe to all laundry requests (Admin View)
+ */
+export const subscribeToAllLaundryRequests = (onUpdate: (data: LaundryRequestDisplay[]) => void) => {
+    const db = getDbSafe();
+    if (!db) return () => { };
+
+    const q = query(collection(db, 'laundry_requests'), orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const requests = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as LaundryRequestDisplay[];
+        onUpdate(requests);
+    }, (error) => {
+        console.error("Error fetching laundry requests:", error);
+    });
+
+    return unsubscribe;
 };

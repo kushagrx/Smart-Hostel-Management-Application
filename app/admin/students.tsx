@@ -29,7 +29,6 @@ export default function StudentsPage() {
     header: {
       paddingVertical: 24,
       paddingHorizontal: 24,
-      marginBottom: 16,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
@@ -57,6 +56,7 @@ export default function StudentsPage() {
       flexDirection: 'row',
       backgroundColor: colors.card,
       marginHorizontal: 16,
+      marginTop: 20,
       marginBottom: 20,
       borderRadius: 16,
       padding: 6,
@@ -394,8 +394,8 @@ export default function StudentsPage() {
       marginBottom: 16,
     },
     modalLabel: {
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 13,
+      fontWeight: '600',
       color: colors.textSecondary,
       marginBottom: 8,
       marginLeft: 4,
@@ -403,26 +403,32 @@ export default function StudentsPage() {
     modalInputWrapper: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme === 'dark' ? '#1E293B' : '#F8FAFC',
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      height: 50,
+      backgroundColor: theme === 'dark' ? '#0F172A' : '#FFFFFF', // Higher contrast background
+      borderRadius: 16, // Rounder corners
+      borderWidth: 1.5, // Thicker border
+      borderColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+      height: 56, // Taller touch target
       paddingHorizontal: 16,
+      shadowColor: theme === 'dark' ? '#000' : '#64748B',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: theme === 'dark' ? 0.3 : 0.05,
+      shadowRadius: 4,
+      elevation: 2,
     },
     disabledInputWrapper: {
-      backgroundColor: theme === 'dark' ? '#1E293B' : '#F1F5F9',
+      backgroundColor: theme === 'dark' ? '#1E293B' : '#F8FAFC',
       borderColor: colors.border,
-      opacity: 0.8,
+      opacity: 0.7,
+      elevation: 0,
     },
     inputIcon: {
-      marginRight: 10,
+      marginRight: 12,
     },
     modalInput: {
       flex: 1,
-      fontSize: 14,
+      fontSize: 15, // Larger text
       color: colors.text,
-      fontWeight: '600',
+      fontWeight: '500',
     },
     disabledInput: {
       color: colors.textSecondary,
@@ -596,13 +602,26 @@ export default function StudentsPage() {
   const [rollNo, setRollNo] = useState('');
   const [collegeName, setCollegeName] = useState('');
   const [hostelName, setHostelName] = useState('');
-  const [age, setAge] = useState('');
+  const [dob, setDob] = useState('');
   const [room, setRoom] = useState('');
   const [email, setEmail] = useState('');
   const [personalEmail, setPersonalEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const [wifiSSID, setWifiSSID] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
   const [generatedPassword, setGeneratedPassword] = useState('');
+  const [address, setAddress] = useState('');
+  const [fatherName, setFatherName] = useState(''); // New Father Name State
+  const [fatherPhone, setFatherPhone] = useState(''); // New Father Phone State
+  const [motherName, setMotherName] = useState(''); // New Mother Name State
+  const [motherPhone, setMotherPhone] = useState(''); // New Mother Phone State
+  const [initialDues, setInitialDues] = useState(''); // New Fees Amount State
+  // Medical Info State
+  const [bloodGroup, setBloodGroup] = useState('');
+  const [medicalHistory, setMedicalHistory] = useState('');
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Edit Modal State
@@ -619,12 +638,26 @@ export default function StudentsPage() {
   const [editRoom, setEditRoom] = useState('');
   const [editCollege, setEditCollege] = useState('');
   const [editHostelName, setEditHostelName] = useState('');
-  const [editAge, setEditAge] = useState('');
+  const [editDob, setEditDob] = useState('');
   const [editPhone, setEditPhone] = useState('');
 
   const [editPersonalEmail, setEditPersonalEmail] = useState('');
   const [editStatus, setEditStatus] = useState('active');
+  const [editWifiSSID, setEditWifiSSID] = useState('');
+  const [editWifiPassword, setEditWifiPassword] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editFatherName, setEditFatherName] = useState(''); // Edit Father Name
+  const [editFatherPhone, setEditFatherPhone] = useState(''); // Edit Father Phone
+  const [editMotherName, setEditMotherName] = useState(''); // Edit Mother Name
+  const [editMotherPhone, setEditMotherPhone] = useState(''); // Edit Mother Phone
+  const [editDues, setEditDues] = useState(''); // Edit Dues
+  const [editFeeFrequency, setEditFeeFrequency] = useState<'Monthly' | 'Semester' | 'Yearly'>('Monthly');
+  // Edit Medical Info State
+  const [editBloodGroup, setEditBloodGroup] = useState('');
+  const [editMedicalHistory, setEditMedicalHistory] = useState('');
+  const [editEmergencyContactName, setEditEmergencyContactName] = useState('');
+  const [editEmergencyContactPhone, setEditEmergencyContactPhone] = useState('');
 
   React.useEffect(() => {
     // Generate a secure random password on mount for allotment
@@ -635,7 +668,10 @@ export default function StudentsPage() {
   const handleAllotmentSubmit = async () => {
     setHasSubmitted(true);
 
-    if (!fullName || !rollNo || !collegeName || !hostelName || !age || !room || !email || !phone) {
+    setHasSubmitted(true);
+    // Removed duplicate setHasSubmitted
+
+    if (!fullName || !rollNo || !collegeName || !hostelName || !dob || !room || !email || !phone || !address || !fatherName || !fatherPhone || !motherName || !motherPhone || !initialDues) {
       showAlert('Missing details', 'Please fill all mandatory fields (marked red).', [], 'error');
       return;
     }
@@ -670,12 +706,24 @@ export default function StudentsPage() {
           rollNo,
           collegeName,
           hostelName,
-          age,
+          dob,
           room,
           email: email.toLowerCase().trim(),
           personalEmail: personalEmail ? personalEmail.toLowerCase().trim() : null,
           phone,
+          address,
+          fatherName,
+          fatherPhone,
+          motherName,
+          motherPhone,
+          dues: parseFloat(initialDues) || 0,
+          bloodGroup,
+          medicalHistory,
+          emergencyContactName,
+          emergencyContactPhone,
           status,
+          wifiSSID: wifiSSID || null,
+          wifiPassword: wifiPassword || null,
           tempPassword: generatedPassword,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -698,8 +746,21 @@ export default function StudentsPage() {
               setRollNo('');
               setRoom('');
               setEmail('');
+              setEmail('');
               setPhone('');
-              setAge('');
+              setDob('');
+              setAddress('');
+              setFatherName('');
+              setFatherPhone('');
+              setMotherName('');
+              setMotherPhone('');
+              setInitialDues('');
+              setBloodGroup('');
+              setMedicalHistory('');
+              setEmergencyContactName('');
+              setEmergencyContactPhone('');
+              setWifiSSID('');
+              setWifiPassword('');
               setHasSubmitted(false);
               setGeneratedPassword(Math.random().toString(36).slice(-8));
             }
@@ -757,11 +818,26 @@ export default function StudentsPage() {
     setEditRoom(student.room || '');
     setEditCollege(student.collegeName || '');
     setEditHostelName(student.hostelName || '');
-    setEditAge(student.age || '');
+    setEditDob(student.dob || '');
     setEditPhone(student.phone || '');
     setEditPersonalEmail(student.personalEmail || '');
     setEditStatus(student.status || 'active');
+    setEditWifiSSID(student.wifiSSID || '');
+    setEditWifiPassword(student.wifiPassword || '');
+    setEditWifiPassword(student.wifiPassword || '');
     setEditPassword(student.tempPassword || '');
+    setEditAddress(student.address || '');
+    setEditFatherName(student.fatherName || '');
+    setEditFatherPhone(student.fatherPhone || '');
+    setEditMotherName(student.motherName || '');
+    setEditMotherPhone(student.motherPhone || '');
+    setEditDues(student.dues ? String(student.dues) : '');
+    setEditDues(student.dues ? String(student.dues) : '');
+    setEditFeeFrequency(student.feeFrequency || 'Monthly');
+    setEditBloodGroup(student.bloodGroup || '');
+    setEditMedicalHistory(student.medicalHistory || '');
+    setEditEmergencyContactName(student.emergencyContactName || '');
+    setEditEmergencyContactPhone(student.emergencyContactPhone || '');
     setEditModalVisible(true);
   };
 
@@ -837,12 +913,25 @@ export default function StudentsPage() {
         room: targetRoom,
         collegeName: editCollege,
         hostelName: editHostelName,
-        age: editAge,
+        dob: editDob,
         phone: editPhone,
         personalEmail: editPersonalEmail,
         status: editStatus,
         tempPassword: editPassword,
         email: newEmail, // Ensure internal email field matches ID
+        wifiSSID: editWifiSSID,
+        wifiPassword: editWifiPassword,
+        address: editAddress,
+        fatherName: editFatherName,
+        fatherPhone: editFatherPhone,
+        motherName: editMotherName,
+        motherPhone: editMotherPhone,
+        dues: parseFloat(editDues) || 0,
+        feeFrequency: editFeeFrequency,
+        bloodGroup: editBloodGroup,
+        medicalHistory: editMedicalHistory,
+        emergencyContactName: editEmergencyContactName,
+        emergencyContactPhone: editEmergencyContactPhone,
       };
 
       if (emailChanged) {
@@ -1014,22 +1103,49 @@ export default function StudentsPage() {
                       <MaterialIcons name="account" size={20} color="#64748B" style={styles.inputIcon} />
                       <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Full Name" />
                     </View>
-                  </View>
 
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ marginTop: 12 }}>
                       <Text style={styles.modalLabel}>Roll No</Text>
                       <View style={styles.modalInputWrapper}>
                         <MaterialIcons name="identifier" size={20} color="#64748B" style={styles.inputIcon} />
                         <TextInput style={styles.modalInput} value={editRollNo} onChangeText={setEditRollNo} placeholder="Roll No" />
                       </View>
                     </View>
-                    <View style={{ flex: 1 }}>
+
+                    <View style={{ marginTop: 12 }}>
                       <Text style={styles.modalLabel}>Room</Text>
                       <View style={styles.modalInputWrapper}>
                         <MaterialIcons name="door" size={20} color="#64748B" style={styles.inputIcon} />
                         <TextInput style={styles.modalInput} value={editRoom} onChangeText={setEditRoom} placeholder="Room" />
                       </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>WiFi SSID</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="wifi" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editWifiSSID}
+                        onChangeText={setEditWifiSSID}
+                        placeholder="WiFi SSID"
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>WiFi Password</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="lock" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editWifiPassword}
+                        onChangeText={setEditWifiPassword}
+                        placeholder="WiFi Password"
+                        placeholderTextColor="#94A3B8"
+                      />
                     </View>
                   </View>
 
@@ -1051,10 +1167,10 @@ export default function StudentsPage() {
 
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.modalLabel}>Age</Text>
+                      <Text style={styles.modalLabel}>Date of Birth</Text>
                       <View style={styles.modalInputWrapper}>
                         <MaterialIcons name="calendar-account" size={20} color="#64748B" style={styles.inputIcon} />
-                        <TextInput style={styles.modalInput} value={editAge} onChangeText={setEditAge} keyboardType="numeric" placeholder="Age" />
+                        <TextInput style={styles.modalInput} value={editDob} onChangeText={setEditDob} placeholder="DD/MM/YYYY" />
                       </View>
                     </View>
                     <View style={{ flex: 1 }}>
@@ -1062,6 +1178,125 @@ export default function StudentsPage() {
                       <View style={styles.modalInputWrapper}>
                         <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
                         <TextInput style={styles.modalInput} value={editPhone} onChangeText={setEditPhone} keyboardType="phone-pad" placeholder="Phone" />
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>Address</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="map-marker" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editAddress} onChangeText={setEditAddress} placeholder="Permanent Address" multiline />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Father's Name</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="account-tie" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editFatherName} onChangeText={setEditFatherName} placeholder="Father Name" />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Father's Phone</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editFatherPhone} onChangeText={setEditFatherPhone} placeholder="Phone" keyboardType="phone-pad" />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Mother's Name</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="face-woman" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editMotherName} onChangeText={setEditMotherName} placeholder="Mother Name" />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Mother's Phone</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editMotherPhone} onChangeText={setEditMotherPhone} placeholder="Phone" keyboardType="phone-pad" />
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>Total Fees</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="cash" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editDues} onChangeText={setEditDues} keyboardType="numeric" placeholder="Amount (e.g. 5000)" />
+                    </View>
+
+                    {/* Fee Frequency Selector */}
+                    <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+                      {(['Monthly', 'Semester', 'Yearly'] as const).map((freq) => (
+                        <TouchableOpacity
+                          key={freq}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            backgroundColor: editFeeFrequency === freq ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: editFeeFrequency === freq ? colors.primary : colors.border
+                          }}
+                          onPress={() => setEditFeeFrequency(freq)}
+                        >
+                          <Text style={{
+                            fontSize: 12,
+                            fontWeight: '600',
+                            color: editFeeFrequency === freq ? '#fff' : colors.textSecondary
+                          }}>
+                            {freq}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={[styles.modalLabel, { color: colors.primary }]}>Medical Info (Optional)</Text>
+
+                    <View>
+                      <Text style={styles.modalLabel}>Blood Group</Text>
+                      <View style={styles.modalInputWrapper}>
+                        <MaterialIcons name="water" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                        <TextInput style={styles.modalInput} value={editBloodGroup} onChangeText={setEditBloodGroup} placeholder="e.g. O+" />
+                      </View>
+                    </View>
+
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.modalLabel}>Emergency Contact Name</Text>
+                      <View style={styles.modalInputWrapper}>
+                        <MaterialIcons name="account-alert" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                        <TextInput style={styles.modalInput} value={editEmergencyContactName} onChangeText={setEditEmergencyContactName} placeholder="Contact Name" />
+                      </View>
+                    </View>
+
+
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.modalLabel}>Emergency Phone</Text>
+                      <View style={styles.modalInputWrapper}>
+                        <MaterialIcons name="phone-alert" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                        <TextInput style={styles.modalInput} value={editEmergencyContactPhone} onChangeText={setEditEmergencyContactPhone} placeholder="Phone" keyboardType="phone-pad" />
+                      </View>
+                    </View>
+
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.modalLabel}>Medical History / Allergies</Text>
+                      <View style={[styles.modalInputWrapper, { height: 'auto', minHeight: 80, paddingVertical: 8, alignItems: 'flex-start' }]}>
+                        <MaterialIcons name="medical-bag" size={20} color={colors.textSecondary} style={[styles.inputIcon, { marginTop: 4 }]} />
+                        <TextInput
+                          style={[styles.modalInput, { textAlignVertical: 'top' }]}
+                          value={editMedicalHistory}
+                          onChangeText={setEditMedicalHistory}
+                          placeholder="Any known allergies or conditions..."
+                          multiline
+                          numberOfLines={3}
+                        />
                       </View>
                     </View>
                   </View>
@@ -1367,15 +1602,87 @@ export default function StudentsPage() {
                   hasSubmitted={hasSubmitted}
                 />
 
+                <InputField
+                  label="Address"
+                  icon="map-marker"
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="Permanent Address"
+                  required
+                  hasSubmitted={hasSubmitted}
+                />
+
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={{ flex: 1 }}>
                     <InputField
-                      label="Age"
+                      label="Father Name"
+                      icon="account-tie"
+                      value={fatherName}
+                      onChangeText={setFatherName}
+                      placeholder="Father Name"
+                      required
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Father Phone"
+                      icon="phone"
+                      value={fatherPhone}
+                      onChangeText={setFatherPhone}
+                      placeholder="Phone"
+                      keyboardType="phone-pad"
+                      required
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Mother Name"
+                      icon="face-woman"
+                      value={motherName}
+                      onChangeText={setMotherName}
+                      placeholder="Mother Name"
+                      required
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Mother Phone"
+                      icon="phone"
+                      value={motherPhone}
+                      onChangeText={setMotherPhone}
+                      placeholder="Phone"
+                      keyboardType="phone-pad"
+                      required
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                </View>
+
+                <InputField
+                  label="Fees Amount (Dues)"
+                  icon="cash"
+                  value={initialDues}
+                  onChangeText={setInitialDues}
+                  placeholder="e.g. 15000"
+                  keyboardType="numeric"
+                  required
+                  hasSubmitted={hasSubmitted}
+                />
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Date of Birth"
                       icon="calendar-account"
-                      value={age}
-                      onChangeText={setAge}
-                      placeholder="Years"
-                      keyboardType="numeric"
+                      value={dob}
+                      onChangeText={setDob}
+                      placeholder="DD/MM/YYYY"
                       required
                       hasSubmitted={hasSubmitted}
                     />
@@ -1406,7 +1713,76 @@ export default function StudentsPage() {
 
                 <View style={styles.divider} />
 
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>Medical Information (Optional)</Text>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Blood Group"
+                      icon="water"
+                      value={bloodGroup}
+                      onChangeText={setBloodGroup}
+                      placeholder="e.g. O+"
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Emergency Contact Name"
+                      icon="account-alert"
+                      value={emergencyContactName}
+                      onChangeText={setEmergencyContactName}
+                      placeholder="Contact Name"
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Emergency Phone"
+                      icon="phone-alert"
+                      value={emergencyContactPhone}
+                      onChangeText={setEmergencyContactPhone}
+                      placeholder="Emergency Phone"
+                      keyboardType="phone-pad"
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Medical History / Allergies"
+                      icon="medical-bag"
+                      value={medicalHistory}
+                      onChangeText={setMedicalHistory}
+                      placeholder="Known allergies..."
+                      hasSubmitted={hasSubmitted}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
                 <Text style={styles.sectionTitle}>College Info</Text>
+
+                <InputField
+                  label="WiFi SSID"
+                  icon="wifi"
+                  value={wifiSSID}
+                  onChangeText={setWifiSSID}
+                  placeholder="e.g. Hostel_Wifi_101"
+                  hasSubmitted={hasSubmitted}
+                />
+
+                <InputField
+                  label="WiFi Password"
+                  icon="lock"
+                  value={wifiPassword}
+                  onChangeText={setWifiPassword}
+                  placeholder="WiFi Password"
+                  hasSubmitted={hasSubmitted}
+                />
 
                 <InputField
                   label="College Name"

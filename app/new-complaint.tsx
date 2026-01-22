@@ -9,10 +9,12 @@ import { useUser } from '../utils/authUtils';
 import { createComplaint } from '../utils/complaintsSyncUtils';
 import { getAuthSafe, getDbSafe } from '../utils/firebase';
 import { fetchUserData } from '../utils/nameUtils';
+import { useTheme } from '../utils/ThemeContext';
 
 export default function NewComplaintPage() {
   const router = useRouter();
   const user = useUser();
+  const { colors, isDark } = useTheme();
   const { showAlert } = useAlert();
 
   const [title, setTitle] = useState('');
@@ -77,7 +79,7 @@ export default function NewComplaintPage() {
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
@@ -101,25 +103,25 @@ export default function NewComplaintPage() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.formCard}>
+        <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Title Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Title</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialIcons name="edit" size={20} color="#64748B" />
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Title</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <MaterialIcons name="edit" size={20} color={colors.textSecondary} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.text }]}
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Briefly summarize the issue"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
           </View>
 
           {/* Priority Selector */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Priority Level</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Priority Level</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -130,6 +132,7 @@ export default function NewComplaintPage() {
                   key={level}
                   style={[
                     styles.priorityButton,
+                    { backgroundColor: colors.background, borderColor: colors.border },
                     priority === level && styles.prioritySelected,
                     priority === level && (styles as any)[`bg${capitalize(level)}`],
                   ]}
@@ -138,7 +141,7 @@ export default function NewComplaintPage() {
                   <MaterialCommunityIcons
                     name={getPriorityIcon(level)}
                     size={18}
-                    color={priority === level ? '#fff' : '#64748B'}
+                    color={priority === level ? '#fff' : colors.textSecondary}
                   />
                   <Text style={[
                     styles.priorityText,
@@ -153,14 +156,14 @@ export default function NewComplaintPage() {
 
           {/* Description Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description</Text>
-            <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Description</Text>
+            <View style={[styles.inputWrapper, styles.textAreaWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { color: colors.text }]}
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Provide details about the problem..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textSecondary}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
@@ -199,7 +202,6 @@ export default function NewComplaintPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
     paddingBottom: 24,
@@ -242,11 +244,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   formCard: {
-    backgroundColor: '#fff',
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
     shadowColor: '#64748B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -267,18 +267,15 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
     paddingHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     gap: 12,
   },
   input: {
     flex: 1,
     paddingVertical: 14,
     fontSize: 15,
-    color: '#1E293B',
     fontWeight: '500',
   },
   textAreaWrapper: {
@@ -299,9 +296,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     gap: 8,
   },
   prioritySelected: {
@@ -315,7 +310,6 @@ const styles = StyleSheet.create({
   priorityText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
   },
   priorityTextSelected: {
     color: '#fff',

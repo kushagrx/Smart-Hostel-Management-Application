@@ -12,13 +12,23 @@ export interface StudentData {
   rollNo?: string;
   collegeName?: string;
   hostelName?: string;
-  age?: string;
+  dob?: string;
   phone?: string;
   personalEmail?: string;
   status?: string;
   dues?: number;
   wifiSSID?: string;
+  wifiPassword?: string;
   email?: string;
+  address?: string;
+  fatherName?: string; // Added Father Name
+  fatherPhone?: string; // Added Father Phone
+  motherName?: string; // Added Mother Name
+  motherPhone?: string; // Added Mother Phone
+  bloodGroup?: string;
+  medicalHistory?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 }
 
 export const userData: StudentData = {
@@ -34,7 +44,7 @@ export const fetchUserData = async (): Promise<StudentData | null> => {
 
     if (!auth?.currentUser || !db) return null;
 
-    const userEmail = auth.currentUser.email;
+    const userEmail = auth.currentUser.email?.toLowerCase().trim();
 
     // Try to fetch from allocations collection using email as ID
     const allocationRef = doc(db, 'allocations', userEmail || '');
@@ -48,13 +58,23 @@ export const fetchUserData = async (): Promise<StudentData | null> => {
         rollNo: data.rollNo || 'N/A',
         collegeName: data.collegeName || 'N/A',
         hostelName: data.hostelName || 'N/A',
-        age: data.age || 'N/A',
+        dob: data.dob || 'N/A',
         phone: data.phone || 'N/A',
         personalEmail: data.personalEmail || userEmail || 'N/A',
         status: data.status || 'active',
         dues: data.dues || 0,
         wifiSSID: data.wifiSSID || 'ENET_' + (data.room || 'N/A'),
+        wifiPassword: data.wifiPassword,
         email: userEmail || undefined,
+        address: data.address || 'N/A',
+        fatherName: data.fatherName || 'N/A', // Map Father Name
+        fatherPhone: data.fatherPhone || 'N/A',
+        motherName: data.motherName || 'N/A', // Map Mother Name
+        motherPhone: data.motherPhone || 'N/A',
+        bloodGroup: data.bloodGroup || 'N/A',
+        medicalHistory: data.medicalHistory || 'None',
+        emergencyContactName: data.emergencyContactName || 'N/A',
+        emergencyContactPhone: data.emergencyContactPhone || 'N/A',
       };
     }
 

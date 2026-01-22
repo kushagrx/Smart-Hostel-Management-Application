@@ -18,10 +18,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
 import { getAuthSafe, getDbSafe } from '../../utils/firebase';
+import { useTheme } from '../../utils/ThemeContext';
 
 export default function ChangePassword() {
   const router = useRouter();
   const { showAlert } = useAlert();
+  const { colors, theme, isDark } = useTheme();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -106,6 +108,103 @@ export default function ChangePassword() {
     }
   };
 
+  const styles = React.useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      paddingBottom: 20,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+    },
+    headerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingTop: 10,
+    },
+    backBtn: {
+      padding: 8,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 12,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#fff',
+    },
+    content: {
+      padding: 20,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 24,
+      shadowColor: colors.textSecondary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 4,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    helperText: {
+      color: colors.textSecondary,
+      marginBottom: 24,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    inputGroup: {
+      marginBottom: 20,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    inputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+    },
+    input: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      color: colors.text,
+      fontSize: 15,
+    },
+    eyeBtn: {
+      padding: 12,
+    },
+    saveBtn: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      borderRadius: 16,
+      alignItems: 'center',
+      marginTop: 12,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    saveBtnDisabled: {
+      opacity: 0.7,
+    },
+    saveBtnText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '700',
+    },
+  }), [colors, theme]);
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -145,10 +244,10 @@ export default function ChangePassword() {
                   onChangeText={setCurrentPassword}
                   secureTextEntry={!showCurrent}
                   placeholder="Enter current password"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textSecondary}
                 />
                 <TouchableOpacity onPress={() => setShowCurrent(!showCurrent)} style={styles.eyeBtn}>
-                  <MaterialIcons name={showCurrent ? 'visibility-off' : 'visibility'} size={20} color="#64748B" />
+                  <MaterialIcons name={showCurrent ? 'visibility-off' : 'visibility'} size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -163,10 +262,10 @@ export default function ChangePassword() {
                   onChangeText={setNewPassword}
                   secureTextEntry={!showNew}
                   placeholder="Enter new password"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textSecondary}
                 />
                 <TouchableOpacity onPress={() => setShowNew(!showNew)} style={styles.eyeBtn}>
-                  <MaterialIcons name={showNew ? 'visibility-off' : 'visibility'} size={20} color="#64748B" />
+                  <MaterialIcons name={showNew ? 'visibility-off' : 'visibility'} size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -181,10 +280,10 @@ export default function ChangePassword() {
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showConfirm}
                   placeholder="Confirm new password"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textSecondary}
                 />
                 <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} style={styles.eyeBtn}>
-                  <MaterialIcons name={showConfirm ? 'visibility-off' : 'visibility'} size={20} color="#64748B" />
+                  <MaterialIcons name={showConfirm ? 'visibility-off' : 'visibility'} size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -207,98 +306,3 @@ export default function ChangePassword() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    paddingBottom: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  backBtn: {
-    padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  content: {
-    padding: 20,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  helperText: {
-    color: '#64748B',
-    marginBottom: 24,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-  },
-  input: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: '#1E293B',
-    fontSize: 15,
-  },
-  eyeBtn: {
-    padding: 12,
-  },
-  saveBtn: {
-    backgroundColor: '#004e92',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginTop: 12,
-    shadowColor: '#004e92',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveBtnDisabled: {
-    opacity: 0.7,
-  },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});

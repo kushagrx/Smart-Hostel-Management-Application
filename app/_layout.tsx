@@ -23,6 +23,18 @@ function AppNavigator() {
         <Stack.Screen name="login" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="alerts" options={{ animation: 'slide_from_right' }} />
+
+        {/* Student Feature Pages - Smooth Transitions */}
+        <Stack.Screen name="mess" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="laundry-request" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="roomservice" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="bustimings" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="leave-request" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="complaints" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="new-complaint" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="my-complaints" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
       </Stack>
     </View>
   );

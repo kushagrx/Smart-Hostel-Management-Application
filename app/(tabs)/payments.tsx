@@ -8,11 +8,13 @@ import { useAlert } from '../../context/AlertContext';
 import { useUser } from '../../utils/authUtils';
 import { getPaymentSettings, getStudentRequests, markRequestAsPaid, PaymentRequest } from '../../utils/financeUtils';
 import { fetchUserData } from '../../utils/nameUtils';
+import { useTheme } from '../../utils/ThemeContext';
 
 export default function PaymentsPage() {
     const router = useRouter();
     const user = useUser();
     const { showAlert } = useAlert();
+    const { colors, isDark } = useTheme();
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -20,14 +22,13 @@ export default function PaymentsPage() {
     const [upiSettings, setUpiSettings] = useState<{ upiId: string, payeeName: string } | null>(null);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
 
-    // Verify Modal State
-    const [verifyModalVisible, setVerifyModalVisible] = useState(false);
-    const [selectedRequest, setSelectedRequest] = useState<PaymentRequest | null>(null);
-    const [transactionId, setTransactionId] = useState('');
+    // Verify Modal State (Removed Zombie Code)
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (user) {
+            loadData();
+        }
+    }, [user]);
 
     const loadData = async () => {
         setLoading(true);
@@ -84,26 +85,29 @@ export default function PaymentsPage() {
         const isHistory = activeTab === 'history';
 
         return (
-            <View style={[styles.card, isHistory && styles.cardHistory]}>
+            <View style={[styles.card, isHistory && styles.cardHistory, {
+                backgroundColor: colors.card,
+                borderColor: colors.border
+            }]}>
                 <View style={styles.cardHeader}>
                     <View style={[
                         styles.iconBox,
-                        { backgroundColor: item.type === 'Hostel Fee' ? '#E0F2FE' : '#F0FDF4' }
+                        { backgroundColor: item.type === 'Hostel Fee' ? (isDark ? '#0c4a6e' : '#E0F2FE') : (isDark ? '#052e16' : '#F0FDF4') }
                     ]}>
                         <MaterialIcons
                             name={item.type === 'Hostel Fee' ? 'home' : 'restaurant'}
                             size={24}
-                            color={item.type === 'Hostel Fee' ? '#0284C7' : '#16A34A'}
+                            color={item.type === 'Hostel Fee' ? (isDark ? '#38bdf8' : '#0284C7') : (isDark ? '#4ade80' : '#16A34A')}
                         />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.cardTitle}>{item.type}</Text>
-                        <Text style={styles.cardDate}>
+                        <Text style={[styles.cardTitle, { color: colors.text }]}>{item.type}</Text>
+                        <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
                             Due: {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'N/A'}
                         </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.amount}>₹{item.amount}</Text>
+                        <Text style={[styles.amount, { color: colors.text }]}>₹{item.amount}</Text>
                         <Text style={[
                             styles.statusBadge,
                             {
@@ -118,7 +122,7 @@ export default function PaymentsPage() {
                 </View>
 
                 {item.description ? (
-                    <Text style={styles.description}>{item.description}</Text>
+                    <Text style={[styles.description, { backgroundColor: isDark ? colors.background : '#F8FAFC', color: colors.textSecondary }]}>{item.description}</Text>
                 ) : null}
 
                 {!isHistory && (
@@ -139,9 +143,9 @@ export default function PaymentsPage() {
                 )}
 
                 {isHistory && item.receiptNumber && (
-                    <View style={styles.receiptContainer}>
-                        <MaterialIcons name="receipt" size={16} color="#64748B" />
-                        <Text style={styles.receiptText}>Receipt: {item.receiptNumber}</Text>
+                    <View style={[styles.receiptContainer, { borderTopColor: colors.border }]}>
+                        <MaterialIcons name="receipt" size={16} color={colors.textSecondary} />
+                        <Text style={[styles.receiptText, { color: colors.textSecondary }]}>Receipt: {item.receiptNumber}</Text>
                     </View>
                 )}
             </View>
@@ -149,7 +153,7 @@ export default function PaymentsPage() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <LinearGradient
                 colors={['#000428', '#004e92']}
                 style={styles.header}
@@ -170,21 +174,22 @@ export default function PaymentsPage() {
                         </View>
                     </View>
                 </SafeAreaView>
+
             </LinearGradient>
 
             <View style={styles.contentContainer}>
-                <View style={styles.tabs}>
+                <View style={[styles.tabs, { backgroundColor: isDark ? colors.card : '#fff' }]}>
                     <TouchableOpacity
-                        style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
+                        style={[styles.tab, activeTab === 'pending' && { backgroundColor: isDark ? '#1e3a8a' : '#EFF6FF' }]}
                         onPress={() => setActiveTab('pending')}
                     >
-                        <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>Pending</Text>
+                        <Text style={[styles.tabText, activeTab === 'pending' && { color: '#3b82f6', fontWeight: '700' }, activeTab !== 'pending' && { color: colors.textSecondary }]}>Pending</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.tab, activeTab === 'history' && styles.activeTab]}
+                        style={[styles.tab, activeTab === 'history' && { backgroundColor: isDark ? '#1e3a8a' : '#EFF6FF' }]}
                         onPress={() => setActiveTab('history')}
                     >
-                        <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>History</Text>
+                        <Text style={[styles.tabText, activeTab === 'history' && { color: '#3b82f6', fontWeight: '700' }, activeTab !== 'history' && { color: colors.textSecondary }]}>History</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -199,8 +204,8 @@ export default function PaymentsPage() {
                     }
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
-                            <MaterialIcons name="check-circle-outline" size={64} color="#CBD5E1" />
-                            <Text style={styles.emptyText}>No {activeTab} requests</Text>
+                            <MaterialIcons name="check-circle-outline" size={64} color={isDark ? colors.secondary : "#CBD5E1"} />
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No {activeTab} requests</Text>
                         </View>
                     }
                 />
@@ -213,7 +218,6 @@ export default function PaymentsPage() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
     },
     header: {
         paddingBottom: 24,
@@ -251,10 +255,37 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
     },
+    headerTabs: {
+        flexDirection: 'row',
+        marginHorizontal: 20,
+        marginBottom: 10,
+        marginTop: 16,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderRadius: 12,
+        padding: 4,
+    },
+    headerTab: {
+        flex: 1,
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    headerTabActive: {
+        backgroundColor: '#fff',
+    },
+    headerTabText: {
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    headerTabTextActive: {
+        color: '#004e92',
+        fontWeight: '700',
+    },
     contentContainer: {
         flex: 1,
         paddingHorizontal: 20,
-        marginTop: -20, // Overlap header
+        marginTop: 20,
     },
     tabs: {
         flexDirection: 'row',
@@ -328,7 +359,6 @@ const styles = StyleSheet.create({
     amount: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#0F172A',
     },
     statusBadge: {
         fontSize: 10,
@@ -386,68 +416,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
     },
-
-    // Modal
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        padding: 20,
-    },
-    modalContent: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        padding: 24,
-        alignItems: 'center',
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#1E293B',
-        marginBottom: 12,
-    },
-    modalText: {
-        fontSize: 14,
-        color: '#64748B',
-        textAlign: 'center',
-        marginBottom: 20,
-        lineHeight: 20,
-    },
-    input: {
-        width: '100%',
-        height: 50,
-        borderWidth: 1,
-        borderColor: '#CBD5E1',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        fontSize: 16,
-        color: '#1E293B',
-        marginBottom: 24,
-        backgroundColor: '#F8FAFC',
-    },
-    modalButtons: {
-        flexDirection: 'row',
-        width: '100%',
-        gap: 12,
-    },
-    modalBtn: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    cancelBtn: {
-        backgroundColor: '#F1F5F9',
-    },
-    confirmBtn: {
-        backgroundColor: '#004e92',
-    },
-    cancelText: {
-        color: '#64748B',
-        fontWeight: '600',
-    },
-    confirmText: {
-        color: '#fff',
-        fontWeight: '700',
-    },
 });
+
+
