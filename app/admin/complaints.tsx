@@ -348,22 +348,37 @@ export default function ComplaintsPage() {
                 <Text style={styles.complaintTextContent}>{item.description}</Text>
               </View>
 
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.progressBtn]}
-                  onPress={() => handleUpdateStatus(item.id, 'inProgress')}
-                >
-                  <MaterialIcons name="clock-outline" size={16} color="#fff" />
-                  <Text style={styles.actionBtnText}>In Progress</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.resolveBtn]}
-                  onPress={() => handleUpdateStatus(item.id, 'resolved')}
-                >
-                  <MaterialIcons name="check" size={16} color="#fff" />
-                  <Text style={styles.actionBtnText}>Resolve</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Only show action buttons if complaint is not resolved or closed */}
+              {item.status !== 'resolved' && item.status !== 'closed' && (
+                <View style={styles.actionButtons}>
+                  {item.status === 'open' && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.progressBtn]}
+                      onPress={() => handleUpdateStatus(item.id, 'inProgress')}
+                    >
+                      <MaterialIcons name="clock-outline" size={16} color="#fff" />
+                      <Text style={styles.actionBtnText}>Mark In Progress</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.resolveBtn]}
+                    onPress={() => handleUpdateStatus(item.id, 'resolved')}
+                  >
+                    <MaterialIcons name="check" size={16} color="#fff" />
+                    <Text style={styles.actionBtnText}>Resolve</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Show resolved message if complaint is resolved or closed */}
+              {(item.status === 'resolved' || item.status === 'closed') && (
+                <View style={styles.resolvedMessage}>
+                  <MaterialIcons name="check-circle" size={20} color={item.status === 'resolved' ? '#10B981' : '#64748B'} />
+                  <Text style={styles.resolvedMessageText}>
+                    This complaint has been {item.status === 'resolved' ? 'resolved' : 'closed'}
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </TouchableOpacity>
