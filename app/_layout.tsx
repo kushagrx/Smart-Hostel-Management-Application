@@ -2,7 +2,9 @@ import { Stack } from "expo-router";
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+// import OfflineIndicator from "../components/OfflineIndicator";
 import { AlertProvider } from "../context/AlertContext";
+// import { OfflineProvider } from "../context/OfflineContext";
 import { ThemeProvider, useTheme } from "../utils/ThemeContext";
 
 function AppNavigator() {
@@ -10,6 +12,7 @@ function AppNavigator() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* <OfflineIndicator /> */}
       <Stack
         screenOptions={{
           headerShown: false,
@@ -45,10 +48,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light" backgroundColor="transparent" translucent={true} />
       <ThemeProvider>
+        {/* <OfflineProvider> */}
         <AlertProvider>
           <AppNavigator />
         </AlertProvider>
+        {/* </OfflineProvider>  */}
       </ThemeProvider>
     </GestureHandlerRootView>
   );
 }
+

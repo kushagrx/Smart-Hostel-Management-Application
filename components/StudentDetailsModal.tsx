@@ -1,6 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/ThemeContext';
 
@@ -12,9 +14,14 @@ interface StudentDetailsModalProps {
     onDelete: (id: string, name: string, room: string) => void;
 }
 
-export default function StudentDetailsModal({ visible, student, onClose, onEdit, onDelete }: StudentDetailsModalProps) {
+import { API_BASE_URL } from '../utils/api';
+import AttendanceHistory from './AttendanceHistory';
+
+
+export default function StudentDetailsModal({ visible, student, onClose, onEdit, onDelete, viewMode = 'full' }: StudentDetailsModalProps & { viewMode?: 'full' | 'attendance' }) {
     const { colors, theme } = useTheme();
     const insets = useSafeAreaInsets();
+    const router = useRouter();
 
     if (!visible || !student) return null;
 
@@ -23,16 +30,11 @@ export default function StudentDetailsModal({ visible, student, onClose, onEdit,
     };
 
     const styles = StyleSheet.create({
-        modalOverlay: {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            zIndex: 1000,
+        centeredView: {
+            flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
         },
         modalContent: {
             backgroundColor: colors.card,
@@ -69,7 +71,7 @@ export default function StudentDetailsModal({ visible, student, onClose, onEdit,
         },
         infoSection: {
             marginBottom: 16,
-            backgroundColor: colors.background, // Nested diff bg
+            backgroundColor: colors.background,
             borderRadius: 16,
             padding: 16,
             borderWidth: 1,
@@ -98,7 +100,7 @@ export default function StudentDetailsModal({ visible, student, onClose, onEdit,
             fontWeight: '600',
             color: colors.text,
             flex: 1,
-            textAlign: 'right', // Align values right
+            textAlign: 'right',
             marginLeft: 16,
         },
         actionButtons: {
@@ -129,238 +131,311 @@ export default function StudentDetailsModal({ visible, student, onClose, onEdit,
     });
 
     return (
-        <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Student Details</Text>
-                    <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                        <MaterialCommunityIcons name="close" size={24} color="#64748B" />
-                    </TouchableOpacity>
-                </View>
+        <Modal
+            animationType="slide"
+            transparent={true}
+            visible={visible}
+            onRequestClose={onClose}
+            statusBarTranslucent
+        >
+            <View style={styles.centeredView}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>
+                            {viewMode === 'attendance' ? 'Attendance Details' : 'Student Details'}
+                        </Text>
+                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                            <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                        </TouchableOpacity>
+                    </View>
 
-                <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
-                    <View style={styles.infoSection}>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="account" size={16} color="#6366F1" />
-                                <Text style={styles.detailLabel}>Full Name</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.name}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="card-account-details" size={16} color="#6366F1" />
-                                <Text style={styles.detailLabel}>Roll No</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.rollNo}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="school" size={16} color="#8B5CF6" />
-                                <Text style={styles.detailLabel}>College</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.collegeName || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="office-building" size={16} color="#8B5CF6" />
-                                <Text style={styles.detailLabel}>Hostel</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.hostelName || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="wifi" size={16} color="#06B6D4" />
-                                <Text style={styles.detailLabel}>WiFi Name</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.wifiSSID || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="wifi-lock" size={16} color="#06B6D4" />
-                                <Text style={styles.detailLabel}>WiFi Password</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.wifiPassword || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="calendar-account" size={16} color="#EC4899" />
-                                <Text style={styles.detailLabel}>Date of Birth</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.dob || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="door-closed" size={16} color="#8B5CF6" />
-                                <Text style={styles.detailLabel}>Room</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.room}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="email" size={16} color="#06B6D4" />
-                                <Text style={styles.detailLabel}>Official Email</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.email}</Text>
-                        </View>
-                        {student.personalEmail && (
-                            <View style={styles.detailRow}>
-                                <View style={styles.detailLeft}>
-                                    <MaterialCommunityIcons name="gmail" size={16} color="#DB4437" />
-                                    <Text style={styles.detailLabel}>Linked Gmail</Text>
+                    <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+                        {/* Common Header for both modes */}
+                        <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                            {student.profilePhoto ? (
+                                <Image
+                                    source={{ uri: `${API_BASE_URL}${student.profilePhoto}` }}
+                                    style={{ width: 100, height: 100, borderRadius: 50, marginBottom: 8 }}
+                                    contentFit="cover"
+                                />
+                            ) : (
+                                <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                                    <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
+                                        {student.name ? student.name.split(' ').map((n: any) => n[0]).join('').toUpperCase() : '?'}
+                                    </Text>
                                 </View>
-                                <Text style={styles.detailValue}>{student.personalEmail}</Text>
-                            </View>
-                        )}
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="map-marker" size={16} color="#F59E0B" />
-                                <Text style={styles.detailLabel}>Address</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.address || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="account-tie" size={16} color="#6366F1" />
-                                <Text style={styles.detailLabel}>Father</Text>
-                            </View>
-                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                                <Text style={styles.detailValue}>{student.fatherName || 'N/A'}</Text>
-                                {student.fatherPhone && student.fatherPhone !== 'N/A' && (
-                                    <Text style={[styles.detailValue, { fontSize: 12, color: colors.textSecondary }]}>{student.fatherPhone}</Text>
-                                )}
-                            </View>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="face-woman" size={16} color="#EC4899" />
-                                <Text style={styles.detailLabel}>Mother</Text>
-                            </View>
-                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                                <Text style={styles.detailValue}>{student.motherName || 'N/A'}</Text>
-                                {student.motherPhone && student.motherPhone !== 'N/A' && (
-                                    <Text style={[styles.detailValue, { fontSize: 12, color: colors.textSecondary }]}>{student.motherPhone}</Text>
-                                )}
-                            </View>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="cash" size={16} color="#EF4444" />
-                                <Text style={styles.detailLabel}>Total Fees</Text>
-                            </View>
-                            <Text style={[styles.detailValue, { color: student.dues > 0 ? '#EF4444' : '#10B981' }]}>
-                                {student.dues ? `₹${student.dues} / ${student.feeFrequency || 'Monthly'}` : 'No Dues'}
-                            </Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="phone" size={16} color="#EC4899" />
-                                <Text style={styles.detailLabel}>Phone</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.phone}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="check-circle" size={16} color={getStatusColor(student.status)} />
-                                <Text style={styles.detailLabel}>Status</Text>
-                            </View>
-                            <Text style={[styles.detailValue, { color: getStatusColor(student.status), fontWeight: '700' }]}>
-                                {student.status?.toUpperCase() || 'UNKNOWN'}
-                            </Text>
+                            )}
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 4 }}>{student.name}</Text>
+                            <Text style={{ fontSize: 14, color: colors.textSecondary }}>{student.rollNo} • Room {student.room}</Text>
+
+                            {/* Action Buttons (Moved here) */}
+                            {viewMode === 'full' && (
+                                <>
+                                    <View style={[styles.actionButtons, { marginTop: 16, width: '100%', marginBottom: 10 }]}>
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.editBtn]}
+                                            onPress={() => {
+                                                onClose();
+                                                onEdit(student);
+                                            }}
+                                        >
+                                            <MaterialCommunityIcons name="pencil" size={16} color="#fff" />
+                                            <Text style={styles.actionBtnText}>Edit</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.deleteBtn]}
+                                            onPress={() => {
+                                                onDelete(student.id, student.name, student.room);
+                                            }}
+                                        >
+                                            <MaterialCommunityIcons name="delete" size={16} color="#fff" />
+                                            <Text style={styles.actionBtnText}>Delete</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, { backgroundColor: '#8B5CF6', marginBottom: 10 }]}
+                                        onPress={() => {
+                                            onClose();
+                                            router.push({
+                                                pathname: '/admin/visitors',
+                                                params: { studentId: student.id, studentName: student.name }
+                                            });
+                                        }}
+                                    >
+                                        <MaterialCommunityIcons name="account-multiple-check" size={16} color="#fff" />
+                                        <Text style={styles.actionBtnText}>View Visitors</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
 
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="calendar-clock" size={16} color="#64748B" />
-                                <Text style={styles.detailLabel}>Joined On</Text>
-                            </View>
-                            <Text style={styles.detailValue}>
-                                {student.createdAt?.seconds
-                                    ? new Date(student.createdAt.seconds * 1000).toLocaleString('en-IN', {
-                                        day: '2-digit', month: 'short', year: 'numeric',
-                                    })
-                                    : 'N/A'}
-                            </Text>
-                        </View>
+                        {/* ATTENDANCE MODE CONTENT */}
+                        {
+                            viewMode === 'attendance' ? (
+                                <>
+                                    <AttendanceHistory studentId={student.studentId || student.id} />
+                                    {/* Maybe show stats summary if not already in AttendanceHistory? 
+                                AttendanceHistory has its own stats. 
+                            */}
+                                </>
+                            ) : (
+                                /* FULL DETAILS MODE CONTENT */
+                                <>
+                                    <View style={styles.infoSection}>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="account" size={16} color="#6366F1" />
+                                                <Text style={styles.detailLabel}>Full Name</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.name}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="card-account-details" size={16} color="#6366F1" />
+                                                <Text style={styles.detailLabel}>Roll No</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.rollNo}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="school" size={16} color="#8B5CF6" />
+                                                <Text style={styles.detailLabel}>College</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.collegeName || 'N/A'}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="office-building" size={16} color="#8B5CF6" />
+                                                <Text style={styles.detailLabel}>Hostel</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.hostelName || 'N/A'}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="wifi" size={16} color="#06B6D4" />
+                                                <Text style={styles.detailLabel}>WiFi Name</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.wifiSSID || 'N/A'}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="wifi-lock" size={16} color="#06B6D4" />
+                                                <Text style={styles.detailLabel}>WiFi Password</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.wifiPassword || 'N/A'}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="calendar-account" size={16} color="#EC4899" />
+                                                <Text style={styles.detailLabel}>Date of Birth</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>
+                                                {student.dob ? new Date(student.dob).toLocaleDateString('en-IN', {
+                                                    day: '2-digit', month: 'short', year: 'numeric'
+                                                }) : 'N/A'}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="door-closed" size={16} color="#8B5CF6" />
+                                                <Text style={styles.detailLabel}>Room</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.room}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="email" size={16} color="#06B6D4" />
+                                                <Text style={styles.detailLabel}>Official Email</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.email}</Text>
+                                        </View>
+                                        {student.googleEmail && (
+                                            <View style={styles.detailRow}>
+                                                <View style={styles.detailLeft}>
+                                                    <MaterialCommunityIcons name="google" size={16} color="#DB4437" />
+                                                    <Text style={styles.detailLabel}>Google Mail</Text>
+                                                </View>
+                                                <Text style={styles.detailValue}>{student.googleEmail}</Text>
+                                            </View>
+                                        )}
+                                        {student.collegeEmail && (
+                                            <View style={styles.detailRow}>
+                                                <View style={styles.detailLeft}>
+                                                    <MaterialCommunityIcons name="email-check" size={16} color="#2563EB" />
+                                                    <Text style={styles.detailLabel}>College Email</Text>
+                                                </View>
+                                                <Text style={styles.detailValue}>{student.collegeEmail}</Text>
+                                            </View>
+                                        )}
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="map-marker" size={16} color="#F59E0B" />
+                                                <Text style={styles.detailLabel}>Address</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.address || 'N/A'}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="account-tie" size={16} color="#6366F1" />
+                                                <Text style={styles.detailLabel}>Father</Text>
+                                            </View>
+                                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                                <Text style={styles.detailValue}>{student.fatherName || 'N/A'}</Text>
+                                                {student.fatherPhone && student.fatherPhone !== 'N/A' && (
+                                                    <Text style={[styles.detailValue, { fontSize: 12, color: colors.textSecondary }]}>{student.fatherPhone}</Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="face-woman" size={16} color="#EC4899" />
+                                                <Text style={styles.detailLabel}>Mother</Text>
+                                            </View>
+                                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                                <Text style={styles.detailValue}>{student.motherName || 'N/A'}</Text>
+                                                {student.motherPhone && student.motherPhone !== 'N/A' && (
+                                                    <Text style={[styles.detailValue, { fontSize: 12, color: colors.textSecondary }]}>{student.motherPhone}</Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="cash" size={16} color="#EF4444" />
+                                                <Text style={styles.detailLabel}>Total Fees</Text>
+                                            </View>
+                                            <Text style={[styles.detailValue, { color: student.dues > 0 ? '#EF4444' : '#10B981' }]}>
+                                                {student.dues ? `₹${student.dues} / ${student.feeFrequency || 'Monthly'}` : 'No Dues'}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="phone" size={16} color="#EC4899" />
+                                                <Text style={styles.detailLabel}>Phone</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.phone}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="check-circle" size={16} color={getStatusColor(student.status)} />
+                                                <Text style={styles.detailLabel}>Status</Text>
+                                            </View>
+                                            <Text style={[styles.detailValue, { color: getStatusColor(student.status), fontWeight: '700' }]}>
+                                                {student.status?.toUpperCase() || 'UNKNOWN'}
+                                            </Text>
+                                        </View>
 
-                        <View style={[styles.detailRow, {
-                            borderBottomWidth: 0,
-                            backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.1)' : '#FFFBEB',
-                            marginHorizontal: -16,
-                            paddingHorizontal: 16,
-                            marginTop: 8,
-                            paddingVertical: 12,
-                            borderTopWidth: 1,
-                            borderTopColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7',
-                        }]}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="key" size={16} color="#F59E0B" />
-                                <Text style={[styles.detailLabel, { color: theme === 'dark' ? '#FBBF24' : '#92400E' }]}>Password</Text>
-                            </View>
-                            <Text style={[styles.detailValue, { fontFamily: 'monospace', color: '#D97706', fontSize: 15 }]}>
-                                {student.tempPassword || 'N/A'}
-                            </Text>
-                        </View>
-                    </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="calendar-clock" size={16} color="#64748B" />
+                                                <Text style={styles.detailLabel}>Joined On</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>
+                                                {student.createdAt
+                                                    ? new Date(student.createdAt.seconds ? student.createdAt.seconds * 1000 : student.createdAt).toLocaleDateString('en-IN', {
+                                                        day: '2-digit', month: 'short', year: 'numeric',
+                                                    })
+                                                    : 'N/A'}
+                                            </Text>
+                                        </View>
 
-                    {/* Medical Details Section */}
-                    <View style={styles.infoSection}>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="water" size={16} color="#EF4444" />
-                                <Text style={styles.detailLabel}>Blood Group</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{student.bloodGroup || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                                <MaterialCommunityIcons name="account-alert" size={16} color="#EC4899" />
-                                <Text style={styles.detailLabel}>Emergency Contact</Text>
-                            </View>
-                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                                <Text style={styles.detailValue}>{student.emergencyContactName || 'N/A'}</Text>
-                                {student.emergencyContactPhone && student.emergencyContactPhone !== 'N/A' && (
-                                    <Text style={[styles.detailValue, { fontSize: 12, color: colors.textSecondary }]}>{student.emergencyContactPhone}</Text>
-                                )}
-                            </View>
-                        </View>
-                        <View style={[styles.detailRow, { borderBottomWidth: 0, alignItems: 'flex-start' }]}>
-                            <View style={[styles.detailLeft, { marginTop: 2 }]}>
-                                <MaterialCommunityIcons name="medical-bag" size={16} color="#6366F1" />
-                                <Text style={styles.detailLabel}>Medical History</Text>
-                            </View>
-                            <Text style={[styles.detailValue, { flex: 1, textAlign: 'right', marginLeft: 16, lineHeight: 20 }]}>
-                                {student.medicalHistory || 'None'}
-                            </Text>
-                        </View>
-                    </View>
+                                        <View style={[styles.detailRow, {
+                                            borderBottomWidth: 0,
+                                            backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.1)' : '#FFFBEB',
+                                            marginHorizontal: -16,
+                                            paddingHorizontal: 16,
+                                            marginTop: 8,
+                                            paddingVertical: 12,
+                                            borderTopWidth: 1,
+                                            borderTopColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7',
+                                        }]}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="key" size={16} color="#F59E0B" />
+                                                <Text style={[styles.detailLabel, { color: theme === 'dark' ? '#FBBF24' : '#92400E' }]}>Password</Text>
+                                            </View>
+                                            <Text style={[styles.detailValue, { fontFamily: 'monospace', color: '#D97706', fontSize: 15 }]}>
+                                                {student.password || student.tempPassword || 'N/A'}
+                                            </Text>
+                                        </View>
+                                    </View>
 
-                    <View style={styles.actionButtons}>
-                        <TouchableOpacity
-                            style={[styles.actionBtn, styles.editBtn]}
-                            onPress={() => {
-                                onClose(); // Close details modal specifically when editing
-                                onEdit(student);
-                            }}
-                        >
-                            <MaterialCommunityIcons name="pencil" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Edit</Text>
-                        </TouchableOpacity>
+                                    <AttendanceHistory studentId={student.id} />
 
-                        <TouchableOpacity
-                            style={[styles.actionBtn, styles.deleteBtn]}
-                            onPress={() => {
-                                // Keep modal open or close? Typically confirm dialog appears over it.
-                                // Let's rely on the main page's delete handler which shows an alert.
-                                onDelete(student.id, student.name, student.room);
-                            }}
-                        >
-                            <MaterialCommunityIcons name="delete" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Delete</Text>
-                        </TouchableOpacity>
-                    </View>
-                </ScrollView>
+                                    <View style={styles.infoSection}>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="water" size={16} color="#EF4444" />
+                                                <Text style={styles.detailLabel}>Blood Group</Text>
+                                            </View>
+                                            <Text style={styles.detailValue}>{student.bloodGroup || 'N/A'}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <View style={styles.detailLeft}>
+                                                <MaterialCommunityIcons name="account-alert" size={16} color="#EC4899" />
+                                                <Text style={styles.detailLabel}>Emergency Contact</Text>
+                                            </View>
+                                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                                <Text style={styles.detailValue}>{student.emergencyContactName || 'N/A'}</Text>
+                                                {student.emergencyContactPhone && student.emergencyContactPhone !== 'N/A' && (
+                                                    <Text style={[styles.detailValue, { fontSize: 12, color: colors.textSecondary }]}>{student.emergencyContactPhone}</Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                        <View style={[styles.detailRow, { borderBottomWidth: 0, alignItems: 'flex-start' }]}>
+                                            <View style={[styles.detailLeft, { marginTop: 2 }]}>
+                                                <MaterialCommunityIcons name="medical-bag" size={16} color="#6366F1" />
+                                                <Text style={styles.detailLabel}>Medical History</Text>
+                                            </View>
+                                            <Text style={[styles.detailValue, { flex: 1, textAlign: 'right', marginLeft: 16, lineHeight: 20 }]}>
+                                                {student.medicalHistory || 'None'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </>
+                            )
+                        }
+                    </ScrollView >
+                </View >
             </View >
-        </View >
+        </Modal >
     );
 }

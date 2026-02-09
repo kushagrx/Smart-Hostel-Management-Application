@@ -3,9 +3,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
+import { useRefresh } from '../hooks/useRefresh';
 import { createLeaveRequest, getStudentLeaves, LeaveRequest } from '../utils/leavesUtils';
 import { fetchUserData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
@@ -21,13 +22,23 @@ export default function LeaveRequestPage() {
     const [showEndPicker, setShowEndPicker] = useState(false);
     const [loading, setLoading] = useState(false);
     const [history, setHistory] = useState<LeaveRequest[]>([]);
-    const [refreshing, setRefreshing] = useState(false);
+    // const [refreshing, setRefreshing] = useState(false); // Managed by useRefresh
 
+    const { refreshing, onRefresh } = useRefresh(async () => {
+        await loadHistory();
+    }, () => {
+        setReason('');
+        setStartDate(new Date());
+        setEndDate(new Date());
+    });
+
+    /* Replaced by useRefresh
     const onRefresh = async () => {
         setRefreshing(true);
         await loadHistory();
         setRefreshing(false);
     };
+    */
 
     useEffect(() => {
         loadHistory();
@@ -94,11 +105,13 @@ export default function LeaveRequestPage() {
         if (selectedDate) setEndDate(selectedDate);
     };
 
+    /* Handled by useRefresh
     const handleRefresh = async () => {
         setRefreshing(true);
         await loadHistory();
         setRefreshing(false);
     };
+    */
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -133,108 +146,116 @@ export default function LeaveRequestPage() {
                 </SafeAreaView>
             </LinearGradient>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
+            >
+                <View style={{ padding: 24 }}>
+                    {/* Form Section */}
+                    <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>NEW REQUEST</Text>
 
-                {/* Form Section */}
-                <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>NEW REQUEST</Text>
-
-                    <View style={styles.dateRow}>
-                        <View style={styles.dateField}>
-                            <Text style={[styles.label, { color: colors.textSecondary }]}>From Date</Text>
-                            <Pressable onPress={() => setShowStartPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                                <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
-                                <Text style={[styles.dateText, { color: colors.text }]}>{startDate.toLocaleDateString()}</Text>
-                            </Pressable>
-                            {showStartPicker && (
-                                <DateTimePicker
-                                    value={startDate}
-                                    mode="date"
-                                    display="default"
-                                    onChange={onChangeStart}
-                                    minimumDate={new Date()}
-                                />
-                            )}
-                        </View>
-
-                        <View style={styles.dateField}>
-                            <Text style={[styles.label, { color: colors.textSecondary }]}>To Date</Text>
-                            <Pressable onPress={() => setShowEndPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                                <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
-                                <Text style={[styles.dateText, { color: colors.text }]}>{endDate.toLocaleDateString()}</Text>
-                            </Pressable>
-                            {showEndPicker && (
-                                <DateTimePicker
-                                    value={endDate}
-                                    mode="date"
-                                    display="default"
-                                    onChange={onChangeEnd}
-                                    minimumDate={startDate}
-                                />
-                            )}
-                        </View>
-                    </View>
-
-                    <Text style={[styles.label, { marginTop: 16, color: colors.textSecondary }]}>Reason</Text>
-                    <TextInput
-                        style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                        placeholder="e.g. Visiting home for festival..."
-                        placeholderTextColor={colors.textSecondary}
-                        multiline
-                        numberOfLines={3}
-                        value={reason}
-                        onChangeText={setReason}
-                        textAlignVertical="top"
-                    />
-
-                    <Pressable
-                        style={[styles.submitBtn, loading && { opacity: 0.7 }]}
-                        onPress={handleSubmit}
-                        disabled={loading}
-                    >
-                        <LinearGradient
-                            colors={['#7C3AED', '#6D28D9']}
-                            style={styles.btnGradient}
-                        >
-                            {loading ? (
-                                <Text style={styles.btnText}>Submitting...</Text>
-                            ) : (
-                                <Text style={styles.btnText}>Submit Request</Text>
-                            )}
-                        </LinearGradient>
-                    </Pressable>
-                </View>
-
-                {/* History Section */}
-                <Text style={[styles.sectionTitle, { marginTop: 24, marginLeft: 4, color: colors.textSecondary }]}>PAST REQUESTS</Text>
-                {history.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <MaterialCommunityIcons name="calendar-blank-outline" size={48} color={colors.textSecondary} />
-                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No leave history found</Text>
-                    </View>
-                ) : (
-                    <View style={styles.historyList}>
-                        {history.map((item) => (
-                            <View key={item.id} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <View style={styles.historyHeader}>
-                                    <View style={styles.dateInfo}>
-                                        <Text style={[styles.historyDate, { color: colors.text }]}>{item.startDate}</Text>
-                                        <MaterialCommunityIcons name="arrow-right" size={16} color={colors.textSecondary} />
-                                        <Text style={[styles.historyDate, { color: colors.text }]}>{item.endDate}</Text>
-                                    </View>
-                                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                                        <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                                            {item.status.toUpperCase()}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <Text style={[styles.historyReason, { color: colors.textSecondary }]}>{item.reason}</Text>
-                                <Text style={[styles.durationText, { color: colors.textSecondary }]}>{item.days} days</Text>
+                        <View style={styles.dateRow}>
+                            <View style={styles.dateField}>
+                                <Text style={[styles.label, { color: colors.textSecondary }]}>From Date</Text>
+                                <Pressable onPress={() => setShowStartPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                                    <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
+                                    <Text style={[styles.dateText, { color: colors.text }]}>{startDate.toLocaleDateString()}</Text>
+                                </Pressable>
+                                {showStartPicker && (
+                                    <DateTimePicker
+                                        value={startDate}
+                                        mode="date"
+                                        display="default"
+                                        onChange={onChangeStart}
+                                        minimumDate={new Date()}
+                                    />
+                                )}
                             </View>
-                        ))}
-                    </View>
-                )}
 
+                            <View style={styles.dateField}>
+                                <Text style={[styles.label, { color: colors.textSecondary }]}>To Date</Text>
+                                <Pressable onPress={() => setShowEndPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                                    <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
+                                    <Text style={[styles.dateText, { color: colors.text }]}>{endDate.toLocaleDateString()}</Text>
+                                </Pressable>
+                                {showEndPicker && (
+                                    <DateTimePicker
+                                        value={endDate}
+                                        mode="date"
+                                        display="default"
+                                        onChange={onChangeEnd}
+                                        minimumDate={startDate}
+                                    />
+                                )}
+                            </View>
+                        </View>
+
+                        <Text style={[styles.label, { marginTop: 16, color: colors.textSecondary }]}>Reason</Text>
+                        <TextInput
+                            style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                            placeholder="e.g. Visiting home for festival..."
+                            placeholderTextColor={colors.textSecondary}
+                            multiline
+                            numberOfLines={3}
+                            value={reason}
+                            onChangeText={setReason}
+                            textAlignVertical="top"
+                        />
+
+                        <Pressable
+                            style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+                            onPress={handleSubmit}
+                            disabled={loading}
+                        >
+                            <LinearGradient
+                                colors={['#7C3AED', '#6D28D9']}
+                                style={styles.btnGradient}
+                            >
+                                {loading ? (
+                                    <Text style={styles.btnText}>Submitting...</Text>
+                                ) : (
+                                    <Text style={styles.btnText}>Submit Request</Text>
+                                )}
+                            </LinearGradient>
+                        </Pressable>
+                    </View>
+
+                    {/* History Section */}
+                    <Text style={[styles.sectionTitle, { marginTop: 24, marginLeft: 4, color: colors.textSecondary }]}>PAST REQUESTS</Text>
+                    {history.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <MaterialCommunityIcons name="calendar-blank-outline" size={48} color={colors.textSecondary} />
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No leave history found</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.historyList}>
+                            {history.map((item) => (
+                                <View key={item.id} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                    <View style={styles.historyHeader}>
+                                        <View style={styles.dateInfo}>
+                                            <Text style={[styles.historyDate, { color: colors.text }]}>
+                                                {new Date(item.startDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </Text>
+                                            <MaterialCommunityIcons name="arrow-right" size={16} color={colors.textSecondary} />
+                                            <Text style={[styles.historyDate, { color: colors.text }]}>
+                                                {new Date(item.endDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </Text>
+                                        </View>
+                                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+                                            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                                                {item.status.toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <Text style={[styles.historyReason, { color: colors.textSecondary }]}>{item.reason}</Text>
+                                    <Text style={[styles.durationText, { color: colors.textSecondary }]}>{item.days} days</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                </View>
             </ScrollView>
         </View>
     );
@@ -282,8 +303,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     content: {
-        padding: 24,
-        paddingBottom: 40,
+        flexGrow: 1,
     },
     formCard: {
         borderRadius: 20,

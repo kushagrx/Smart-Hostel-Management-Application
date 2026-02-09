@@ -1,18 +1,25 @@
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
+    LayoutAnimation,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
+    UIManager,
     View
 } from 'react-native';
+import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import InputField from '../../components/InputField';
 import { useAlert } from '../../context/AlertContext';
@@ -50,6 +57,39 @@ export default function ManageMessMenuPage() {
         breakfast: '', lunch: '', snacks: '', dinner: ''
     });
     const [savingTimings, setSavingTimings] = useState(false);
+    const dayScrollRef = React.useRef<ScrollView>(null);
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            if (UIManager.setLayoutAnimationEnabledExperimental) {
+                UIManager.setLayoutAnimationEnabledExperimental(true);
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        if (dayScrollRef.current) {
+            const index = DAYS.indexOf(selectedDay);
+            dayScrollRef.current.scrollTo({ x: index * 90, animated: true });
+        }
+    }, [selectedDay]);
+
+    const changeDay = (direction: number) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+        const currentIndex = DAYS.indexOf(selectedDay);
+        let nextIndex = currentIndex + direction;
+        if (nextIndex < 0) nextIndex = DAYS.length - 1;
+        if (nextIndex >= DAYS.length) nextIndex = 0;
+        setSelectedDay(DAYS[nextIndex]);
+    };
+
+    const swipeGestures = React.useMemo(() => {
+        const left = Gesture.Fling().direction(Directions.LEFT).onEnd(() => runOnJS(changeDay)(1));
+        const right = Gesture.Fling().direction(Directions.RIGHT).onEnd(() => runOnJS(changeDay)(-1));
+        return Gesture.Race(left, right);
+    }, [selectedDay]);
 
     useEffect(() => {
         if (!isAdmin(user)) return;
@@ -97,6 +137,7 @@ export default function ManageMessMenuPage() {
     };
 
     const handleUpdateItem = (mealType: string, index: number, field: keyof MenuItem, value: any) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         const updatedMenu = { ...currentDayMenu };
         // @ts-ignore
         updatedMenu[mealType][index][field] = value;
@@ -185,12 +226,14 @@ export default function ManageMessMenuPage() {
             gap: 8,
         },
         dayBtn: {
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 20,
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: 24,
             backgroundColor: colors.card,
             borderWidth: 1,
             borderColor: colors.border,
+            minWidth: 70,
+            alignItems: 'center',
         },
         dayBtnSelected: {
             backgroundColor: colors.primary,
@@ -199,6 +242,7 @@ export default function ManageMessMenuPage() {
         dayBtnText: {
             color: colors.textSecondary,
             fontWeight: '600',
+            fontSize: 13,
         },
         dayBtnTextSelected: {
             color: '#fff',
@@ -330,6 +374,13 @@ export default function ManageMessMenuPage() {
             marginBottom: 8,
             marginTop: 16,
         },
+        currentDayTitle: {
+            fontSize: 20,
+            fontWeight: '700',
+            color: colors.text,
+            marginBottom: 16,
+            marginLeft: 4,
+        },
     }), [colors, theme]);
 
     if (!isAdmin(user)) return null;
@@ -351,9 +402,18 @@ export default function ManageMessMenuPage() {
             {loading ? (
                 <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
             ) : (
-                <>
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+                >
                     <View style={styles.daySelector}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySelectorContent}>
+                        <ScrollView
+                            ref={dayScrollRef}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.daySelectorContent}
+                        >
                             {DAYS.map(day => (
                                 <TouchableOpacity
                                     key={day}
@@ -361,75 +421,82 @@ export default function ManageMessMenuPage() {
                                     onPress={() => setSelectedDay(day)}
                                 >
                                     <Text style={[styles.dayBtnText, selectedDay === day && styles.dayBtnTextSelected]}>
-                                        {day}
+                                        {day.slice(0, 3)}
                                     </Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
                     </View>
 
-                    <ScrollView style={styles.editorScroll} contentContainerStyle={{ paddingBottom: 100 }}>
-                        {MEALS.map(meal => {
-                            // @ts-ignore
-                            const items: MenuItem[] = currentDayMenu[meal] || [];
+                    <GestureDetector gesture={swipeGestures}>
+                        <ScrollView
+                            style={styles.editorScroll}
+                            contentContainerStyle={{ paddingBottom: 100 }}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <Text style={styles.currentDayTitle}>{selectedDay}'s Menu</Text>
+                            {MEALS.map(meal => {
+                                // @ts-ignore
+                                const items: MenuItem[] = currentDayMenu[meal] || [];
 
-                            return (
-                                <View key={meal} style={styles.mealSection}>
-                                    <View style={styles.mealHeader}>
-                                        <Text style={styles.mealTitle}>{meal}</Text>
-                                        <TouchableOpacity onPress={() => handleAddItem(meal)} style={styles.addItemBtn}>
-                                            <MaterialCommunityIcons name="plus-circle" size={18} color={colors.primary} />
-                                            <Text style={styles.addItemText}>Add Item</Text>
-                                        </TouchableOpacity>
+                                return (
+                                    <View key={meal} style={styles.mealSection}>
+                                        <View style={styles.mealHeader}>
+                                            <Text style={styles.mealTitle}>{meal}</Text>
+                                            <TouchableOpacity onPress={() => handleAddItem(meal)} style={styles.addItemBtn}>
+                                                <MaterialCommunityIcons name="plus-circle" size={18} color={colors.primary} />
+                                                <Text style={styles.addItemText}>Add Item</Text>
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        {items.length === 0 ? (
+                                            <Text style={{ color: colors.textSecondary, fontStyle: 'italic', fontSize: 13 }}>No items added yet.</Text>
+                                        ) : (
+                                            items.map((item, idx) => (
+                                                <View key={idx} style={styles.itemRow}>
+                                                    <TextInput
+                                                        style={styles.itemInput}
+                                                        placeholder="Dish Name"
+                                                        placeholderTextColor={colors.textSecondary}
+                                                        value={item.dish}
+                                                        onChangeText={(text) => handleUpdateItem(meal, idx, 'dish', text)}
+                                                    />
+
+                                                    {/* Veg/Non-Veg Toggle */}
+                                                    <TouchableOpacity
+                                                        style={[styles.typeToggle, { borderColor: item.type === 'veg' ? '#10B981' : '#EF4444' }]}
+                                                        onPress={() => handleUpdateItem(meal, idx, 'type', item.type === 'veg' ? 'non-veg' : 'veg')}
+                                                    >
+                                                        <MaterialCommunityIcons
+                                                            name="circle-slice-8"
+                                                            size={16}
+                                                            color={item.type === 'veg' ? '#10B981' : '#EF4444'}
+                                                        />
+                                                    </TouchableOpacity>
+
+                                                    {/* Highlight/Star Toggle */}
+                                                    <TouchableOpacity
+                                                        style={[styles.typeToggle, item.highlight && { backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.2)' : '#FFFBEB', borderColor: '#F59E0B' }]}
+                                                        onPress={() => handleUpdateItem(meal, idx, 'highlight', !item.highlight)}
+                                                    >
+                                                        <MaterialCommunityIcons
+                                                            name={item.highlight ? "star" : "star-outline"}
+                                                            size={18}
+                                                            color={item.highlight ? "#F59E0B" : colors.textSecondary}
+                                                        />
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity onPress={() => handleDeleteItem(meal, idx)} style={styles.deleteBtn}>
+                                                        <MaterialCommunityIcons name="minus" size={18} color="#EF4444" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ))
+                                        )}
                                     </View>
-
-                                    {items.length === 0 ? (
-                                        <Text style={{ color: colors.textSecondary, fontStyle: 'italic', fontSize: 13 }}>No items added yet.</Text>
-                                    ) : (
-                                        items.map((item, idx) => (
-                                            <View key={idx} style={styles.itemRow}>
-                                                <TextInput
-                                                    style={styles.itemInput}
-                                                    placeholder="Dish Name"
-                                                    placeholderTextColor={colors.textSecondary}
-                                                    value={item.dish}
-                                                    onChangeText={(text) => handleUpdateItem(meal, idx, 'dish', text)}
-                                                />
-
-                                                {/* Veg/Non-Veg Toggle */}
-                                                <TouchableOpacity
-                                                    style={[styles.typeToggle, { borderColor: item.type === 'veg' ? '#10B981' : '#EF4444' }]}
-                                                    onPress={() => handleUpdateItem(meal, idx, 'type', item.type === 'veg' ? 'non-veg' : 'veg')}
-                                                >
-                                                    <MaterialCommunityIcons
-                                                        name="circle-slice-8"
-                                                        size={16}
-                                                        color={item.type === 'veg' ? '#10B981' : '#EF4444'}
-                                                    />
-                                                </TouchableOpacity>
-
-                                                {/* Highlight/Star Toggle */}
-                                                <TouchableOpacity
-                                                    style={[styles.typeToggle, item.highlight && { backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.2)' : '#FFFBEB', borderColor: '#F59E0B' }]}
-                                                    onPress={() => handleUpdateItem(meal, idx, 'highlight', !item.highlight)}
-                                                >
-                                                    <MaterialCommunityIcons
-                                                        name={item.highlight ? "star" : "star-outline"}
-                                                        size={18}
-                                                        color={item.highlight ? "#F59E0B" : colors.textSecondary}
-                                                    />
-                                                </TouchableOpacity>
-
-                                                <TouchableOpacity onPress={() => handleDeleteItem(meal, idx)} style={styles.deleteBtn}>
-                                                    <MaterialCommunityIcons name="minus" size={18} color="#EF4444" />
-                                                </TouchableOpacity>
-                                            </View>
-                                        ))
-                                    )}
-                                </View>
-                            );
-                        })}
-                    </ScrollView>
+                                );
+                            })}
+                        </ScrollView>
+                    </GestureDetector>
 
                     <TouchableOpacity
                         style={[styles.saveBtn, saving && { opacity: 0.7 }]}
@@ -445,55 +512,60 @@ export default function ManageMessMenuPage() {
                             </>
                         )}
                     </TouchableOpacity>
+                </KeyboardAvoidingView>
+            )}
 
-                    {/* Timings Modal */}
-                    <Modal
-                        visible={timingsModalVisible}
-                        transparent
-                        animationType="slide"
-                        onRequestClose={() => setTimingsModalVisible(false)}
+            {/* Timings Modal */}
+            <Modal
+                visible={timingsModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setTimingsModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={{ flex: 1, justifyContent: 'flex-end' }}
                     >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalContent}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Update {selectedDay}'s Timings</Text>
-                                    <TouchableOpacity onPress={() => setTimingsModalVisible(false)}>
-                                        <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <ScrollView style={{ maxHeight: 500 }}>
-                                    {MEALS.map((meal) => (
-                                        <View key={meal}>
-                                            <Text style={styles.label}>{meal.charAt(0).toUpperCase() + meal.slice(1)} Time</Text>
-                                            <InputField
-                                                icon="clock-time-four-outline"
-                                                placeholder="e.g. 08:00 - 09:30 AM"
-                                                // @ts-ignore
-                                                value={timings[meal]}
-                                                // @ts-ignore
-                                                onChangeText={(text) => setTimings({ ...timings, [meal]: text })}
-                                            />
-                                        </View>
-                                    ))}
-                                </ScrollView>
-
-                                <TouchableOpacity
-                                    style={[styles.saveBtn, savingTimings && { opacity: 0.7 }, { marginHorizontal: 0, marginTop: 24 }]}
-                                    onPress={handleSaveTimings}
-                                    disabled={savingTimings}
-                                >
-                                    {savingTimings ? (
-                                        <ActivityIndicator color="#fff" />
-                                    ) : (
-                                        <Text style={styles.saveBtnText}>Save Timings</Text>
-                                    )}
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Update {selectedDay}'s Timings</Text>
+                                <TouchableOpacity onPress={() => setTimingsModalVisible(false)}>
+                                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
                                 </TouchableOpacity>
                             </View>
+
+                            <ScrollView style={{ maxHeight: 500 }}>
+                                {MEALS.map((meal) => (
+                                    <View key={meal}>
+                                        <Text style={styles.label}>{meal.charAt(0).toUpperCase() + meal.slice(1)} Time</Text>
+                                        <InputField
+                                            icon="clock-time-four-outline"
+                                            placeholder="e.g. 08:00 - 09:30 AM"
+                                            // @ts-ignore
+                                            value={timings[meal]}
+                                            // @ts-ignore
+                                            onChangeText={(text) => setTimings({ ...timings, [meal]: text })}
+                                        />
+                                    </View>
+                                ))}
+                            </ScrollView>
+
+                            <TouchableOpacity
+                                style={[styles.saveBtn, savingTimings && { opacity: 0.7 }, { marginHorizontal: 0, marginTop: 24 }]}
+                                onPress={handleSaveTimings}
+                                disabled={savingTimings}
+                            >
+                                {savingTimings ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.saveBtnText}>Save Timings</Text>
+                                )}
+                            </TouchableOpacity>
                         </View>
-                    </Modal>
-                </>
-            )}
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
         </View>
     );
 }

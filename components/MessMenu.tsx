@@ -1,9 +1,26 @@
 import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { MenuItem, subscribeToMenu, WeekMenu } from '../utils/messSyncUtils';
-
+import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from 'react-native';
+import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useTheme } from '../utils/ThemeContext';
+
+interface MenuItem {
+  dish: string;
+  type: 'veg' | 'non-veg';
+  highlight?: boolean;
+}
+
+interface WeekMenu {
+  [key: string]: {
+    breakfast?: MenuItem[];
+    lunch?: MenuItem[];
+    snacks?: MenuItem[];
+    dinner?: MenuItem[];
+    timings?: any;
+  }
+}
 
 export default function MessMenu() {
   const { colors, theme } = useTheme();
@@ -12,18 +29,104 @@ export default function MessMenu() {
   const [selectedDay, setSelectedDay] = useState(new Date().toLocaleString('en-US', { weekday: 'long' }));
   const [loading, setLoading] = useState(true);
 
-
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const dayScrollRef = React.useRef<ScrollView>(null);
 
   useEffect(() => {
-    const unsubscribeMenu = subscribeToMenu((data) => {
-      setFullMenu(data);
-      setLoading(false);
-    });
+    if (Platform.OS === 'android') {
+      if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    }
+  }, []);
 
-    return () => {
-      unsubscribeMenu();
-    };
+  useEffect(() => {
+    if (dayScrollRef.current) {
+      const index = days.indexOf(selectedDay);
+      dayScrollRef.current.scrollTo({ x: index * 90, animated: true });
+    }
+  }, [selectedDay]);
+
+  const changeDay = (direction: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+    const currentIndex = days.indexOf(selectedDay);
+    let nextIndex = currentIndex + direction;
+    if (nextIndex < 0) nextIndex = days.length - 1;
+    if (nextIndex >= days.length) nextIndex = 0;
+    setSelectedDay(days[nextIndex]);
+  };
+
+  const swipeGestures = React.useMemo(() => {
+    const left = Gesture.Fling().direction(Directions.LEFT).onEnd(() => runOnJS(changeDay)(1));
+    const right = Gesture.Fling().direction(Directions.RIGHT).onEnd(() => runOnJS(changeDay)(-1));
+    return Gesture.Race(left, right);
+  }, [selectedDay]);
+
+  const fetchMenu = async () => {
+    try {
+      const { default: api } = await import('../utils/api');
+      const response = await api.get('/services/mess');
+
+      const rawData = response.data;
+      const formattedMenu: WeekMenu = {};
+
+      rawData.forEach((dayRow: any) => {
+        const dayName = dayRow.day; // "Monday"
+        formattedMenu[dayName] = {};
+
+        ['breakfast', 'lunch', 'snacks', 'dinner'].forEach(meal => {
+          const rawMealData = dayRow[meal];
+          if (rawMealData) {
+            let items: MenuItem[] = [];
+
+            // Case 1: Already an array (JSONB support)
+            if (Array.isArray(rawMealData)) {
+              items = rawMealData;
+            }
+            // Case 2: Stringified JSON (e.g. '[{"dish":"Dal","type":"veg"}]')
+            else if (typeof rawMealData === 'string' && rawMealData.trim().startsWith('[')) {
+              try {
+                const parsed = JSON.parse(rawMealData);
+                if (Array.isArray(parsed)) items = parsed;
+              } catch (e) {
+                // Fallback if parse fails
+                items = [{ dish: rawMealData, type: 'veg' }];
+              }
+            }
+            // Case 3: Legacy Comma-Separated String
+            else if (typeof rawMealData === 'string') {
+              items = rawMealData.split(',').map((dish: string) => ({
+                dish: dish.trim(),
+                type: 'veg' as 'veg' | 'non-veg',
+                highlight: false
+              })).filter(i => i.dish);
+            }
+
+            // @ts-ignore
+            formattedMenu[dayName][meal] = items;
+          }
+        });
+
+        // Map timings if present (backend should send them)
+        if (dayRow.timings) {
+          // @ts-ignore
+          formattedMenu[dayName].timings = typeof dayRow.timings === 'string' ? JSON.parse(dayRow.timings) : dayRow.timings;
+        }
+      });
+
+      setFullMenu(formattedMenu);
+
+    } catch (error) {
+      console.error('Error fetching mess menu:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMenu();
   }, []);
 
   const styles = React.useMemo(() => StyleSheet.create({
@@ -143,16 +246,21 @@ export default function MessMenu() {
     return fullMenu[selectedDay]?.timings?.[mealType] || '';
   };
 
-  const hasItems = (mealType: string) => {
+  const isMenuLoadedForDay = (day: string) => {
     // @ts-ignore
-    return fullMenu[selectedDay]?.[mealType]?.length > 0;
-  };
+    return fullMenu[day] !== undefined;
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Day Selector */}
       <View style={styles.daySelectorWrapper}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySelector}>
+        <ScrollView
+          ref={dayScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.daySelector}
+        >
           {days.map((day) => (
             <Pressable
               key={day}
@@ -174,76 +282,78 @@ export default function MessMenu() {
         </ScrollView>
       </View>
 
-      <View style={styles.menuContainer}>
-        <Text style={styles.currentDayTitle}>{selectedDay}'s Menu</Text>
+      <GestureDetector gesture={swipeGestures}>
+        <View style={styles.menuContainer}>
+          <Text style={styles.currentDayTitle}>{selectedDay}'s Menu</Text>
 
-        {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
-        ) : (
-          <>
-            {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => (
-              <View key={mealType} style={[styles.mealSection, styles.shadowProp]}>
-                <View style={styles.mealHeader}>
-                  <View style={styles.mealTitleContainer}>
-                    <View style={[styles.iconBox, { backgroundColor: getMealColorBg(mealType, theme) }]}>
-                      <MaterialCommunityIcons
-                        name={getMealIcon(mealType) as any}
-                        size={20}
-                        color={getMealColor(mealType)}
-                      />
-                    </View>
-                    <View>
-                      <Text style={styles.mealType}>
-                        {mealType.charAt(0).toUpperCase() + mealType.slice(1)}
-                      </Text>
-                      <Text style={styles.timings}>
-                        {getMealTimings(mealType)}
-                      </Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+          ) : (
+            <>
+              {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => (
+                <View key={mealType} style={[styles.mealSection, styles.shadowProp]}>
+                  <View style={styles.mealHeader}>
+                    <View style={styles.mealTitleContainer}>
+                      <View style={[styles.iconBox, { backgroundColor: getMealColorBg(mealType, theme) }]}>
+                        <MaterialCommunityIcons
+                          name={getMealIcon(mealType) as any}
+                          size={20}
+                          color={getMealColor(mealType)}
+                        />
+                      </View>
+                      <View>
+                        <Text style={styles.mealType}>
+                          {mealType.charAt(0).toUpperCase() + mealType.slice(1)}
+                        </Text>
+                        <Text style={styles.timings}>
+                          {getMealTimings(mealType)}
+                        </Text>
+                      </View>
                     </View>
                   </View>
+
+                  <View style={styles.divider} />
+
+                  {/* @ts-ignore */}
+                  {!fullMenu[selectedDay]?.[mealType]?.length ? (
+                    <Text style={{ color: colors.textSecondary, fontStyle: 'italic', fontSize: 13 }}>No menu available</Text>
+                  ) : (
+                    // @ts-ignore
+                    fullMenu[selectedDay][mealType].map((item: MenuItem, index: number) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.menuItem,
+                          item.highlight && { backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.1)' : '#FFFBEB', borderRadius: 8, marginHorizontal: -8, paddingHorizontal: 12, padding: 8, borderLeftWidth: 3, borderLeftColor: '#F59E0B' }
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name={item.type === 'veg' ? 'circle-slice-8' : 'food-drumstick'}
+                          size={14}
+                          color={item.type === 'veg' ? '#10B981' : '#EF4444'}
+                          style={{ marginTop: 2 }}
+                        />
+                        <Text style={[
+                          styles.menuItemText,
+                          item.highlight && { color: colors.text, fontWeight: '500' }
+                        ]}>
+                          {item.dish}
+                          {item.highlight && (
+                            <Text>
+                              {"  "}
+                              <FontAwesome name="star" size={10} color="#F59E0B" />
+                            </Text>
+                          )}
+                        </Text>
+                      </View>
+                    ))
+                  )}
                 </View>
-
-                <View style={styles.divider} />
-
-                {/* @ts-ignore */}
-                {!fullMenu[selectedDay]?.[mealType]?.length ? (
-                  <Text style={{ color: colors.textSecondary, fontStyle: 'italic', fontSize: 13 }}>TBD</Text>
-                ) : (
-                  // @ts-ignore
-                  fullMenu[selectedDay][mealType].map((item: MenuItem, index: number) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.menuItem,
-                        item.highlight && { backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.1)' : '#FFFBEB', borderRadius: 8, marginHorizontal: -8, paddingHorizontal: 12, padding: 8, borderLeftWidth: 3, borderLeftColor: '#F59E0B' }
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={item.type === 'veg' ? 'circle-slice-8' : 'food-drumstick'}
-                        size={14}
-                        color={item.type === 'veg' ? '#10B981' : '#EF4444'}
-                        style={{ marginTop: 2 }}
-                      />
-                      <Text style={[
-                        styles.menuItemText,
-                        item.highlight && { color: colors.text, fontWeight: '500' }
-                      ]}>
-                        {item.dish}
-                        {item.highlight && (
-                          <Text>
-                            {"  "}
-                            <FontAwesome name="star" size={10} color="#F59E0B" />
-                          </Text>
-                        )}
-                      </Text>
-                    </View>
-                  ))
-                )}
-              </View>
-            ))}
-          </>
-        )}
-      </View>
+              ))}
+            </>
+          )}
+        </View>
+      </GestureDetector>
     </ScrollView>
   );
 }
@@ -286,5 +396,3 @@ const getMealColorBg = (mealType: string, theme: string) => {
     default: return '#F1F5F9';
   }
 };
-
-

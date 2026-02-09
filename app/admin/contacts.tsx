@@ -2,11 +2,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, Image, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../utils/ThemeContext';
+import { API_BASE_URL } from '../../utils/api';
 import { isAdmin, useUser } from '../../utils/authUtils';
+import { subscribeToStudents } from '../../utils/studentUtils';
 
 export default function ContactsPage() {
     const { colors, theme } = useTheme();
@@ -17,37 +19,17 @@ export default function ContactsPage() {
     const [students, setStudents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Fetch students from Firestore
+    // Fetch students from API
     useEffect(() => {
         if (!isAdmin(user)) return;
 
-        let unsubscribe: () => void;
+        const unsubscribe = subscribeToStudents((data) => {
+            setStudents(data);
+            setLoading(false);
+        });
 
-        const fetchStudents = async () => {
-            try {
-                const { getDbSafe } = await import('../../utils/firebase');
-                const { collection, query, orderBy, onSnapshot } = await import('firebase/firestore');
-                const db = getDbSafe();
-                if (!db) return;
-
-                const q = query(collection(db, 'allocations'), orderBy('name', 'asc'));
-                unsubscribe = onSnapshot(q, (snapshot) => {
-                    const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setStudents(list);
-                    setLoading(false);
-                }, (error) => {
-                    console.error("Error subscribing to contacts:", error);
-                    setLoading(false);
-                });
-            } catch (e) {
-                console.error(e);
-                setLoading(false);
-            }
-        };
-
-        fetchStudents();
         return () => {
-            if (unsubscribe) unsubscribe();
+            unsubscribe();
         };
     }, [user]);
 
@@ -235,11 +217,18 @@ export default function ContactsPage() {
         <View style={styles.contactCard}>
             <View style={styles.reqHeader}>
                 <View style={styles.reqProfile}>
-                    <View style={styles.reqAvatar}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primary }}>
-                            {item.name?.charAt(0).toUpperCase()}
-                        </Text>
-                    </View>
+                    {item.profilePhoto ? (
+                        <Image
+                            source={{ uri: `${API_BASE_URL}${item.profilePhoto}` }}
+                            style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}
+                        />
+                    ) : (
+                        <View style={styles.reqAvatar}>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primary }}>
+                                {item.name?.charAt(0).toUpperCase()}
+                            </Text>
+                        </View>
+                    )}
                     <View style={styles.reqNameBlock}>
                         <Text style={styles.reqName}>{item.name}</Text>
                         <View style={styles.reqRoomBadge}>

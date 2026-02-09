@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -11,8 +11,10 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    UIManager,
+    View
 } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import InputField from '../../components/InputField';
 import { useAlert } from '../../context/AlertContext';
@@ -29,6 +31,8 @@ export default function LaundryManagementPage() {
     const router = useRouter();
     const user = useUser();
     const { showAlert } = useAlert();
+    const { openId } = useLocalSearchParams();
+    const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
     const [activeTab, setActiveTab] = useState<'requests' | 'timings'>('timings'); // Default to timings as it's first
 
@@ -45,6 +49,17 @@ export default function LaundryManagementPage() {
         message: ''
     });
     const [requests, setRequests] = useState<LaundryRequestDisplay[]>([]);
+    const pagerRef = React.useRef<PagerView>(null); // Added Ref
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            if (UIManager.setLayoutAnimationEnabledExperimental) {
+                UIManager.setLayoutAnimationEnabledExperimental(true);
+            }
+        }
+    }, []);
+
+    // Gestures removed for PagerView
 
     useEffect(() => {
         if (!isAdmin(user)) return;
@@ -58,11 +73,22 @@ export default function LaundryManagementPage() {
             setRequests(data);
         });
 
+        if (openId) {
+            // Wait slightly for layout/pager to be ready if needed
+            setTimeout(() => {
+                setActiveTab('requests');
+                pagerRef.current?.setPage(1);
+                setHighlightedId(openId as string);
+                // Clear highlight after 3 seconds
+                setTimeout(() => setHighlightedId(null), 3000);
+            }, 500);
+        }
+
         return () => {
             unsubscribeSettings();
             unsubscribeRequests();
         };
-    }, [user]);
+    }, [user, openId]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -281,6 +307,11 @@ export default function LaundryManagementPage() {
             shadowRadius: 8,
             elevation: 3,
         },
+        highlightedItem: {
+            borderColor: colors.primary,
+            borderWidth: 2,
+            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : '#EFF6FF',
+        },
         reqHeader: {
             flexDirection: 'row',
             justifyContent: 'space-between',
@@ -382,7 +413,10 @@ export default function LaundryManagementPage() {
             <View style={styles.navBar}>
                 <TouchableOpacity
                     style={[styles.navItem, activeTab === 'timings' && styles.navItemActive]}
-                    onPress={() => setActiveTab('timings')}
+                    onPress={() => {
+                        setActiveTab('timings');
+                        pagerRef.current?.setPage(0);
+                    }}
                 >
                     <MaterialCommunityIcons
                         name="clock-outline"
@@ -396,7 +430,10 @@ export default function LaundryManagementPage() {
 
                 <TouchableOpacity
                     style={[styles.navItem, activeTab === 'requests' && styles.navItemActive]}
-                    onPress={() => setActiveTab('requests')}
+                    onPress={() => {
+                        setActiveTab('requests');
+                        pagerRef.current?.setPage(1);
+                    }}
                 >
                     <MaterialCommunityIcons
                         name="clipboard-list-outline"
@@ -413,57 +450,18 @@ export default function LaundryManagementPage() {
                 <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
             ) : (
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-                    <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-
-                        {/* REQUESTS LIST TAB */}
-                        {activeTab === 'requests' && (
-                            <View>
-                                {requests.length === 0 ? (
-                                    <View style={[styles.section, { alignItems: 'center', padding: 40 }]}>
-                                        <MaterialCommunityIcons name="washing-machine-off" size={48} color={colors.textSecondary} />
-                                        <Text style={{ color: colors.textSecondary, marginTop: 12 }}>No laundry requests found</Text>
-                                    </View>
-                                ) : (
-                                    requests.map(req => (
-                                        <View key={req.id} style={styles.requestItem}>
-                                            <View style={styles.reqHeader}>
-                                                <View style={styles.reqProfile}>
-                                                    <View style={styles.reqAvatar}>
-                                                        <MaterialCommunityIcons name="account" size={24} color={colors.primary} />
-                                                    </View>
-                                                    <View style={styles.reqNameBlock}>
-                                                        <Text style={styles.reqName}>{req.studentName || 'Unknown'}</Text>
-                                                        <View style={styles.reqRoomBadge}>
-                                                            <Text style={styles.reqRoomText}>Room {req.roomNo}</Text>
-                                                        </View>
-                                                    </View>
-                                                </View>
-                                                <Text style={styles.reqTime}>
-                                                    {req.createdAt?.toDate ? req.createdAt.toDate().toLocaleDateString() : 'Just now'}
-                                                </Text>
-                                            </View>
-
-                                            <View style={styles.reqDetailsBlock}>
-                                                <Text style={styles.reqLabel}>CLOTHES DETAILS</Text>
-                                                <Text style={styles.reqText}>{req.clothesDetails}</Text>
-                                            </View>
-
-                                            <View style={styles.reqFooter}>
-                                                <View style={styles.totalBadge}>
-                                                    <MaterialCommunityIcons name="tshirt-crew" size={16} color={colors.textSecondary} />
-                                                    <Text style={styles.totalText}>Total: {req.totalClothes}</Text>
-                                                </View>
-                                            </View>
-                                        </View>
-                                    ))
-                                )}
-                            </View>
-                        )}
-
-
-                        {/* SETTINGS FORM TAB */}
-                        {activeTab === 'timings' && (
-                            <>
+                    <PagerView
+                        ref={pagerRef}
+                        style={{ flex: 1 }}
+                        initialPage={0}
+                        onPageSelected={(e) => {
+                            const index = e.nativeEvent.position;
+                            setActiveTab(index === 0 ? 'timings' : 'requests');
+                        }}
+                    >
+                        {/* TIMINGS TAB (Page 0) - NOTE: Swapped order to match array index 0=timings, 1=requests */}
+                        <View key="timings">
+                            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                                 <View style={styles.section}>
                                     <Text style={[styles.label, { marginTop: 0 }]}>Service Status</Text>
                                     <View style={styles.statusContainer}>
@@ -499,7 +497,7 @@ export default function LaundryManagementPage() {
                                                 icon="clock-time-four-outline"
                                                 placeholder="09:00"
                                                 value={settings.pickupTime}
-                                                onChangeText={(text) => setSettings({ ...settings, pickupTime: text })}
+                                                onChangeText={(text: string) => setSettings({ ...settings, pickupTime: text })}
                                             />
                                         </View>
                                         <View style={styles.periodToggleContainer}>
@@ -537,7 +535,7 @@ export default function LaundryManagementPage() {
                                                 icon="truck-delivery-outline"
                                                 placeholder="05:00"
                                                 value={settings.dropoffTime}
-                                                onChangeText={(text) => setSettings({ ...settings, dropoffTime: text })}
+                                                onChangeText={(text: string) => setSettings({ ...settings, dropoffTime: text })}
                                             />
                                         </View>
                                         <View style={styles.periodToggleContainer}>
@@ -581,10 +579,65 @@ export default function LaundryManagementPage() {
                                         </>
                                     )}
                                 </TouchableOpacity>
-                            </>
-                        )}
+                            </ScrollView>
+                        </View>
 
-                    </ScrollView>
+                        {/* REQUESTS TAB (Page 1) */}
+                        <View key="requests">
+                            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                                {requests.length === 0 ? (
+                                    <View style={[styles.section, { alignItems: 'center', padding: 40 }]}>
+                                        <MaterialCommunityIcons name="washing-machine-off" size={48} color={colors.textSecondary} />
+                                        <Text style={{ color: colors.textSecondary, marginTop: 12 }}>No laundry requests found</Text>
+                                    </View>
+                                ) : (
+                                    requests.map(req => (
+                                        <View
+                                            key={req.id}
+                                            style={[
+                                                styles.requestItem,
+                                                highlightedId === req.id && styles.highlightedItem
+                                            ]}
+                                        >
+                                            <View style={styles.reqHeader}>
+                                                <View style={styles.reqProfile}>
+                                                    <View style={styles.reqAvatar}>
+                                                        <MaterialCommunityIcons name="account" size={24} color={colors.primary} />
+                                                    </View>
+                                                    <View style={styles.reqNameBlock}>
+                                                        <Text style={styles.reqName}>{req.studentName || 'Unknown'}</Text>
+                                                        <View style={styles.reqRoomBadge}>
+                                                            <Text style={styles.reqRoomText}>Room {req.roomNo}</Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                                <Text style={styles.reqTime}>
+                                                    {req.createdAt ? new Date(req.createdAt).toLocaleDateString(undefined, {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    }) : 'Just now'}
+                                                </Text>
+                                            </View>
+
+                                            <View style={styles.reqDetailsBlock}>
+                                                <Text style={styles.reqLabel}>CLOTHES DETAILS</Text>
+                                                <Text style={styles.reqText}>{req.clothesDetails}</Text>
+                                            </View>
+
+                                            <View style={styles.reqFooter}>
+                                                <View style={styles.totalBadge}>
+                                                    <MaterialCommunityIcons name="tshirt-crew" size={16} color={colors.textSecondary} />
+                                                    <Text style={styles.totalText}>Total: {req.totalClothes}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    ))
+                                )}
+                            </ScrollView>
+                        </View>
+                    </PagerView>
                 </KeyboardAvoidingView>
             )
             }

@@ -74,7 +74,32 @@ export const NoticeSkeleton = () => {
                 <Skeleton width="60%" height={14} />
             </View>
         </View>
-    )
+    );
+}
+
+// Compact Skeleton for Popover
+export const CompactNoticeSkeleton = () => {
+    const { colors, theme } = useTheme();
+    const styles = getStyles(colors, theme);
+    return (
+        <View style={[styles.card, { padding: 12, marginBottom: 8 }]}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+                {/* Icon Placeholder */}
+                <Skeleton width={32} height={32} borderRadius={10} />
+                <View style={{ flex: 1, gap: 6 }}>
+                    {/* Title */}
+                    <Skeleton width="70%" height={14} borderRadius={4} />
+                    {/* Date */}
+                    <Skeleton width={60} height={10} borderRadius={4} />
+                    {/* Body Lines */}
+                    <View style={{ gap: 4, marginTop: 4 }}>
+                        <Skeleton width="100%" height={10} />
+                        <Skeleton width="90%" height={10} />
+                    </View>
+                </View>
+            </View>
+        </View>
+    );
 }
 
 
@@ -100,6 +125,14 @@ export const NoticeListSkeleton = () => (
     <View style={{ gap: 10 }}>
         {[1, 2, 3].map((i) => (
             <NoticeSkeleton key={i} />
+        ))}
+    </View>
+);
+
+export const CompactNoticeListSkeleton = () => (
+    <View style={{ gap: 10 }}>
+        {[1, 2, 3].map((i) => (
+            <CompactNoticeSkeleton key={i} />
         ))}
     </View>
 );

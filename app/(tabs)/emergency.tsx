@@ -57,127 +57,125 @@ export default function Emergency() {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-
-        {/* Helper Banner */}
-        <View style={[styles.banner, {
-          backgroundColor: isDark ? colors.card : '#EFF6FF',
-          borderColor: isDark ? colors.border : '#DBEAFE'
-        }]}>
-          <MaterialCommunityIcons name="information-outline" size={24} color={isDark ? colors.primary : "#004e92"} />
-          <Text style={[styles.bannerText, { color: isDark ? colors.text : '#1E40AF' }]}>
-            Tap on any contact card below to initiate an immediate call.
-          </Text>
-        </View>
-
-        {/* Support Chat Card */}
-        <Pressable
-          style={[styles.contactCard, styles.shadowProp, {
-            backgroundColor: isDark ? colors.card : '#FFFFFF',
-            borderColor: colors.border,
-            marginBottom: 24
-          }]}
-          // @ts-ignore
-          onPress={() => router.push(`/chat/${user?.uid || user?.email || 'guest'}`)}
-        >
-          <View style={styles.cardInner}>
-            <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
-              <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
-            </View>
-            <View style={styles.contactInfo}>
-              <Text style={[styles.contactName, { color: colors.text }]}>Admin Support Chat</Text>
-              <Text style={[styles.contactNumber, { color: colors.textSecondary }]}>Direct Message to Hostel Admin</Text>
-            </View>
-            <View style={[styles.callBtn, { backgroundColor: '#25D366' }]}>
-              <MaterialCommunityIcons name="message-text" size={20} color="#fff" />
-            </View>
+        <View style={{ padding: 24 }}>
+          {/* Helper Banner */}
+          <View style={[styles.banner, {
+            backgroundColor: isDark ? colors.card : '#EFF6FF',
+            borderColor: isDark ? colors.border : '#DBEAFE'
+          }]}>
+            <MaterialCommunityIcons name="information-outline" size={24} color={isDark ? colors.primary : "#004e92"} />
+            <Text style={[styles.bannerText, { color: isDark ? colors.text : '#1E40AF' }]}>
+              Tap on any contact card below to initiate an immediate call.
+            </Text>
           </View>
-        </Pressable>
 
-        {/* Medical Profile Card */}
-        {userData && (
-          <View style={{ marginBottom: 24 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
-              <MaterialCommunityIcons name="medical-bag" size={20} color={isDark ? colors.text : '#1E293B'} />
-              <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.text : '#1E293B', marginLeft: 8 }}>
-                My Medical Profile
-              </Text>
+          {/* Support Chat Card */}
+          <Pressable
+            style={[styles.contactCard, styles.shadowProp, {
+              backgroundColor: isDark ? colors.card : '#FFFFFF',
+              borderColor: colors.border,
+              marginBottom: 24
+            }]}
+            // @ts-ignore
+            onPress={() => router.push(`/chat/${user?.uid || user?.email || 'guest'}`)}
+          >
+            <View style={styles.cardInner}>
+              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
+                <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={[styles.contactName, { color: colors.text }]}>Admin Support Chat</Text>
+                <Text style={[styles.contactNumber, { color: colors.textSecondary }]}>Direct Message to Hostel Admin</Text>
+              </View>
+              <View style={[styles.callBtn, { backgroundColor: '#25D366' }]}>
+                <MaterialCommunityIcons name="message-text" size={20} color="#fff" />
+              </View>
             </View>
+          </Pressable>
 
-            <View style={[styles.contactCard, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border, padding: 16 }]}>
-              <View style={{ flexDirection: 'row', gap: 16 }}>
-                {/* Blood Group Badge */}
-                <View style={{
-                  width: 60, height: 60,
-                  borderRadius: 16,
-                  backgroundColor: '#FEF2F2',
-                  justifyContent: 'center', alignItems: 'center',
-                  borderWidth: 1, borderColor: '#FECACA'
-                }}>
-                  <MaterialIcons name="water" size={24} color="#EF4444" />
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#B91C1C', marginTop: 2 }}>
-                    {userData.bloodGroup || 'N/A'}
-                  </Text>
-                </View>
+          {/* Medical Profile Card */}
+          {userData && (
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
+                <MaterialCommunityIcons name="medical-bag" size={20} color={isDark ? colors.text : '#1E293B'} />
+                <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.text : '#1E293B', marginLeft: 8 }}>
+                  My Medical Profile
+                </Text>
+              </View>
 
-                <View style={{ flex: 1, justifyContent: 'center' }}>
-                  <View style={{ marginBottom: 8 }}>
-                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 2 }}>Specific Emergency Contact</Text>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{userData.emergencyContactName || 'Not set'}</Text>
-                    {userData.emergencyContactPhone && userData.emergencyContactPhone !== 'N/A' && (
-                      <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }} onPress={() => handleCall(userData.emergencyContactPhone!)}>
-                        {userData.emergencyContactPhone}
-                      </Text>
-                    )}
+              <View style={[styles.contactCard, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border, padding: 16 }]}>
+                <View style={{ flexDirection: 'row', gap: 16 }}>
+                  {/* Blood Group Badge */}
+                  <View style={{
+                    width: 60, height: 60,
+                    borderRadius: 16,
+                    backgroundColor: '#FEF2F2',
+                    justifyContent: 'center', alignItems: 'center',
+                    borderWidth: 1, borderColor: '#FECACA'
+                  }}>
+                    <MaterialIcons name="water" size={24} color="#EF4444" />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#B91C1C', marginTop: 2 }}>
+                      {userData.bloodGroup || 'N/A'}
+                    </Text>
+                  </View>
+
+                  <View style={{ flex: 1, justifyContent: 'center' }}>
+                    <View style={{ marginBottom: 8 }}>
+                      <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 2 }}>Specific Emergency Contact</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{userData.emergencyContactName || 'Not set'}</Text>
+                      {userData.emergencyContactPhone && userData.emergencyContactPhone !== 'N/A' && (
+                        <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }} onPress={() => handleCall(userData.emergencyContactPhone!)}>
+                          {userData.emergencyContactPhone}
+                        </Text>
+                      )}
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              {(userData.medicalHistory && userData.medicalHistory !== 'None') && (
-                <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
-                  <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 4 }}>Medical History / Allergies</Text>
-                  <Text style={{ fontSize: 14, color: colors.text, lineHeight: 20 }}>
-                    {userData.medicalHistory}
-                  </Text>
-                </View>
-              )}
+                {(userData.medicalHistory && userData.medicalHistory !== 'None') && (
+                  <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 4 }}>Medical History / Allergies</Text>
+                    <Text style={{ fontSize: 14, color: colors.text, lineHeight: 20 }}>
+                      {userData.medicalHistory}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
+          )}
+
+          <View style={styles.contactsContainer}>
+            {contacts.map((contact, index) => (
+              <Pressable
+                key={contact.id}
+                style={[styles.contactCard, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => handleCall(contact.number)}
+              >
+                <View style={styles.cardInner}>
+                  <View style={[styles.iconBox, { backgroundColor: index === 0 ? '#FEF2F2' : (isDark ? '#172554' : '#EFF6FF') }]}>
+                    <MaterialCommunityIcons
+                      name={contact.icon as any || 'phone-in-talk'}
+                      size={24} // keeping red for emergency
+                      color={index === 0 ? "#EF4444" : (isDark ? '#60A5FA' : "#004e92")}
+                    />
+                  </View>
+
+                  <View style={styles.contactInfo}>
+                    <Text style={[styles.contactName, { color: colors.text }]}>{contact.title} {contact.name ? `• ${contact.name}` : ''}</Text>
+                    <Text style={[styles.contactNumber, { color: colors.textSecondary }]}>{contact.number}</Text>
+                  </View>
+
+                  <View style={[styles.callBtn, { backgroundColor: index === 0 ? '#EF4444' : '#10B981' }]}>
+                    <MaterialIcons name="call" size={20} color="#fff" />
+                  </View>
+                </View>
+              </Pressable>
+            ))}
           </View>
-        )}
-
-        <View style={styles.contactsContainer}>
-          {contacts.map((contact, index) => (
-            <Pressable
-              key={contact.id}
-              style={[styles.contactCard, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => handleCall(contact.number)}
-            >
-              <View style={styles.cardInner}>
-                <View style={[styles.iconBox, { backgroundColor: index === 0 ? '#FEF2F2' : (isDark ? '#172554' : '#EFF6FF') }]}>
-                  <MaterialCommunityIcons
-                    name={contact.icon as any || 'phone-in-talk'}
-                    size={24} // keeping red for emergency
-                    color={index === 0 ? "#EF4444" : (isDark ? '#60A5FA' : "#004e92")}
-                  />
-                </View>
-
-                <View style={styles.contactInfo}>
-                  <Text style={[styles.contactName, { color: colors.text }]}>{contact.title} {contact.name ? `• ${contact.name}` : ''}</Text>
-                  <Text style={[styles.contactNumber, { color: colors.textSecondary }]}>{contact.number}</Text>
-                </View>
-
-                <View style={[styles.callBtn, { backgroundColor: index === 0 ? '#EF4444' : '#10B981' }]}>
-                  <MaterialIcons name="call" size={20} color="#fff" />
-                </View>
-              </View>
-            </Pressable>
-          ))}
         </View>
-
-
-
       </ScrollView>
     </View>
   );
@@ -227,7 +225,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 24,
   },
   banner: {
     flexDirection: 'row',

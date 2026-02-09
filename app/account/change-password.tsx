@@ -1,8 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +15,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
-import { getAuthSafe, getDbSafe } from '../../utils/firebase';
 import { useTheme } from '../../utils/ThemeContext';
 
 export default function ChangePassword() {
@@ -32,42 +29,6 @@ export default function ChangePassword() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
-  const changePassword = async (currentPass: string, newPass: string) => {
-    const auth = getAuthSafe();
-    const db = getDbSafe();
-
-    if (!auth?.currentUser || !db) {
-      throw new Error('Connection error. Please try again.');
-    }
-
-    const user = auth.currentUser;
-    const userEmail = user.email;
-
-    if (!userEmail) {
-      throw new Error('User email not found.');
-    }
-
-    // 1. Re-authenticate
-    const credential = EmailAuthProvider.credential(userEmail, currentPass);
-    await reauthenticateWithCredential(user, credential);
-
-    // 2. Update Firebase Auth Password
-    await updatePassword(user, newPass);
-
-    // 3. Update Sync in Firestore (allocations)
-    // This ensures the Admin can still see/manage the current password if needed
-    // Try updating allocation if it exists (for students)
-    const allocationRef = doc(db, 'allocations', userEmail);
-    try {
-      await updateDoc(allocationRef, {
-        tempPassword: newPass,
-        updatedAt: new Date().toISOString() // Using string for safety
-      });
-    } catch (e) {
-      console.log("Could not sync to allocations (might be admin): ", e);
-    }
-  };
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -88,19 +49,20 @@ export default function ChangePassword() {
     setIsLoading(true);
 
     try {
-      await changePassword(currentPassword, newPassword);
+      const { default: api } = await import('../../utils/api');
+      await api.post('/auth/change-password', {
+        currentPassword,
+        newPassword
+      });
+
       showAlert('Success', 'Password updated successfully!', [
         { text: 'OK', onPress: () => router.back() }
       ], 'success');
     } catch (error: any) {
       console.error(error);
       let msg = 'Failed to update password.';
-      if (error.code === 'auth/wrong-password') {
-        msg = 'Current password is incorrect.';
-      } else if (error.code === 'auth/requires-recent-login') {
-        msg = 'For security, please logout and login again before changing password.';
-      } else if (error.message) {
-        msg = error.message;
+      if (error.response?.data?.error) {
+        msg = error.response.data.error;
       }
       showAlert('Error', msg, [], 'error');
     } finally {

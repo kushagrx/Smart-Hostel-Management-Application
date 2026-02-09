@@ -32,6 +32,7 @@ type NavItem = {
 export const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Home', icon: 'home', color: '#3B82F6', path: '/admin' },
   { id: 'studentManagement', label: 'Student Management', icon: 'account-school', color: '#6366F1', path: '/admin/student-management' },
+  { id: 'facilities', label: 'Hostel Management', icon: 'office-building', color: '#10B981', path: '/admin/facilities' },
 ];
 
 interface AdminSidebarProps {
@@ -106,10 +107,14 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
           style: "destructive",
           onPress: async () => {
             try {
-              const { getAuthSafe } = await import('../utils/firebase');
-              const { signOut } = await import('firebase/auth');
-              const auth = getAuthSafe();
-              if (auth) await signOut(auth);
+              // const { getAuthSafe } = await import('../utils/firebase');
+              // const { signOut } = await import('firebase/auth');
+              // const auth = getAuthSafe();
+              // if (auth) await signOut(auth);
+
+              await setStoredUser(null);
+              onClose();
+              router.replace('/login');
 
               await setStoredUser(null);
               onClose();
@@ -163,7 +168,7 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
       />
       <Animated.View style={[styles.sidebarPanel, { backgroundColor: colors.card, shadowColor: '#000' }, panelStyle]}>
         <LinearGradient colors={['#000428', '#004e92']} style={[styles.sidebarHeader, { paddingTop: insets.top + 24 }]}>
-          <Text style={styles.sidebarTitle}>Smart Hostel</Text>
+          <Text style={styles.sidebarTitle}>SmartStay</Text>
           <TouchableOpacity onPress={onClose}>
             <MaterialIcons name="close" size={24} color="#fff" />
           </TouchableOpacity>

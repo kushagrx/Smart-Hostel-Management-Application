@@ -89,48 +89,37 @@ export default function StudentAllotmentPage() {
     }
 
     try {
-      const { getDbSafe } = await import('../../utils/firebase');
-      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-      const { allocateRoom, deallocateRoom } = await import('../../utils/roomUtils');
+      const { default: api } = await import('../../utils/api');
 
-      const db = getDbSafe();
+      const totalDues = (parseFloat(hostelFee) || 0) + (parseFloat(messFee) || 0);
 
-      if (!db) {
-        showAlert('Error', 'Database not initialized', [], 'error');
-        return;
-      }
+      const payload = {
+        fullName,
+        email: email.trim(),
+        password: generatedPassword,
+        rollNo,
+        collegeName,
+        hostelName,
+        dob: null, // Frontend only asks for Age
+        roomNo: room,
+        phone,
+        personalEmail: personalEmail ? personalEmail.trim() : null,
+        address: '', // Optional
+        fatherName: '', // Optional
+        fatherPhone: '', // Optional
+        motherName: '', // Optional
+        motherPhone: '', // Optional
+        dues: totalDues,
+        bloodGroup: '', // Optional
+        medicalHistory: '', // Optional
+        emergencyContactName: '', // Optional
+        emergencyContactPhone: '', // Optional
+        status,
+        wifiSSID: 'Hostel_WiFi', // Default
+        wifiPassword: '' // Default
+      };
 
-      // 1. Try to allocate room first (checks capacity)
-      await allocateRoom(db, room, email.toLowerCase().trim(), fullName);
-
-      // 2. If successful, create allocation document
-      try {
-        await setDoc(doc(db, 'allocations', email.toLowerCase().trim()), {
-          name: fullName,
-          rollNo,
-          collegeName,
-          hostelName,
-          age,
-          room,
-          email: email.toLowerCase().trim(),
-          personalEmail: personalEmail ? personalEmail.toLowerCase().trim() : null,
-          phone,
-          status,
-          tempPassword: generatedPassword,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          feeStructure: {
-            hostelFee: parseFloat(hostelFee) || 0,
-            messFee: parseFloat(messFee) || 0,
-            frequency: feeFrequency
-          }
-        });
-      } catch (allocError: any) {
-        // Rollback room allocation if saving student data fails
-        console.error("Allocation save failed, rolling back room...", allocError);
-        await deallocateRoom(db, room, email.toLowerCase().trim());
-        throw allocError;
-      }
+      await api.post('/students/allot', payload);
 
       showAlert(
         'Success',
@@ -141,7 +130,12 @@ export default function StudentAllotmentPage() {
         'success'
       );
     } catch (error: any) {
-      showAlert('Error', 'Failed to allot student: ' + error.message, [], 'error');
+      console.error(error);
+      let msg = 'Failed to allot student.';
+      if (error.response?.data?.error) {
+        msg = error.response.data.error;
+      }
+      showAlert('Error', msg, [], 'error');
     }
   };
 

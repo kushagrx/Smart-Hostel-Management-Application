@@ -1,21 +1,68 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoticeListSkeleton, StudentComplaintListSkeleton } from '../components/SkeletonLists';
-import { useTheme } from '../utils/ThemeContext';
+import { useRefresh } from '../hooks/useRefresh';
 import { Complaint, subscribeToStudentComplaints } from '../utils/complaintsSyncUtils';
 import { Notice, subscribeToNotices } from '../utils/noticesSyncUtils';
+import { useTheme } from '../utils/ThemeContext';
+
+const { width } = Dimensions.get('window');
+
+// Centered Layout Config
+const CONTAINER_WIDTH = Math.min(width * 0.85, 380); // Max width of 380 or 85% of screen
+const CLEARED_TIMESTAMP_KEY = 'NOTIFICATIONS_CLEARED_TIMESTAMP';
 
 export default function Alerts() {
     const [activeTab, setActiveTab] = useState<'alerts' | 'complaints' | 'documents'>('alerts');
     const [complaints, setComplaints] = useState<Complaint[]>([]);
     const [complaintsLoading, setComplaintsLoading] = useState(true);
-    const [notices, setNotices] = useState<Notice[]>([]);
+    const [allNotices, setAllNotices] = useState<Notice[]>([]);
+    const [filteredNotices, setFilteredNotices] = useState<Notice[]>([]);
     const [noticesLoading, setNoticesLoading] = useState(true);
-    const { colors, isDark } = useTheme();
+    const [lastClearedTime, setLastClearedTime] = useState<number>(0);
+    const { colors, isDark, theme } = useTheme();
+    const insets = useSafeAreaInsets();
+    const router = useRouter();
+
+    const { refreshing, onRefresh } = useRefresh(async () => {
+        // Refresh logic - re-apply filters or re-fetch if needed
+        await loadClearedTime();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    });
+
+    // Load cleared timestamp on mount
+    const loadClearedTime = async () => {
+        try {
+            const storedTime = await AsyncStorage.getItem(CLEARED_TIMESTAMP_KEY);
+            if (storedTime) {
+                setLastClearedTime(parseInt(storedTime, 10));
+            }
+        } catch (e) {
+            console.error("Failed to load cleared timestamp", e);
+        }
+    };
+
+    useEffect(() => {
+        loadClearedTime();
+    }, []);
+
+    // Filter notices whenever allNotices or lastClearedTime changes
+    useEffect(() => {
+        if (allNotices.length > 0) {
+            const visible = allNotices.filter(n => {
+                const time = n.date instanceof Date ? n.date.getTime() : new Date(n.date).getTime();
+                return !isNaN(time) && time > lastClearedTime;
+            });
+            setFilteredNotices(visible);
+        } else {
+            setFilteredNotices([]);
+        }
+    }, [allNotices, lastClearedTime]);
 
     useFocusEffect(
         useCallback(() => {
@@ -35,7 +82,7 @@ export default function Alerts() {
         useCallback(() => {
             setNoticesLoading(true);
             const unsubscribe = subscribeToNotices((data) => {
-                setNotices(data);
+                setAllNotices(data);
                 setNoticesLoading(false);
             });
 
@@ -45,26 +92,42 @@ export default function Alerts() {
         }, [])
     );
 
-    const getPriorityColor = (priority?: string) => {
-        const priorityColors: Record<string, string> = {
-            low: '#10B981',      // Green
-            medium: '#F59E0B',   // Yellow/Orange
-            high: '#EF4444',     // Red
-            emergency: '#7F1D1D', // Dark Red
-        };
-        return priorityColors[priority || 'low'] || '#3B82F6';
+    const handleClearNotifications = async () => {
+        if (filteredNotices.length === 0) {
+            Alert.alert("No Notifications", "There are no new notifications to clear.");
+            return;
+        }
+
+        Alert.alert(
+            "Clear Notifications",
+            "Are you sure you want to clear all current notifications?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Clear All",
+                    style: 'destructive',
+                    onPress: async () => {
+                        const now = Date.now();
+                        try {
+                            await AsyncStorage.setItem(CLEARED_TIMESTAMP_KEY, now.toString());
+                            setLastClearedTime(now);
+                        } catch (e) {
+                            console.error("Failed to save cleared timestamp", e);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
-    const getAlertIcon = (type: string) => {
-        const icons: Record<string, string> = {
-            mess: 'food-fork-drink',
-            laundry: 'washing-machine',
-            payment: 'credit-card',
-            maintenance: 'wrench',
-            event: 'calendar-event',
-            announcement: 'bullhorn',
+    const getPriorityColor = (priority?: string) => {
+        const priorityColors: Record<string, string> = {
+            low: '#10B981',
+            medium: '#F59E0B',
+            high: '#EF4444',
+            emergency: '#7F1D1D',
         };
-        return icons[type] || 'bell-ring';
+        return priorityColors[priority || 'low'] || '#3B82F6';
     };
 
     const getStatusIcon = (status: string): any => {
@@ -92,193 +155,165 @@ export default function Alerts() {
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
-            {/* Header */}
+            {/* Header - Full Width but content centered */}
             <LinearGradient
                 colors={['#000428', '#004e92']}
-                style={styles.header}
+                style={[styles.header, { paddingTop: 24 + insets.top }]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
             >
-                <SafeAreaView edges={['top', 'left', 'right']}>
-                    <View style={styles.headerContent}>
-                        <Text style={styles.headerTitle}>Notifications</Text>
+                <View style={[styles.centeredContent, { flexDirection: 'row', alignItems: 'center', gap: 12, width: CONTAINER_WIDTH }]}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                        <MaterialIcons name="chevron-left" size={32} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Notifications</Text>
+
+                    {/* Clear Button (Always visible on Alerts tab) */}
+                    {activeTab === 'alerts' ? (
+                        <TouchableOpacity
+                            onPress={handleClearNotifications}
+                            style={styles.clearBtn}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.clearBtnText}>CLEAR</Text>
+                        </TouchableOpacity>
+                    ) : (
                         <View style={styles.notificationBadge}>
                             <MaterialIcons name="notifications-none" size={24} color="#fff" />
-                            {(notices.length > 0) && <View style={styles.dot} />}
+                            {filteredNotices.length > 0 && <View style={styles.dot} />}
                         </View>
-                    </View>
-
-
-                </SafeAreaView>
+                    )}
+                </View>
             </LinearGradient>
 
-            {/* Custom Tab Bar - Moved Outside Header */}
-            <View style={[styles.tabBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#E0E7FF' }]}>
-                {(['alerts', 'complaints', 'documents'] as const).map((tab) => (
-                    <Pressable
-                        key={tab}
-                        style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
-                        onPress={() => setActiveTab(tab)}
-                    >
-                        <Text style={[
-                            styles.tabText,
-                            { color: isDark ? colors.textSecondary : '#64748B' },
-                            activeTab === tab && styles.tabTextActive
-                        ]}>
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </Text>
-                    </Pressable>
-                ))}
-            </View>
-
-            <ScrollView
-                style={styles.content}
-                contentContainerStyle={{ paddingBottom: 100 }}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Alerts Tab */}
-                {activeTab === 'alerts' && (
-                    <View style={styles.section}>
-
-                        {/* Hostel Notices Section */}
-                        <View style={styles.sectionHeader}>
-                            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Hostel Notices</Text>
-                            {notices.length > 0 && <View style={styles.countBadge}><Text style={styles.countText}>{notices.length}</Text></View>}
-                        </View>
-
-                        {noticesLoading ? (
-                            <NoticeListSkeleton />
-                        ) : notices.length > 0 ? (
-                            notices.map((notice) => (
-                                <View
-                                    key={notice.id}
-                                    style={[styles.card, styles.shadowProp, {
-                                        backgroundColor: colors.card,
-                                        borderColor: colors.border
-                                    }]}
-                                >
-                                    <View style={[styles.priorityLine, { backgroundColor: getPriorityColor(notice.priority) }]} />
-                                    <View style={styles.cardInner}>
-                                        <View style={styles.cardHeaderRow}>
-                                            <View style={[styles.iconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
-                                                <MaterialCommunityIcons name="bullhorn" size={20} color={isDark ? '#60A5FA' : '#004e92'} />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={[styles.cardTitle, { color: colors.text }]}>{notice.title}</Text>
-                                                <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{notice.date.toLocaleDateString()}</Text>
-                                            </View>
-                                            {notice.priority === 'emergency' && <MaterialIcons name="warning" size={20} color="#EF4444" />}
-                                        </View>
-                                        <Text style={[styles.cardBody, { color: colors.textSecondary }]}>{notice.body}</Text>
-                                    </View>
-                                </View>
-                            ))
-                        ) : (
-                            <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <MaterialCommunityIcons name="bell-sleep" size={48} color={isDark ? colors.secondary : "#CBD5E1"} />
-                                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No new notices</Text>
-                            </View>
-                        )}
-
-                        {/* Personal Alerts Section */}
-                        <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24, marginBottom: 12 }]}>Personal Alerts</Text>
-                        {/* 
-            {personalizedAlerts.map((alert) => (
-              <Pressable
-                key={alert.id}
-                style={[styles.card, styles.shadowProp]}
-              >
-                <View style={[styles.priorityLine, { backgroundColor: getPriorityColor(alert.priority) }]} />
-                <View style={styles.cardInner}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={[styles.iconBox, { backgroundColor: '#F0F9FF' }]}>
-                      <MaterialCommunityIcons name={getAlertIcon(alert.type) as any} size={20} color="#0EA5E9" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.cardTitle}>{alert.title}</Text>
-                      <Text style={styles.cardDate}>{alert.time}</Text>
-                    </View>
-                    {alert.actionable && <MaterialIcons name="chevron-right" size={24} color="#94A3B8" />}
-                  </View>
-                  <Text style={styles.cardBody}>{alert.message}</Text>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+                {/* Responsive Tab Bar */}
+                <View style={[styles.navBar, { width: CONTAINER_WIDTH, backgroundColor: colors.card, shadowColor: colors.textSecondary }]}>
+                    {(['alerts', 'complaints', 'documents'] as const).map((tab) => (
+                        <TouchableOpacity
+                            key={tab}
+                            style={[
+                                styles.navItem,
+                                activeTab === tab && { backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : '#EFF6FF' }
+                            ]}
+                            onPress={() => setActiveTab(tab)}
+                        >
+                            <Text style={[
+                                styles.navItemLabel,
+                                { color: activeTab === tab ? colors.primary : colors.textSecondary },
+                                activeTab === tab && { fontWeight: '700' }
+                            ]}>
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
-              </Pressable>
-            ))} 
-            */}
-                    </View>
-                )}
 
-                {/* Complaints Tab */}
-                {activeTab === 'complaints' && (
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>My Complaints</Text>
-                        {complaintsLoading ? (
-                            <StudentComplaintListSkeleton />
-                        ) : complaints.length > 0 ? (
-                            complaints.map((complaint) => (
-                                <View
-                                    key={complaint.id}
-                                    style={[styles.card, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}
-                                >
-                                    <View style={[styles.cardInner, { backgroundColor: colors.card }]}>
-                                        <View style={styles.cardHeaderRow}>
-                                            <Text style={[styles.cardTitle, { color: colors.text }]}>{complaint.title}</Text>
-                                            <View style={[styles.statusTag, { backgroundColor: getPriorityColor(complaint.priority) + '20' }]}>
-                                                <Text style={[styles.statusTagText, { color: getPriorityColor(complaint.priority) }]}>
-                                                    {complaint.priority?.toUpperCase()}
-                                                </Text>
+                {/* Main Content Area */}
+                <ScrollView
+                    style={{ flex: 1, width: '100%' }}
+                    contentContainerStyle={{ paddingBottom: 100, alignItems: 'center' }}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
+                >
+                    <View style={{ width: CONTAINER_WIDTH, gap: 12 }}>
+                        {/* Alerts Tab */}
+                        {activeTab === 'alerts' && (
+                            <>
+                                {noticesLoading ? (
+                                    <NoticeListSkeleton />
+                                ) : filteredNotices.length > 0 ? (
+                                    filteredNotices.map((notice) => (
+                                        <View
+                                            key={notice.id}
+                                            style={[styles.card, { backgroundColor: colors.card, shadowColor: colors.textSecondary }]}
+                                        >
+                                            <View style={styles.cardHeaderRow}>
+                                                <View style={[styles.iconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
+                                                    <MaterialCommunityIcons name="bullhorn" size={20} color={isDark ? '#60A5FA' : '#004e92'} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={[styles.cardTitle, { color: colors.text }]}>{notice.title}</Text>
+                                                    <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{notice.date.toLocaleDateString()}</Text>
+                                                </View>
+                                                {notice.priority === 'emergency' && <MaterialIcons name="warning" size={20} color="#EF4444" />}
                                             </View>
+                                            <Text style={[styles.cardBody, { color: colors.text }]}>{notice.body}</Text>
                                         </View>
-
-                                        <Text style={[styles.cardBody, { marginTop: 8, color: colors.textSecondary }]}>{complaint.description}</Text>
-
-                                        <View style={styles.divider} />
-
-                                        <View style={styles.cardFooter}>
-                                            <View style={styles.statusRow}>
-                                                <MaterialCommunityIcons
-                                                    name={getStatusIcon(complaint.status)}
-                                                    size={16}
-                                                    color={complaint.status === 'resolved' ? '#10B981' : colors.textSecondary}
-                                                />
-                                                <Text style={[
-                                                    styles.statusText,
-                                                    { color: complaint.status === 'resolved' ? '#10B981' : colors.textSecondary },
-                                                    complaint.status === 'resolved' && { fontWeight: '600' }
-                                                ]}>
-                                                    {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
-                                                </Text>
-                                            </View>
-                                            <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{formatDate(complaint.createdAt)}</Text>
-                                        </View>
+                                    ))
+                                ) : (
+                                    <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                        <MaterialCommunityIcons name="bell-sleep" size={48} color={isDark ? colors.secondary : "#CBD5E1"} />
+                                        <Text style={[styles.emptyText, { color: colors.text }]}>No new notices</Text>
                                     </View>
-                                </View>
-                            ))
-                        ) : (
-                            <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <MaterialCommunityIcons name="clipboard-check-outline" size={48} color={isDark ? colors.secondary : "#CBD5E1"} />
-                                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No complaints history</Text>
+                                )}
+                            </>
+                        )}
+
+                        {/* Complaints Tab */}
+                        {activeTab === 'complaints' && (
+                            <>
+                                {complaintsLoading ? (
+                                    <StudentComplaintListSkeleton />
+                                ) : complaints.length > 0 ? (
+                                    complaints.map((complaint) => (
+                                        <View
+                                            key={complaint.id}
+                                            style={[styles.card, { backgroundColor: colors.card, shadowColor: colors.textSecondary }]}
+                                        >
+                                            <View style={styles.cardHeaderRow}>
+                                                <Text style={[styles.cardTitle, { color: colors.text }]}>{complaint.title}</Text>
+                                                <View style={[styles.statusTag, { backgroundColor: getPriorityColor(complaint.priority) + '20' }]}>
+                                                    <Text style={[styles.statusTagText, { color: getPriorityColor(complaint.priority) }]}>
+                                                        {complaint.priority?.toUpperCase()}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            <Text style={[styles.cardBody, { marginTop: 8, color: colors.text }]}>{complaint.description}</Text>
+
+                                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                                            <View style={styles.cardFooter}>
+                                                <View style={[styles.statusRow, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC' }]}>
+                                                    <MaterialCommunityIcons
+                                                        name={getStatusIcon(complaint.status)}
+                                                        size={16}
+                                                        color={complaint.status === 'resolved' ? '#10B981' : colors.textSecondary}
+                                                    />
+                                                    <Text style={[
+                                                        styles.statusText,
+                                                        { color: complaint.status === 'resolved' ? '#10B981' : colors.textSecondary },
+                                                        complaint.status === 'resolved' && { fontWeight: '600' }
+                                                    ]}>
+                                                        {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
+                                                    </Text>
+                                                </View>
+                                                <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{formatDate(complaint.createdAt)}</Text>
+                                            </View>
+                                        </View>
+                                    ))
+                                ) : (
+                                    <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                        <MaterialCommunityIcons name="clipboard-check-outline" size={48} color={isDark ? colors.secondary : "#CBD5E1"} />
+                                        <Text style={[styles.emptyText, { color: colors.text }]}>No complaints history</Text>
+                                    </View>
+                                )}
+                            </>
+                        )}
+
+                        {/* Documents Tab */}
+                        {activeTab === 'documents' && (
+                            <View style={[styles.card, styles.emptyState, { height: 200, backgroundColor: colors.card, shadowColor: colors.textSecondary }]}>
+                                <MaterialCommunityIcons name="file-document-outline" size={48} color={isDark ? colors.secondary : "#CBD5E1"} />
+                                <Text style={[styles.emptyText, { color: colors.text }]}>No documents available</Text>
+                                <Text style={[styles.subEmptyText, { color: colors.textSecondary }]}>Hostel circulars and forms will appear here.</Text>
                             </View>
                         )}
                     </View>
-                )}
-
-                {/* Documents Tab */}
-                {activeTab === 'documents' && (
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>My Documents</Text>
-                        <View style={[styles.card, styles.shadowProp, styles.emptyState, { height: 200, backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <MaterialCommunityIcons name="file-document-outline" size={48} color={isDark ? colors.secondary : "#CBD5E1"} />
-                            <Text style={[styles.emptyText, { color: colors.text }]}>No documents available</Text>
-                            <Text style={[styles.subEmptyText, { color: colors.textSecondary }]}>Hostel circulars and forms will appear here.</Text>
-                        </View>
-                    </View>
-                )}
-            </ScrollView>
-
-            {/* Styles for new TabBar placement */}
-            {/* Note: In a real refactor, I would clean up the unused styles below, but I'll override them here for logic consistency first */}
-        </View >
+                </ScrollView>
+            </View>
+        </View>
     );
 }
 
@@ -296,20 +331,25 @@ const styles = StyleSheet.create({
         shadowRadius: 16,
         elevation: 8,
         zIndex: 10,
+        alignItems: 'center', // Center content horizontally
     },
-    headerContent: {
-        paddingHorizontal: 24,
-        paddingTop: 10,
-        paddingBottom: 10, // Reduced since tabs are gone
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    centeredContent: {
+        // Width is handled inline
+    },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
         alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 28,
-        fontWeight: '700',
+        fontSize: 22,
+        fontWeight: '800',
         color: '#fff',
         letterSpacing: 0.5,
+        flex: 1,
     },
     notificationBadge: {
         width: 40,
@@ -318,6 +358,25 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    clearBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 12,
+        backgroundColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 3,
+    },
+    clearBtnText: {
+        color: '#004e92',
+        fontSize: 12,
+        fontWeight: '800',
+        letterSpacing: 0.5,
     },
     dot: {
         width: 8,
@@ -330,95 +389,41 @@ const styles = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: 'rgba(255,255,255,0.2)',
     },
-    tabBar: {
+    navBar: {
         flexDirection: 'row',
-        marginHorizontal: 20,
-        marginTop: 20, // Add top margin to separate from headers
-        marginBottom: 5, // Add bottom margin
-        borderRadius: 14,
+        marginTop: 20,
+        marginBottom: 10,
+        borderRadius: 16,
         padding: 6,
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
     },
-    tabItem: {
+    navItem: {
         flex: 1,
-        paddingVertical: 10,
         alignItems: 'center',
-        borderRadius: 10,
+        justifyContent: 'center',
+        paddingVertical: 10,
+        borderRadius: 12,
     },
-    tabItemActive: {
-        backgroundColor: '#fff',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    tabText: {
+    navItemLabel: {
         fontSize: 13,
         fontWeight: '600',
     },
-    tabTextActive: {
-        color: '#004e92',
-        fontWeight: '700',
-    },
-    content: {
-        flex: 1,
-        padding: 20,
-    },
-    section: {
-        gap: 16,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-        gap: 8,
-    },
-    sectionTitle: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: '#64748B',
-        letterSpacing: 0.5,
-        textTransform: 'uppercase',
-    },
-    countBadge: {
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 10,
-    },
-    countText: {
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: '700',
-    },
     card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 24,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#EFF6FF', // Premium Soft Blue Border
-        padding: 2, // Inner spacing for premium look
-    },
-    cardInner: {
-        padding: 20,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-    },
-    priorityLine: {
-        width: 4,
-        height: 24,
-        position: 'absolute',
-        left: 0,
-        top: 24,
-        borderTopRightRadius: 4,
-        borderBottomRightRadius: 4,
-        display: 'none', // Removed side line for cleaner look, opt for badges/icons
+        borderRadius: 20,
+        padding: 16,
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
     },
     cardHeaderRow: {
         flexDirection: 'row',
         gap: 14,
         alignItems: 'flex-start',
-        marginBottom: 12,
+        marginBottom: 10,
     },
     iconBox: {
         width: 42,
@@ -426,71 +431,55 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F0F9FF', // Soft Blue background for icons
         borderWidth: 1,
-        borderColor: '#E0F2FE',
+        borderColor: 'rgba(0,0,0,0.05)',
     },
     cardTitle: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#1E3A8A', // Deep Royal Blue
-        marginBottom: 4,
+        marginBottom: 2,
         lineHeight: 22,
         flex: 1,
     },
     cardDate: {
         fontSize: 12,
-        color: '#94A3B8',
         fontWeight: '600',
     },
     cardBody: {
         fontSize: 14,
-        color: '#475569',
-        lineHeight: 22,
+        lineHeight: 20,
         fontWeight: '500',
     },
     statusTag: {
         paddingHorizontal: 10,
-        paddingVertical: 6,
+        paddingVertical: 4,
         borderRadius: 8,
     },
     statusTagText: {
         fontSize: 11,
         fontWeight: '700',
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
     divider: {
         height: 1,
-        backgroundColor: '#F1F5F9',
-        marginVertical: 14,
+        marginVertical: 12,
     },
     cardFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 4,
     },
     statusRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: '#F8FAFC',
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 8,
     },
     statusText: {
         fontSize: 12,
-        color: '#64748B',
         fontWeight: '600',
-    },
-    shadowProp: {
-        shadowColor: "#1E40AF", // Blue shadow
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.08, // Soft premium shadow
-        shadowRadius: 16,
-        elevation: 4,
     },
     emptyState: {
         alignItems: 'center',
@@ -502,12 +491,10 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     emptyText: {
-        color: '#64748B',
         fontSize: 15,
         fontWeight: '600',
     },
     subEmptyText: {
-        color: '#94A3B8',
         fontSize: 13,
         textAlign: 'center',
         lineHeight: 20,

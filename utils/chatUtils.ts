@@ -1,15 +1,4 @@
-import {
-    addDoc,
-    collection,
-    doc,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    setDoc
-} from 'firebase/firestore';
-import { getDbSafe } from './firebase';
+import api from './api';
 
 export interface ChatMessage {
     _id: string;
@@ -18,61 +7,50 @@ export interface ChatMessage {
     user: {
         _id: string;
         name: string;
+        avatar?: string;
     };
     sent: boolean;
     received: boolean;
+    read?: boolean;
 }
 
 export const sendMessage = async (conversationId: string, text: string, user: { _id: string, name: string }) => {
-    const db = getDbSafe();
-    if (!db) return;
-
-    const conversationRef = doc(db, 'conversations', conversationId);
-    const messagesRef = collection(conversationRef, 'messages');
-
-    // Add message
-    await addDoc(messagesRef, {
-        text,
-        createdAt: serverTimestamp(),
-        user,
-        sent: true,
-        received: false,
-    });
-
-    // Update conversation metadata
-    const updateData = {
-        lastMessage: text,
-        lastMessageTime: serverTimestamp(),
-        studentId: conversationId, // Ensure ID is set
-        [user._id === 'admin' ? 'studentUnread' : 'adminUnread']: 1 // Increment logic would be better but simple toggle for now
-    };
-
-    // Use setDoc with merge to create if not exists
-    await setDoc(conversationRef, updateData, { merge: true });
+    try {
+        await api.post(`/chats/${conversationId}/messages`, { text });
+    } catch (error) {
+        console.error("Error sending message:", error);
+    }
 };
 
-export const subscribeToMessages = (conversationId: string, callback: (messages: ChatMessage[]) => void) => {
-    const db = getDbSafe();
-    if (!db) return () => { };
+export const subscribeToMessages = (conversationId: string, callback: (messages: ChatMessage[], partnerStatus?: { online: boolean, lastSeen: string | null }, partnerDetails?: any) => void) => {
+    const fetch = async () => {
+        try {
+            const response = await api.get(`/chats/${conversationId}/messages`);
+            // Check if response is the new format { messages, partnerStatus, partnerDetails }
+            let messagesData = [];
+            let statusData = { online: false, lastSeen: null };
+            let detailsData = null;
 
-    const q = query(
-        collection(db, 'conversations', conversationId, 'messages'),
-        orderBy('createdAt', 'desc'),
-        limit(50)
-    );
+            if (response.data.messages) {
+                messagesData = response.data.messages;
+                statusData = response.data.partnerStatus;
+                detailsData = response.data.partnerDetails;
+            } else if (Array.isArray(response.data)) {
+                // Fallback
+                messagesData = response.data;
+            }
 
-    return onSnapshot(q, (snapshot) => {
-        const messages = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                _id: doc.id,
-                text: data.text,
-                createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                user: data.user,
-                sent: data.sent,
-                received: data.received,
-            };
-        });
-        callback(messages);
-    });
+            const messages = messagesData.map((msg: any) => ({
+                ...msg,
+                createdAt: new Date(msg.createdAt),
+            }));
+
+            callback(messages, statusData, detailsData);
+        } catch (error) {
+            console.error("Error fetching messages:", error);
+        }
+    };
+    fetch();
+    const interval = setInterval(fetch, 2000); // Polling every 2s for "real-time" feel
+    return () => clearInterval(interval);
 };
