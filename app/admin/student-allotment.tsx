@@ -63,6 +63,9 @@ export default function StudentAllotmentPage() {
   const [personalEmail, setPersonalEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const [hostelFee, setHostelFee] = useState('');
+  const [messFee, setMessFee] = useState('');
+  const [feeFrequency, setFeeFrequency] = useState<'Monthly' | 'Quarterly' | 'Yearly'>('Monthly');
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
@@ -86,43 +89,37 @@ export default function StudentAllotmentPage() {
     }
 
     try {
-      const { getDbSafe } = await import('../../utils/firebase');
-      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-      const { allocateRoom, deallocateRoom } = await import('../../utils/roomUtils');
+      const { default: api } = await import('../../utils/api');
 
-      const db = getDbSafe();
+      const totalDues = (parseFloat(hostelFee) || 0) + (parseFloat(messFee) || 0);
 
-      if (!db) {
-        showAlert('Error', 'Database not initialized', [], 'error');
-        return;
-      }
+      const payload = {
+        fullName,
+        email: email.trim(),
+        password: generatedPassword,
+        rollNo,
+        collegeName,
+        hostelName,
+        dob: null, // Frontend only asks for Age
+        roomNo: room,
+        phone,
+        personalEmail: personalEmail ? personalEmail.trim() : null,
+        address: '', // Optional
+        fatherName: '', // Optional
+        fatherPhone: '', // Optional
+        motherName: '', // Optional
+        motherPhone: '', // Optional
+        dues: totalDues,
+        bloodGroup: '', // Optional
+        medicalHistory: '', // Optional
+        emergencyContactName: '', // Optional
+        emergencyContactPhone: '', // Optional
+        status,
+        wifiSSID: 'Hostel_WiFi', // Default
+        wifiPassword: '' // Default
+      };
 
-      // 1. Try to allocate room first (checks capacity)
-      await allocateRoom(db, room, email.toLowerCase().trim(), fullName);
-
-      // 2. If successful, create allocation document
-      try {
-        await setDoc(doc(db, 'allocations', email.toLowerCase().trim()), {
-          name: fullName,
-          rollNo,
-          collegeName,
-          hostelName,
-          age,
-          room,
-          email: email.toLowerCase().trim(),
-          personalEmail: personalEmail ? personalEmail.toLowerCase().trim() : null,
-          phone,
-          status,
-          tempPassword: generatedPassword,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } catch (allocError: any) {
-        // Rollback room allocation if saving student data fails
-        console.error("Allocation save failed, rolling back room...", allocError);
-        await deallocateRoom(db, room, email.toLowerCase().trim());
-        throw allocError;
-      }
+      await api.post('/students/allot', payload);
 
       showAlert(
         'Success',
@@ -133,7 +130,12 @@ export default function StudentAllotmentPage() {
         'success'
       );
     } catch (error: any) {
-      showAlert('Error', 'Failed to allot student: ' + error.message, [], 'error');
+      console.error(error);
+      let msg = 'Failed to allot student.';
+      if (error.response?.data?.error) {
+        msg = error.response.data.error;
+      }
+      showAlert('Error', msg, [], 'error');
     }
   };
 
@@ -165,17 +167,17 @@ export default function StudentAllotmentPage() {
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Navigation Tabs */}
-          <View style={styles.tabContainer}>
+          <View style={styles.navBar}>
             <TouchableOpacity
-              style={styles.tabItem}
+              style={styles.navItem}
               onPress={() => router.replace('/admin/students')}
             >
               <MaterialIcons name="account-group" size={20} color="#64748B" />
-              <Text style={styles.tabText}>Students</Text>
+              <Text style={styles.navItemLabel}>Students</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabItem, styles.activeTab]}>
+            <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
               <MaterialIcons name="account-plus" size={20} color="#004e92" />
-              <Text style={[styles.tabText, styles.activeTabText]}>Allotment</Text>
+              <Text style={[styles.navItemLabel, styles.navItemLabelActive]}>Allotment</Text>
             </TouchableOpacity>
           </View>
 
@@ -322,6 +324,51 @@ export default function StudentAllotmentPage() {
               hasSubmitted={hasSubmitted}
             />
 
+            <View style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Fee Structure</Text>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <InputField
+                  label="Hostel Fee"
+                  icon="bed"
+                  value={hostelFee}
+                  onChangeText={setHostelFee}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  hasSubmitted={hasSubmitted}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <InputField
+                  label="Mess Fee"
+                  icon="food"
+                  value={messFee}
+                  onChangeText={setMessFee}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  hasSubmitted={hasSubmitted}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Payment Frequency</Text>
+              <View style={styles.inputWrapper}>
+                <MaterialIcons name="calendar-clock" size={20} color={feeFrequency ? '#004e92' : '#64748B'} style={styles.inputIcon} />
+                <Picker
+                  selectedValue={feeFrequency}
+                  style={{ flex: 1, color: '#1E293B', marginLeft: -8 }}
+                  onValueChange={(v) => setFeeFrequency(v)}
+                >
+                  <Picker.Item label="Monthly" value="Monthly" />
+                  <Picker.Item label="Quarterly" value="Quarterly" />
+                  <Picker.Item label="Yearly" value="Yearly" />
+                </Picker>
+              </View>
+            </View>
+
             <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
               <LinearGradient
                 colors={['#004e92', '#000428']}
@@ -360,7 +407,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    marginBottom: 10,
   },
   backButton: {
     width: 40,
@@ -379,11 +425,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
   },
-  tabContainer: {
+  navBar: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 6,
+    marginTop: 20,
     marginBottom: 20,
     elevation: 2,
     shadowColor: '#000',
@@ -391,7 +438,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
-  tabItem: {
+  navItem: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -400,15 +447,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  activeTab: {
+  navItemActive: {
     backgroundColor: '#EFF6FF',
   },
-  tabText: {
+  navItemLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#64748B',
   },
-  activeTabText: {
+  navItemLabelActive: {
     color: '#004e92',
     fontWeight: '700',
   },

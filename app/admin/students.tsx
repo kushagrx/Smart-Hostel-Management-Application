@@ -1,13 +1,22 @@
 ﻿import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Dimensions, FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Dimensions, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, SectionList, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AlphabetJumpBar from '../../components/AlphabetJumpBar';
 import InputField from '../../components/InputField';
+import StudentDetailsModal from '../../components/StudentDetailsModal';
 import { useAlert } from '../../context/AlertContext';
+import { useRefresh } from '../../hooks/useRefresh';
+import { API_BASE_URL } from '../../utils/api';
 import { isAdmin, useUser } from '../../utils/authUtils';
+import { createStudent, deleteStudent, subscribeToStudents, updateStudent } from '../../utils/studentUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
 
@@ -28,7 +37,6 @@ export default function StudentsPage() {
     header: {
       paddingVertical: 24,
       paddingHorizontal: 24,
-      marginBottom: 16,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
@@ -56,6 +64,7 @@ export default function StudentsPage() {
       flexDirection: 'row',
       backgroundColor: colors.card,
       marginHorizontal: 16,
+      marginTop: 20,
       marginBottom: 20,
       borderRadius: 16,
       padding: 6,
@@ -86,43 +95,80 @@ export default function StudentsPage() {
       color: colors.primary,
       fontWeight: '700',
     },
-    statsContainer: {
-      flexDirection: 'row',
-      paddingHorizontal: 16,
-      marginBottom: 20,
+    statsGrid: {
+      paddingHorizontal: 20,
+      marginBottom: 24,
       gap: 12,
     },
-    statCard: {
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    heroCard: {
+      borderRadius: 24,
+      padding: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#4F46E5',
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+      overflow: 'hidden',
+      height: 100,
+    },
+    miniCard: {
       flex: 1,
-      backgroundColor: colors.card,
-      borderRadius: 16,
-      padding: 12,
-      alignItems: 'center',
-      shadowColor: colors.textSecondary,
-      shadowOpacity: 0.05,
+      borderRadius: 20,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
       shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+      overflow: 'hidden',
+      height: 110,
+      justifyContent: 'space-between',
     },
-    statIconBg: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 8,
+    cardWatermark: {
+      position: 'absolute',
+      right: -10,
+      bottom: -10,
+      opacity: 0.15,
+      transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
     },
-    statValue: {
-      fontSize: 20,
-      fontWeight: '800',
-      marginBottom: 2,
-    },
-    statLabel: {
-      fontSize: 10,
+    heroLabel: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 14,
       fontWeight: '600',
-      color: colors.textSecondary,
+      marginBottom: 4,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 1,
+    },
+    heroValue: {
+      color: '#fff',
+      fontSize: 36,
+      fontWeight: '800',
+      letterSpacing: -1,
+    },
+    miniLabel: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700',
+      opacity: 0.9,
+    },
+    miniValue: {
+      color: '#fff',
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+    miniHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
     },
     searchContainer: {
       flexDirection: 'row',
@@ -190,6 +236,7 @@ export default function StudentsPage() {
     },
     studentAvatarContainer: {
       marginRight: 14,
+      position: 'relative',
     },
     studentAvatar: {
       width: 50,
@@ -197,6 +244,12 @@ export default function StudentsPage() {
       borderRadius: 18,
       justifyContent: 'center',
       alignItems: 'center',
+      backgroundColor: colors.card,
+    },
+    avatarImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 18,
     },
     studentInitial: {
       color: '#fff',
@@ -356,8 +409,8 @@ export default function StudentsPage() {
       marginBottom: 16,
     },
     modalLabel: {
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 13,
+      fontWeight: '600',
       color: colors.textSecondary,
       marginBottom: 8,
       marginLeft: 4,
@@ -365,29 +418,68 @@ export default function StudentsPage() {
     modalInputWrapper: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme === 'dark' ? '#1E293B' : '#F8FAFC',
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      height: 50,
+      backgroundColor: theme === 'dark' ? '#0F172A' : '#FFFFFF', // Higher contrast background
+      borderRadius: 16, // Rounder corners
+      borderWidth: 1.5, // Thicker border
+      borderColor: theme === 'dark' ? '#334155' : '#E2E8F0',
+      height: 56, // Taller touch target
       paddingHorizontal: 16,
+      shadowColor: theme === 'dark' ? '#000' : '#64748B',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: theme === 'dark' ? 0.3 : 0.05,
+      shadowRadius: 4,
+      elevation: 2,
     },
     disabledInputWrapper: {
-      backgroundColor: theme === 'dark' ? '#1E293B' : '#F1F5F9',
+      backgroundColor: theme === 'dark' ? '#1E293B' : '#F8FAFC',
       borderColor: colors.border,
-      opacity: 0.8,
+      opacity: 0.7,
+      elevation: 0,
     },
     inputIcon: {
-      marginRight: 10,
+      marginRight: 12,
     },
     modalInput: {
       flex: 1,
-      fontSize: 14,
+      fontSize: 15, // Larger text
       color: colors.text,
-      fontWeight: '600',
+      fontWeight: '500',
     },
     disabledInput: {
       color: colors.textSecondary,
+    },
+    profilePhotoContainer: {
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    profilePhoto: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      marginBottom: 10,
+    },
+    photoPlaceholder: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: theme === 'dark' ? '#1E293B' : '#F1F5F9',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    changePhotoBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      backgroundColor: theme === 'dark' ? '#1E293B' : '#F1F5F9',
+    },
+    changePhotoText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.primary,
     },
     modalFooter: {
       padding: 24,
@@ -520,15 +612,14 @@ export default function StudentsPage() {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Simulated refresh for real-time list
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    // Simulated refresh for real-time list
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }, () => {
+    // Clear search and selection
+    setSearchQuery('');
+    setSelectedId(null);
+  });
 
   // Auto-search from params
   React.useEffect(() => {
@@ -540,35 +631,143 @@ export default function StudentsPage() {
   // Auto-expand student if openId is provided and exists in loaded students
   React.useEffect(() => {
     if (openId && students.length > 0) {
-      const exists = students.some(s => s.id === openId);
-      if (exists) {
-        setSelectedId(openId as string);
+      const student = students.find(s => s.id === openId);
+      if (student) {
+        setViewingStudent(student);
+        setDetailsModalVisible(true);
       }
     }
   }, [openId, students]);
 
+  // Handle 'action' param to switch tabs
+  const { action, openEditId } = useLocalSearchParams();
+  React.useEffect(() => {
+    if (action === 'allot') {
+      // Small delay to ensure pager is ready
+      setTimeout(() => {
+        handleTabChange(1);
+      }, 100);
+    }
+  }, [action]);
+
+  // Handle 'openEditId' param to auto-open edit modal
+  React.useEffect(() => {
+    if (openEditId && students.length > 0) {
+      // Use loose equality or string conversion to match IDs
+      const student = students.find(s => String(s.id) === String(openEditId));
+      if (student) {
+        // Clear param to avoid re-opening on re-renders if needed, 
+        // but for now just opening is fine. router.setParams works but triggers re-render.
+        handleEdit(student);
+      }
+    }
+  }, [openEditId, students]);
+
+  // Handle 'openDeleteId' param to auto-trigger delete confirmation
+  const { openDeleteId } = useLocalSearchParams();
+  React.useEffect(() => {
+    if (openDeleteId && students.length > 0) {
+      const student = students.find(s => String(s.id) === String(openDeleteId));
+      if (student) {
+        handleDelete(student.id, student.name, student.roomNo || student.room);
+      }
+    }
+  }, [openDeleteId, students]);
 
 
-  // Tab State
-  const [activeTab, setActiveTab] = useState<'list' | 'allotment'>('list');
+
+  // Tab State & Pager Ref
+  const [activeTab, setActiveTab] = useState(0); // 0: Manage, 1: Allotment
+  const pagerRef = useRef<PagerView>(null);
+
+  const handleTabChange = (index: number) => {
+    setActiveTab(index);
+    pagerRef.current?.setPage(index);
+  };
+
+  // Image Picker State
+  const [image, setImage] = useState<string | null>(null);
+
+  const pickImage = async () => {
+    // Request permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Permission needed', 'Sorry, we need camera roll permissions to make this work!', [], 'error');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+      // Also update editing state if modal is open
+      if (isEditModalVisible) {
+        setEditImage(result.assets[0].uri);
+      }
+    }
+  };
+
+  const [editImage, setEditImage] = useState<string | null>(null);
+  const pickEditImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Permission needed', 'Sorry, we need camera roll permissions!', [], 'error');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setEditImage(result.assets[0].uri);
+    }
+  };
 
   // Allotment Form State
   const [fullName, setFullName] = useState('');
   const [rollNo, setRollNo] = useState('');
   const [collegeName, setCollegeName] = useState('');
   const [hostelName, setHostelName] = useState('');
-  const [age, setAge] = useState('');
+  const [dob, setDob] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [room, setRoom] = useState('');
   const [email, setEmail] = useState('');
-  const [personalEmail, setPersonalEmail] = useState('');
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [collegeEmail, setCollegeEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const [wifiSSID, setWifiSSID] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
   const [generatedPassword, setGeneratedPassword] = useState('');
+  const [address, setAddress] = useState('');
+  const [fatherName, setFatherName] = useState(''); // New Father Name State
+  const [fatherPhone, setFatherPhone] = useState(''); // New Father Phone State
+  const [motherName, setMotherName] = useState(''); // New Mother Name State
+  const [motherPhone, setMotherPhone] = useState(''); // New Mother Phone State
+  const [initialDues, setInitialDues] = useState(''); // New Fees Amount State
+  const [feeFrequency, setFeeFrequency] = useState<'Monthly' | 'Semester' | 'Yearly'>('Monthly');
+  // Medical Info State
+  const [bloodGroup, setBloodGroup] = useState('');
+  const [medicalHistory, setMedicalHistory] = useState('');
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Edit Modal State
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
+
+  // View Details Modal State
+  const [viewingStudent, setViewingStudent] = useState<any>(null);
+  const [isDetailsModalVisible, setDetailsModalVisible] = useState(false);
 
   // Form State (Edit)
   const [editName, setEditName] = useState('');
@@ -576,23 +775,54 @@ export default function StudentsPage() {
   const [editRoom, setEditRoom] = useState('');
   const [editCollege, setEditCollege] = useState('');
   const [editHostelName, setEditHostelName] = useState('');
-  const [editAge, setEditAge] = useState('');
+
+  const [editDob, setEditDob] = useState('');
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [editPhone, setEditPhone] = useState('');
 
-  const [editPersonalEmail, setEditPersonalEmail] = useState('');
+  const [editGoogleEmail, setEditGoogleEmail] = useState('');
+  const [editCollegeEmail, setEditCollegeEmail] = useState('');
   const [editStatus, setEditStatus] = useState('active');
+  const [editWifiSSID, setEditWifiSSID] = useState('');
+  const [editWifiPassword, setEditWifiPassword] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editFatherName, setEditFatherName] = useState(''); // Edit Father Name
+  const [editFatherPhone, setEditFatherPhone] = useState(''); // Edit Father Phone
+  const [editMotherName, setEditMotherName] = useState(''); // Edit Mother Name
+  const [editMotherPhone, setEditMotherPhone] = useState(''); // Edit Mother Phone
+  const [editDues, setEditDues] = useState(''); // Edit Dues
+  const [editFeeFrequency, setEditFeeFrequency] = useState<'Monthly' | 'Semester' | 'Yearly'>('Monthly');
+  // Edit Medical Info State
+  const [editBloodGroup, setEditBloodGroup] = useState('');
+  const [editMedicalHistory, setEditMedicalHistory] = useState('');
+  const [editEmergencyContactName, setEditEmergencyContactName] = useState('');
+  const [editEmergencyContactPhone, setEditEmergencyContactPhone] = useState('');
 
   React.useEffect(() => {
-    // Generate a secure random password on mount for allotment
-    const pwd = Math.random().toString(36).slice(-8); // 8 chars
+    // Generate a secure random password on mount for allotment (max 8 chars)
+    const pwd = Math.random().toString(36).slice(-8); // Exactly 8 chars
     setGeneratedPassword(pwd);
   }, []);
+
+  // Helper to convert DD/MM/YYYY to YYYY-MM-DD for backend
+  const toISODate = (dateStr: string) => {
+    if (!dateStr) return null;
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    return dateStr;
+  };
 
   const handleAllotmentSubmit = async () => {
     setHasSubmitted(true);
 
-    if (!fullName || !rollNo || !collegeName || !hostelName || !age || !room || !email || !phone) {
+
+
+    if (!fullName || !rollNo || !collegeName || !hostelName || !dob || !room || !email || !phone || !address || !fatherName || !fatherPhone || !motherName || !motherPhone || !initialDues) {
       showAlert('Missing details', 'Please fill all mandatory fields (marked red).', [], 'error');
       return;
     }
@@ -602,70 +832,76 @@ export default function StudentsPage() {
       return;
     }
 
-    if (generatedPassword.length < 6) {
-      showAlert('Invalid Password', 'Password must be at least 6 characters long.', [], 'error');
+    if (generatedPassword.length < 6 || generatedPassword.length > 8) {
+      showAlert('Invalid Password', 'Password must be between 6-8 characters.', [], 'error');
       return;
     }
 
     try {
-      const { getDbSafe } = await import('../../utils/firebase');
-      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-      const { allocateRoom, deallocateRoom } = await import('../../utils/roomUtils');
+      /* API Migration */
+      /* API Migration */
+      const formData = new FormData();
+      formData.append('fullName', fullName);
+      formData.append('rollNo', rollNo);
+      formData.append('collegeName', collegeName);
+      formData.append('hostelName', hostelName);
+      formData.append('dob', toISODate(dob) || dob);
+      formData.append('roomNo', room);
+      formData.append('email', email.toLowerCase().trim());
+      formData.append('phone', phone);
+      formData.append('googleEmail', googleEmail);
+      formData.append('collegeEmail', collegeEmail);
+      formData.append('address', address);
+      formData.append('fatherName', fatherName);
+      formData.append('fatherPhone', fatherPhone);
+      formData.append('motherName', motherName);
+      formData.append('motherPhone', motherPhone);
+      formData.append('dues', initialDues); // Backend handles parsing
+      formData.append('bloodGroup', bloodGroup);
+      formData.append('medicalHistory', medicalHistory);
+      formData.append('emergencyContactName', emergencyContactName);
+      formData.append('emergencyContactPhone', emergencyContactPhone);
+      formData.append('status', status);
+      formData.append('wifiSSID', wifiSSID);
+      formData.append('wifiPassword', wifiPassword);
+      formData.append('password', generatedPassword);
+      formData.append('feeFrequency', feeFrequency);
 
-      const db = getDbSafe();
-
-      if (!db) {
-        showAlert('Error', 'Database not initialized', [], 'error');
-        return;
-      }
-
-      await allocateRoom(db, room, email.toLowerCase().trim(), fullName);
-
-      try {
-        await setDoc(doc(db, 'allocations', email.toLowerCase().trim()), {
-          name: fullName,
-          rollNo,
-          collegeName,
-          hostelName,
-          age,
-          room,
-          email: email.toLowerCase().trim(),
-          personalEmail: personalEmail ? personalEmail.toLowerCase().trim() : null,
-          phone,
-          status,
-          tempPassword: generatedPassword,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+      if (image) {
+        // @ts-ignore
+        formData.append('profilePhoto', {
+          uri: image,
+          name: 'profile.jpg',
+          type: 'image/jpeg',
         });
-      } catch (allocError: any) {
-        console.error("Allocation save failed, rolling back room...", allocError);
-        await deallocateRoom(db, room, email.toLowerCase().trim());
-        throw allocError;
       }
 
-      showAlert(
-        'Success',
-        `Student allotted to Room ${room}.\n\nLogin Password: ${generatedPassword}\n\nPlease share this with the student.`,
-        [
-          {
-            text: 'Copy & Close',
-            onPress: () => {
-              setActiveTab('list');
-              setFullName('');
-              setRollNo('');
-              setRoom('');
-              setEmail('');
-              setPhone('');
-              setAge('');
-              setHasSubmitted(false);
-              setGeneratedPassword(Math.random().toString(36).slice(-8));
+      const success = await createStudent(formData);
+
+      if (success) {
+        showAlert(
+          'Success',
+          `Student allotted to Room ${room}.\n\nLogin Password: ${generatedPassword}\n\nPlease share this with the student.`,
+          [
+            {
+              text: 'Copy & Close',
+              onPress: () => {
+                handleTabChange(0);
+                setFullName(''); setRollNo(''); setRoom(''); setEmail(''); setPhone(''); setDob('');
+                setAddress(''); setFatherName(''); setFatherPhone(''); setMotherName(''); setMotherPhone('');
+                setInitialDues(''); setFeeFrequency('Monthly'); setBloodGroup(''); setMedicalHistory(''); setEmergencyContactName('');
+                setEmergencyContactPhone(''); setWifiSSID(''); setWifiPassword('');
+                setImage(null);
+                setHasSubmitted(false);
+                setGeneratedPassword(Math.random().toString(36).slice(-8));
+              }
             }
-          }
-        ],
-        'success'
-      );
+          ],
+          'success'
+        );
+      }
     } catch (error: any) {
-      showAlert('Error', 'Failed to allot student: ' + error.message, [], 'error');
+      showAlert('Error', 'Failed to allot student: ' + (error.response?.data?.error || error.message), [], 'error');
     }
   };
 
@@ -677,25 +913,11 @@ export default function StudentsPage() {
     let unsubscribe: () => void;
 
     const fetchStudents = async () => {
-      try {
-        const { getDbSafe } = await import('../../utils/firebase');
-        const { collection, query, orderBy, onSnapshot } = await import('firebase/firestore');
-        const db = getDbSafe();
-        if (!db) return;
-
-        const q = query(collection(db, 'allocations'), orderBy('createdAt', 'desc'));
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setStudents(list);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error subscribing to allocations:", error);
-          setLoading(false);
-        });
-      } catch (e) {
-        console.error(e);
+      /* API Migration */
+      unsubscribe = subscribeToStudents((data) => {
+        setStudents(data);
         setLoading(false);
-      }
+      });
     };
 
     fetchStudents();
@@ -704,107 +926,117 @@ export default function StudentsPage() {
     };
   }, [user]);
 
+  const [editEmail, setEditEmail] = useState(''); // Add state for ID/Email editing
+
   const handleEdit = (student: any) => {
     setEditingStudent(student);
     setEditName(student.name || '');
+    setEditEmail(student.email || student.id || ''); // Initialize with Email, fallback to ID
     setEditRollNo(student.rollNo || '');
     setEditRoom(student.room || '');
     setEditCollege(student.collegeName || '');
     setEditHostelName(student.hostelName || '');
-    setEditAge(student.age || '');
+    setEditDob(student.dob || '');
     setEditPhone(student.phone || '');
-    setEditPersonalEmail(student.personalEmail || '');
+    setEditGoogleEmail(student.googleEmail || '');
+    setEditCollegeEmail(student.collegeEmail || '');
     setEditStatus(student.status || 'active');
-    setEditPassword(student.tempPassword || '');
+    setEditWifiSSID(student.wifiSSID || '');
+    setEditWifiPassword(student.wifiPassword || '');
+
+    setEditPassword(student.password || student.tempPassword || '');
+    setEditAddress(student.address || '');
+    setEditFatherName(student.fatherName || '');
+    setEditFatherPhone(student.fatherPhone || '');
+    setEditMotherName(student.motherName || '');
+    setEditMotherPhone(student.motherPhone || '');
+    setEditDues(student.dues ? String(student.dues) : '');
+
+    setEditFeeFrequency(student.feeFrequency || 'Monthly');
+    setEditBloodGroup(student.bloodGroup || '');
+    setEditMedicalHistory(student.medicalHistory || '');
+    setEditEmergencyContactName(student.emergencyContactName || '');
+    setEditEmergencyContactPhone(student.emergencyContactPhone || '');
+
+    // Load existing profile photo if available
+    setEditImage(student.profilePhoto ? (student.profilePhoto.startsWith('http') ? student.profilePhoto : `${API_BASE_URL}${student.profilePhoto}`) : null);
+
     setEditModalVisible(true);
+  };
+
+
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      const day = selectedDate.getDate().toString().padStart(2, '0');
+      const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+      const year = selectedDate.getFullYear();
+      setDob(`${day}/${month}/${year}`);
+    }
+  };
+
+  const onEditDateChange = (event: any, selectedDate?: Date) => {
+    setShowEditDatePicker(false);
+    if (selectedDate) {
+      const day = selectedDate.getDate().toString().padStart(2, '0');
+      const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+      const year = selectedDate.getFullYear();
+      setEditDob(`${day}/${month}/${year}`);
+    }
   };
 
   const handleSaveEdit = async () => {
     if (!editingStudent) return;
+    setLoading(true);
 
     try {
-      const { getDbSafe } = await import('../../utils/firebase');
-      const { doc, updateDoc, collection, query, where, getDocs, writeBatch } = await import('firebase/firestore');
-      const { allocateRoom, deallocateRoom } = await import('../../utils/roomUtils');
+      /* API Migration */
+      const formData = new FormData();
+      formData.append('fullName', editName);
+      formData.append('rollNo', editRollNo);
+      formData.append('roomNo', editRoom);
+      formData.append('collegeName', editCollege);
+      formData.append('hostelName', editHostelName);
+      formData.append('dob', toISODate(editDob) || editDob);
+      formData.append('phone', editPhone);
+      formData.append('googleEmail', editGoogleEmail);
+      formData.append('collegeEmail', editCollegeEmail);
+      formData.append('status', editStatus);
+      formData.append('wifiSSID', editWifiSSID);
+      formData.append('wifiPassword', editWifiPassword);
+      formData.append('address', editAddress);
+      formData.append('fatherName', editFatherName);
+      formData.append('fatherPhone', editFatherPhone);
+      formData.append('motherName', editMotherName);
+      formData.append('motherPhone', editMotherPhone);
+      formData.append('dues', editDues);
+      formData.append('feeFrequency', editFeeFrequency);
+      formData.append('bloodGroup', editBloodGroup);
+      formData.append('medicalHistory', editMedicalHistory);
+      formData.append('emergencyContactName', editEmergencyContactName);
+      formData.append('emergencyContactPhone', editEmergencyContactPhone);
+      formData.append('email', editEmail);
+      formData.append('password', editPassword);
 
-      const db = getDbSafe();
-      if (!db) {
-        showAlert('Error', 'Database not connected', [], 'error');
-        return;
-      }
-
-      setLoading(true);
-
-      const roomChanged = editRoom !== editingStudent.room;
-
-      // 1. If room changed, reserve the new room first (checks capacity)
-      if (roomChanged) {
-        try {
-          await allocateRoom(db, editRoom, editingStudent.id, editName);
-        } catch (err: any) {
-          showAlert('Room Assignment Failed', err.message, [], 'error');
-          setLoading(false);
-          return;
-        }
-      }
-
-      const batch = writeBatch(db);
-
-      // 2. Update Allocation Document
-      const allocationRef = doc(db, 'allocations', editingStudent.id); // ID is official email
-      const updates = {
-        name: editName,
-        rollNo: editRollNo,
-        room: editRoom,
-        collegeName: editCollege,
-        hostelName: editHostelName,
-        age: editAge,
-        phone: editPhone,
-        personalEmail: editPersonalEmail,
-        status: editStatus,
-        tempPassword: editPassword,
-      };
-      batch.update(allocationRef, updates);
-
-      // 3. Find and Update User Profile (if exists) via Official Email
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('officialEmail', '==', editingStudent.id));
-      const querySnap = await getDocs(q);
-
-      querySnap.forEach((userDoc) => {
-        batch.update(userDoc.ref, updates);
-      });
-
-      if (querySnap.empty) {
-        const q2 = query(usersRef, where('email', '==', editingStudent.id));
-        const snap2 = await getDocs(q2);
-        snap2.forEach((userDoc) => {
-          batch.update(userDoc.ref, updates);
+      if (editImage && editImage !== editingStudent.profilePhoto && !editImage.startsWith('http')) {
+        // @ts-ignore
+        formData.append('profilePhoto', {
+          uri: editImage,
+          name: 'profile_edit.jpg',
+          type: 'image/jpeg',
         });
       }
 
-      try {
-        await batch.commit();
+      await updateStudent(editingStudent.id, formData);
 
-        // 4. If commit successful AND room changed, release the old room
-        if (roomChanged && editingStudent.room) {
-          await deallocateRoom(db, editingStudent.room, editingStudent.id);
-        }
-
-        showAlert('Success', 'Student details updated successfully.', [], 'success');
-        setEditModalVisible(false);
-        setEditingStudent(null);
-      } catch (commitError: any) {
-        // 5. If batch failed, rollback the new room allocation
-        if (roomChanged) {
-          await deallocateRoom(db, editRoom, editingStudent.id);
-        }
-        throw commitError;
-      }
-
+      showAlert('Success', 'Student details updated successfully.', [], 'success');
+      setEditModalVisible(false);
+      setEditingStudent(null);
+      setEditEmail('');
     } catch (e: any) {
       console.error(e);
-      showAlert('Error', 'Failed to update student: ' + e.message, [], 'error');
+      showAlert('Error', 'Failed to update student: ' + (e.response?.data?.error || e.message), [], 'error');
     } finally {
       setLoading(false);
     }
@@ -825,21 +1057,12 @@ export default function StudentsPage() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { getDbSafe } = await import('../../utils/firebase');
-              const { doc, deleteDoc } = await import('firebase/firestore');
-              const { deallocateRoom } = await import('../../utils/roomUtils');
-              const db = getDbSafe();
-              if (db) {
-                // 1. Deallocate Room
-                await deallocateRoom(db, roomNo, id); // id is the email in this schema
-                // 2. Delete Student Allocation Doc
-                await deleteDoc(doc(db, 'allocations', id));
-
-                showAlert('Success', 'Student removed successfully.', [], 'success');
-              }
-            } catch (error) {
+              /* API Migration */
+              await deleteStudent(id);
+              showAlert('Success', 'Student removed successfully.', [], 'success');
+            } catch (error: any) {
               console.error(error);
-              showAlert('Error', 'Failed to delete allocation', [], 'error');
+              showAlert('Error', 'Failed to delete student: ' + (error.response?.data?.error || error.message), [], 'error');
             }
           },
         },
@@ -853,9 +1076,55 @@ export default function StudentsPage() {
       s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.room?.includes(searchQuery) ||
       s.rollNo?.includes(searchQuery)
-  );
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   const activeStudents = students.filter((s) => s.status === 'active').length;
+
+  const sectionListRef = useRef<SectionList>(null);
+  const [showAlphabet, setShowAlphabet] = useState(false);
+  const hideTimeout = useRef<any>(null);
+
+  const handleScroll = () => {
+    setShowAlphabet(true);
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+    hideTimeout.current = setTimeout(() => {
+      setShowAlphabet(false);
+    }, 1500);
+  };
+
+  // Group by first letter
+  const sections = React.useMemo(() => {
+    const groups: { [key: string]: any[] } = {};
+    if (filteredStudents.length === 0) return [];
+
+    filteredStudents.forEach(student => {
+      const letter = student.name.charAt(0).toUpperCase();
+      if (/[A-Z]/.test(letter)) {
+        if (!groups[letter]) groups[letter] = [];
+        groups[letter].push(student);
+      } else {
+        if (!groups['#']) groups['#'] = [];
+        groups['#'].push(student);
+      }
+    });
+
+    const sortedKeys = Object.keys(groups).sort();
+    return sortedKeys.map(key => ({
+      title: key,
+      data: groups[key]
+    }));
+  }, [filteredStudents]);
+
+  const handleLetterPress = (letter: string) => {
+    const sectionIndex = sections.findIndex(s => s.title === letter);
+    if (sectionIndex !== -1 && sectionListRef.current) {
+      sectionListRef.current.scrollToLocation({
+        sectionIndex,
+        itemIndex: 0,
+        animated: false
+      });
+    }
+  };
 
   const getStatusColor = (status: string) => {
     return status === 'active' ? '#4CAF50' : '#F44336';
@@ -892,13 +1161,81 @@ export default function StudentsPage() {
                   </TouchableOpacity>
                 </View>
                 <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
+                  {/* Profile Photo Section */}
+                  <View style={styles.profilePhotoContainer}>
+                    <View style={styles.photoPlaceholder}>
+                      {editImage ? (
+                        <Image source={{ uri: editImage }} style={styles.profilePhoto} contentFit="cover" />
+                      ) : (
+                        <MaterialIcons name="account" size={40} color={colors.textSecondary} />
+                      )}
+                    </View>
+                    <TouchableOpacity style={styles.changePhotoBtn} onPress={pickEditImage}>
+                      <MaterialIcons name="camera" size={16} color={colors.primary} />
+                      <Text style={styles.changePhotoText}>Change Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <View style={styles.formSection}>
-                    <Text style={styles.modalLabel}>Official Email (ID)</Text>
-                    <View style={[styles.modalInputWrapper, styles.disabledInputWrapper]}>
-                      <MaterialIcons name="email-lock" size={20} color="#94A3B8" style={styles.inputIcon} />
-                      <TextInput style={[styles.modalInput, styles.disabledInput]} value={editingStudent?.id} editable={false} />
+                    <Text style={styles.modalLabel}>Personal Email (Login ID)</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="email-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editEmail}
+                        onChangeText={setEditEmail}
+                        placeholder="official@college.edu"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
                     </View>
                   </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>Login Password</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="key" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editPassword}
+                        onChangeText={setEditPassword}
+                        placeholder="Login Password"
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>Google Mail (For Login)</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="google" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editGoogleEmail}
+                        onChangeText={setEditGoogleEmail}
+                        placeholder="student.google@gmail.com"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>College Email</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="email" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editCollegeEmail}
+                        onChangeText={setEditCollegeEmail}
+                        placeholder="student@college.edu"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                    </View>
+                  </View>
+
+
 
                   <View style={styles.formSection}>
                     <Text style={styles.modalLabel}>Full Name</Text>
@@ -906,22 +1243,49 @@ export default function StudentsPage() {
                       <MaterialIcons name="account" size={20} color="#64748B" style={styles.inputIcon} />
                       <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Full Name" />
                     </View>
-                  </View>
 
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ marginTop: 12 }}>
                       <Text style={styles.modalLabel}>Roll No</Text>
                       <View style={styles.modalInputWrapper}>
                         <MaterialIcons name="identifier" size={20} color="#64748B" style={styles.inputIcon} />
                         <TextInput style={styles.modalInput} value={editRollNo} onChangeText={setEditRollNo} placeholder="Roll No" />
                       </View>
                     </View>
-                    <View style={{ flex: 1 }}>
+
+                    <View style={{ marginTop: 12 }}>
                       <Text style={styles.modalLabel}>Room</Text>
                       <View style={styles.modalInputWrapper}>
                         <MaterialIcons name="door" size={20} color="#64748B" style={styles.inputIcon} />
                         <TextInput style={styles.modalInput} value={editRoom} onChangeText={setEditRoom} placeholder="Room" />
                       </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>WiFi SSID</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="wifi" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editWifiSSID}
+                        onChangeText={setEditWifiSSID}
+                        placeholder="WiFi SSID"
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>WiFi Password</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="lock" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.modalInput}
+                        value={editWifiPassword}
+                        onChangeText={setEditWifiPassword}
+                        placeholder="WiFi Password"
+                        placeholderTextColor="#94A3B8"
+                      />
                     </View>
                   </View>
 
@@ -943,17 +1307,150 @@ export default function StudentsPage() {
 
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.modalLabel}>Age</Text>
-                      <View style={styles.modalInputWrapper}>
+                      <Text style={styles.modalLabel}>Date of Birth</Text>
+                      <TouchableOpacity
+                        onPress={() => setShowEditDatePicker(true)}
+                        style={styles.modalInputWrapper}
+                      >
                         <MaterialIcons name="calendar-account" size={20} color="#64748B" style={styles.inputIcon} />
-                        <TextInput style={styles.modalInput} value={editAge} onChangeText={setEditAge} keyboardType="numeric" placeholder="Age" />
-                      </View>
+                        <Text style={[styles.modalInput, { color: editDob ? colors.text : '#94A3B8', paddingVertical: 14 }]}>
+                          {editDob || 'DD/MM/YYYY'}
+                        </Text>
+                      </TouchableOpacity>
+                      {showEditDatePicker && (
+                        <DateTimePicker
+                          value={editDob && editDob.includes('/') ? new Date(editDob.split('/').reverse().join('-')) : new Date()}
+                          mode="date"
+                          display="default"
+                          onChange={onEditDateChange}
+                          maximumDate={new Date()}
+                        />
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.modalLabel}>Phone</Text>
                       <View style={styles.modalInputWrapper}>
                         <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
                         <TextInput style={styles.modalInput} value={editPhone} onChangeText={setEditPhone} keyboardType="phone-pad" placeholder="Phone" />
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>Address</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="map-marker" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editAddress} onChangeText={setEditAddress} placeholder="Permanent Address" multiline />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Father's Name</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="account-tie" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editFatherName} onChangeText={setEditFatherName} placeholder="Father Name" />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Father's Phone</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editFatherPhone} onChangeText={setEditFatherPhone} placeholder="Phone" keyboardType="phone-pad" />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Mother's Name</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="face-woman" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editMotherName} onChangeText={setEditMotherName} placeholder="Mother Name" />
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.modalLabel}>Mother's Phone</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editMotherPhone} onChangeText={setEditMotherPhone} placeholder="Phone" keyboardType="phone-pad" />
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={styles.modalLabel}>Total Fees</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="cash" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editDues} onChangeText={setEditDues} keyboardType="numeric" placeholder="Amount (e.g. 5000)" />
+                    </View>
+
+                    {/* Fee Frequency Selector */}
+                    <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+                      {(['Monthly', 'Semester', 'Yearly'] as const).map((freq) => (
+                        <TouchableOpacity
+                          key={freq}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            backgroundColor: editFeeFrequency === freq ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: editFeeFrequency === freq ? colors.primary : colors.border
+                          }}
+                          onPress={() => setEditFeeFrequency(freq)}
+                        >
+                          <Text style={{
+                            fontSize: 12,
+                            fontWeight: '600',
+                            color: editFeeFrequency === freq ? '#fff' : colors.textSecondary
+                          }}>
+                            {freq}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.formSection}>
+                    <Text style={[styles.modalLabel, { color: colors.primary }]}>Medical Info (Optional)</Text>
+
+                    <View>
+                      <Text style={styles.modalLabel}>Blood Group</Text>
+                      <View style={styles.modalInputWrapper}>
+                        <MaterialIcons name="water" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                        <TextInput style={styles.modalInput} value={editBloodGroup} onChangeText={setEditBloodGroup} placeholder="e.g. O+" />
+                      </View>
+                    </View>
+
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.modalLabel}>Emergency Contact Name</Text>
+                      <View style={styles.modalInputWrapper}>
+                        <MaterialIcons name="account-alert" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                        <TextInput style={styles.modalInput} value={editEmergencyContactName} onChangeText={setEditEmergencyContactName} placeholder="Contact Name" />
+                      </View>
+                    </View>
+
+
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.modalLabel}>Emergency Phone</Text>
+                      <View style={styles.modalInputWrapper}>
+                        <MaterialIcons name="phone-alert" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                        <TextInput style={styles.modalInput} value={editEmergencyContactPhone} onChangeText={setEditEmergencyContactPhone} placeholder="Phone" keyboardType="phone-pad" />
+                      </View>
+                    </View>
+
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.modalLabel}>Medical History / Allergies</Text>
+                      <View style={[styles.modalInputWrapper, { height: 'auto', minHeight: 80, paddingVertical: 8, alignItems: 'flex-start' }]}>
+                        <MaterialIcons name="medical-bag" size={20} color={colors.textSecondary} style={[styles.inputIcon, { marginTop: 4 }]} />
+                        <TextInput
+                          style={[styles.modalInput, { textAlignVertical: 'top' }]}
+                          value={editMedicalHistory}
+                          onChangeText={setEditMedicalHistory}
+                          placeholder="Any known allergies or conditions..."
+                          multiline
+                          numberOfLines={3}
+                        />
                       </View>
                     </View>
                   </View>
@@ -1000,7 +1497,16 @@ export default function StudentsPage() {
         )
         }
 
-        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* View Details Modal */}
+        <StudentDetailsModal
+          visible={isDetailsModalVisible}
+          student={viewingStudent}
+          onClose={() => setDetailsModalVisible(false)}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+
+        <View style={{ flex: 1 }}>
           <LinearGradient
             colors={['#000428', '#004e92']}
             style={[styles.header, { paddingTop: 24 + insets.top }]}
@@ -1011,7 +1517,7 @@ export default function StudentsPage() {
               <MaterialIcons name="chevron-left" size={32} color="#fff" />
             </TouchableOpacity>
             <View style={styles.headerContent}>
-              <Text style={styles.headerTitle}>{activeTab === 'list' ? 'Manage Students' : 'Student Allotment'}</Text>
+              <Text style={styles.headerTitle}>{activeTab === 0 ? 'Manage Students' : 'Student Allotment'}</Text>
             </View>
           </LinearGradient>
 
@@ -1019,405 +1525,541 @@ export default function StudentsPage() {
 
           <View style={styles.navBar}>
             <TouchableOpacity
-              style={[styles.navItem, activeTab === 'list' && styles.navItemActive]}
-              onPress={() => setActiveTab('list')}
+              style={[styles.navItem, activeTab === 0 && styles.navItemActive]}
+              onPress={() => handleTabChange(0)}
             >
-              <MaterialIcons name="account-group" size={20} color={activeTab === 'list' ? colors.primary : colors.textSecondary} />
-              <Text style={[styles.navItemLabel, activeTab === 'list' && styles.navItemLabelActive]}>Manage Students</Text>
+              <MaterialIcons name="account-group" size={20} color={activeTab === 0 ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.navItemLabel, activeTab === 0 && styles.navItemLabelActive]}>Manage Students</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.navItem, activeTab === 'allotment' && styles.navItemActive]}
-              onPress={() => setActiveTab('allotment')}
+              style={[styles.navItem, activeTab === 1 && styles.navItemActive]}
+              onPress={() => handleTabChange(1)}
             >
-              <MaterialIcons name="account-plus" size={20} color={activeTab === 'allotment' ? colors.primary : colors.textSecondary} />
-              <Text style={[styles.navItemLabel, activeTab === 'allotment' && styles.navItemLabelActive]}>Student Allotment</Text>
+              <MaterialIcons name="account-plus" size={20} color={activeTab === 1 ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.navItemLabel, activeTab === 1 && styles.navItemLabelActive]}>Student Allotment</Text>
             </TouchableOpacity>
           </View>
 
-          {activeTab === 'list' ? (
-            <>
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconBg, { backgroundColor: '#E0E7FF' }]}>
-                    <MaterialIcons name="account-group" size={24} color="#004e92" />
-                  </View>
-                  <Text style={[styles.statValue, { color: '#004e92' }]}>{students.length}</Text>
-                  <Text style={styles.statLabel}>Total Students</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconBg, { backgroundColor: '#DCFCE7' }]}>
-                    <MaterialIcons name="check-circle" size={24} color="#16A34A" />
-                  </View>
-                  <Text style={[styles.statValue, { color: '#16A34A' }]}>{activeStudents}</Text>
-                  <Text style={styles.statLabel}>Active</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconBg, { backgroundColor: '#F3E8FF' }]}>
-                    <MaterialIcons name="door-closed" size={24} color="#9333EA" />
-                  </View>
-                  <Text style={[styles.statValue, { color: '#9333EA' }]}>{students.length}</Text>
-                  <Text style={styles.statLabel}>Rooms</Text>
-                </View>
-              </View>
-
-              <View style={styles.searchContainer}>
-                <MaterialIcons name="magnify" size={24} color="#94A3B8" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search by name, room, or roll no..."
-                  placeholderTextColor="#94A3B8"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-              </View>
-
-              <View style={styles.listHeader}>
-                <Text style={styles.listTitle}>
-                  {filteredStudents.length} Student{filteredStudents.length !== 1 ? 's' : ''} Found
-                </Text>
-              </View>
-
-              <FlatList
-                data={filteredStudents}
-                scrollEnabled={false}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.studentCard,
-                      selectedId === item.id && styles.studentCardActive,
-                    ]}
-                    onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
-                  >
-                    <View style={styles.cardHeader}>
-                      <View style={styles.studentAvatarContainer}>
-                        <LinearGradient
-                          colors={['#004e92', '#000428']}
-                          style={styles.studentAvatar}
-                        >
-                          <Text style={styles.studentInitial}>
-                            {item.name
-                              .split(' ')
-                              .map((n: string) => n[0])
-                              .join('')
-                              .toUpperCase()}
-                          </Text>
-                        </LinearGradient>
-                      </View>
-                      <View style={styles.studentInfo}>
-                        <Text style={styles.studentName}>{item.name}</Text>
-                        <View style={styles.roomRollContainer}>
-                          <View style={styles.pill}>
-                            <Text style={styles.detailSmall}>Room {item.room}</Text>
-                          </View>
-                          <Text style={styles.detailSmallLight}>• {item.rollNo}</Text>
-                        </View>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                        <MaterialIcons name={getStatusIcon(item.status)} size={18} color={getStatusColor(item.status)} />
-                      </View>
+          <PagerView
+            ref={pagerRef}
+            style={{ flex: 1 }}
+            initialPage={0}
+            onPageSelected={(e) => setActiveTab(e.nativeEvent.position)}
+          >
+            {/* PAGE 0: MANAGE STUDENTS LIST */}
+            <View key="0" style={{ flex: 1 }}>
+              <View style={{ flex: 1, position: 'relative' }}>
+                <SectionList
+                  ref={sectionListRef}
+                  onScroll={handleScroll}
+                  scrollEventThrottle={16}
+                  sections={sections}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={styles.listContent}
+                  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                  showsVerticalScrollIndicator={false}
+                  renderSectionHeader={({ section: { title } }) => (
+                    <View style={{ backgroundColor: colors.background, paddingVertical: 8, paddingHorizontal: 20 }}>
+                      <Text style={{ fontWeight: 'bold', color: colors.primary }}>{title}</Text>
                     </View>
+                  )}
+                  ListHeaderComponent={
+                    <View>
+                      <View style={styles.statsGrid}>
+                        {/* Hero Card: Total Students */}
+                        <LinearGradient
+                          colors={['#4F46E5', '#312E81']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.heroCard}
+                        >
+                          <View>
+                            <Text style={styles.heroLabel}>Total Students</Text>
+                            <Text style={styles.heroValue}>{students.length}</Text>
+                          </View>
+                          <MaterialIcons name="account-group" size={48} color="rgba(255,255,255,0.9)" />
+                          <View style={styles.cardWatermark}>
+                            <MaterialIcons name="account-group" size={100} color="#fff" />
+                          </View>
+                        </LinearGradient>
 
-                    {selectedId === item.id && (
-                      <View style={styles.expandedContent}>
-                        <View style={styles.infoSection}>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="account" size={16} color="#6366F1" />
-                              <Text style={styles.detailLabel}>Full Name</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.name}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="card-account-details" size={16} color="#6366F1" />
-                              <Text style={styles.detailLabel}>Roll No</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.rollNo}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="school" size={16} color="#8B5CF6" />
-                              <Text style={styles.detailLabel}>College</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.collegeName || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="home-city" size={16} color="#8B5CF6" />
-                              <Text style={styles.detailLabel}>Hostel</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.hostelName || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="cake" size={16} color="#EC4899" />
-                              <Text style={styles.detailLabel}>Age</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.age || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="door-closed" size={16} color="#8B5CF6" />
-                              <Text style={styles.detailLabel}>Room</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.room}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="email" size={16} color="#06B6D4" />
-                              <Text style={styles.detailLabel}>Official Email</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.email}</Text>
-                          </View>
-                          {item.personalEmail && (
-                            <View style={styles.detailRow}>
-                              <View style={styles.detailLeft}>
-                                <MaterialIcons name="gmail" size={16} color="#DB4437" />
-                                <Text style={styles.detailLabel}>Linked Gmail</Text>
-                              </View>
-                              <Text style={styles.detailValue}>{item.personalEmail}</Text>
-                            </View>
-                          )}
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="phone" size={16} color="#EC4899" />
-                              <Text style={styles.detailLabel}>Phone</Text>
-                            </View>
-                            <Text style={styles.detailValue}>{item.phone}</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="check-circle" size={16} color={getStatusColor(item.status)} />
-                              <Text style={styles.detailLabel}>Status</Text>
-                            </View>
-                            <Text style={[styles.detailValue, { color: getStatusColor(item.status), fontWeight: '700' }]}>
-                              {item.status.toUpperCase()}
-                            </Text>
-                          </View>
-
-                          <View style={styles.detailRow}>
-                            <View style={styles.detailLeft}>
-                              <MaterialIcons name="calendar-clock" size={16} color="#64748B" />
-                              <Text style={styles.detailLabel}>Joined On</Text>
-                            </View>
-                            <Text style={styles.detailValue}>
-                              {item.createdAt?.seconds
-                                ? new Date(item.createdAt.seconds * 1000).toLocaleString('en-IN', {
-                                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                                })
-                                : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'N/A')}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.detailRow}>
-                          <View style={styles.detailLeft}>
-                            <MaterialIcons name="key" size={16} color="#F59E0B" />
-                            <Text style={styles.detailLabel}>Password</Text>
-                          </View>
-                          <Text style={[styles.detailValue, { fontFamily: 'monospace', color: '#D97706' }]}>
-                            {item.tempPassword || 'N/A'}
-                          </Text>
-                        </View>
-
-                        <View style={styles.actionButtons}>
-                          <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={() => handleEdit(item)}>
-                            <MaterialIcons name="pencil" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Edit</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.actionBtn, styles.deleteBtn]}
-                            onPress={() => handleDelete(item.id, item.name, item.room)}
+                        <View style={styles.statsRow}>
+                          {/* Active Students */}
+                          <LinearGradient
+                            colors={['#059669', '#064E3B']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.miniCard}
                           >
-                            <MaterialIcons name="delete" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Delete</Text>
-                          </TouchableOpacity>
+                            <View style={styles.miniHeader}>
+                              <MaterialIcons name="check-circle" size={18} color="rgba(255,255,255,0.9)" />
+                              <Text style={styles.miniLabel}>Active</Text>
+                            </View>
+                            <Text style={styles.miniValue}>{activeStudents}</Text>
+                            <View style={styles.cardWatermark}>
+                              <MaterialIcons name="check-circle" size={80} color="#fff" />
+                            </View>
+                          </LinearGradient>
+
+                          {/* Rooms Occupied */}
+                          <LinearGradient
+                            colors={['#7E22CE', '#581C87']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.miniCard}
+                          >
+                            <View style={styles.miniHeader}>
+                              <MaterialIcons name="door-closed" size={18} color="rgba(255,255,255,0.9)" />
+                              <Text style={styles.miniLabel}>Rooms</Text>
+                            </View>
+                            <Text style={styles.miniValue}>{students.length}</Text>
+                            <View style={styles.cardWatermark}>
+                              <MaterialIcons name="door-closed" size={80} color="#fff" />
+                            </View>
+                          </LinearGradient>
                         </View>
                       </View>
-                    )}
-                  </TouchableOpacity>
-                )}
-                contentContainerStyle={styles.listContent}
-              />
-            </>
-          ) : (
-            <View style={{ paddingHorizontal: 20 }}>
-              {/* Form Card */}
-              <View style={styles.card}>
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={styles.sectionTitle}>Student Details</Text>
-                  <Text style={styles.sectionSubtitle}>Enter the information below to allot a room.</Text>
-                </View>
 
-                {/* Generated Password Input */}
-                <View style={{ marginBottom: 16 }}>
-                  <InputField
-                    label="Login Password"
-                    icon="key-variant"
-                    value={generatedPassword}
-                    onChangeText={setGeneratedPassword}
-                    placeholder="Auto-generated password"
-                    required
-                    hasSubmitted={hasSubmitted}
-                  />
-                  <Text style={{ fontSize: 12, color: '#64748B', marginLeft: 4, marginTop: -8, marginBottom: 12 }}>
-                    This password is auto-generated. You can edit it if needed.
-                  </Text>
-                </View>
-
-                <View style={styles.divider} />
-
-                <InputField
-                  label="Full Name"
-                  icon="account"
-                  value={fullName}
-                  onChangeText={setFullName}
-                  placeholder="e.g. John Doe"
-                  required
-                  hasSubmitted={hasSubmitted}
-                />
-
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Roll No"
-                      icon="identifier"
-                      value={rollNo}
-                      onChangeText={setRollNo}
-                      placeholder="e.g. CS-24-001"
-                      required
-                      hasSubmitted={hasSubmitted}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Room"
-                      icon="door"
-                      value={room}
-                      onChangeText={setRoom}
-                      placeholder="e.g. 101"
-                      required
-                      hasSubmitted={hasSubmitted}
-                    />
-                  </View>
-                </View>
-
-                <InputField
-                  label="Official Email"
-                  icon="email-lock"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="student@college.edu"
-                  keyboardType="email-address"
-                  required
-                  hasSubmitted={hasSubmitted}
-                />
-
-                <InputField
-                  label="Personal Email"
-                  icon="google"
-                  value={personalEmail}
-                  onChangeText={setPersonalEmail}
-                  placeholder="personal@gmail.com (Optional)"
-                  keyboardType="email-address"
-                  hasSubmitted={hasSubmitted}
-                />
-
-                <InputField
-                  label="Phone Number"
-                  icon="phone"
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="10-digit mobile number"
-                  keyboardType="phone-pad"
-                  required
-                  hasSubmitted={hasSubmitted}
-                />
-
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Age"
-                      icon="calendar-account"
-                      value={age}
-                      onChangeText={setAge}
-                      placeholder="Years"
-                      keyboardType="numeric"
-                      required
-                      hasSubmitted={hasSubmitted}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.label}>Status</Text>
-                      <View style={styles.inputWrapper}>
-                        <Switch
-                          trackColor={{ false: "#FEE2E2", true: "#DCFCE7" }}
-                          thumbColor={status === 'active' ? "#16A34A" : "#EF4444"}
-                          ios_backgroundColor="#FEE2E2"
-                          onValueChange={(val) => setStatus(val ? 'active' : 'inactive')}
-                          value={status === 'active'}
+                      <View style={styles.searchContainer}>
+                        <MaterialIcons name="magnify" size={24} color="#94A3B8" style={styles.searchIcon} />
+                        <TextInput
+                          style={styles.searchInput}
+                          placeholder="Search by name, room, or roll no..."
+                          placeholderTextColor="#94A3B8"
+                          value={searchQuery}
+                          onChangeText={setSearchQuery}
                         />
-                        <Text style={{
-                          marginLeft: 12,
-                          fontSize: 14,
-                          fontWeight: '600',
-                          color: status === 'active' ? '#16A34A' : '#EF4444'
-                        }}>
-                          {status === 'active' ? 'Active' : 'Inactive'}
+                      </View>
+
+                      <View style={styles.listHeader}>
+                        <Text style={styles.listTitle}>
+                          {filteredStudents.length} Student{filteredStudents.length !== 1 ? 's' : ''} Found
                         </Text>
                       </View>
                     </View>
-                  </View>
-                </View>
-
-                <View style={styles.divider} />
-
-                <Text style={styles.sectionTitle}>College Info</Text>
-
-                <InputField
-                  label="College Name"
-                  icon="school"
-                  value={collegeName}
-                  onChangeText={setCollegeName}
-                  placeholder="e.g. Engineering College"
-                  required
-                  hasSubmitted={hasSubmitted}
+                  }
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.studentCard,
+                        // selectedId === item.id && styles.studentCardActive, // No longer highlighting in place
+                      ]}
+                      onPress={() => {
+                        setViewingStudent(item);
+                        setDetailsModalVisible(true);
+                      }}
+                    >
+                      <View style={styles.cardHeader}>
+                        <View style={styles.studentAvatarContainer}>
+                          <LinearGradient
+                            colors={['#004e92', '#000428']}
+                            style={styles.studentAvatar}
+                          >
+                            <Text style={styles.studentInitial}>
+                              {item.profilePhoto ? (
+                                <Image source={{ uri: `${API_BASE_URL}${item.profilePhoto}` }} style={styles.avatarImage} contentFit="cover" />
+                              ) : (
+                                item.name
+                                  .split(' ')
+                                  .map((n: string) => n[0])
+                                  .join('')
+                                  .toUpperCase()
+                              )}
+                            </Text>
+                          </LinearGradient>
+                        </View>
+                        <View style={styles.studentInfo}>
+                          <Text style={styles.studentName}>{item.name}</Text>
+                          <View style={styles.roomRollContainer}>
+                            <View style={styles.pill}>
+                              <Text style={styles.detailSmall}>Room {item.room}</Text>
+                            </View>
+                            <Text style={styles.detailSmallLight}>• {item.rollNo}</Text>
+                          </View>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+                          <MaterialIcons name={getStatusIcon(item.status)} size={18} color={getStatusColor(item.status)} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 />
-
-                <InputField
-                  label="Hostel Name"
-                  icon="office-building"
-                  value={hostelName}
-                  onChangeText={setHostelName}
-                  placeholder="e.g. Block A"
-                  required
-                  hasSubmitted={hasSubmitted}
+                <AlphabetJumpBar
+                  onLetterPress={handleLetterPress}
+                  visible={showAlphabet}
+                  alphabets={sections.map(s => s.title)}
                 />
-
-                <TouchableOpacity style={styles.submitButton} onPress={handleAllotmentSubmit}>
-                  <LinearGradient
-                    colors={['#004e92', '#000428']}
-                    style={styles.gradientButton}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
-                    <Text style={styles.submitButtonText}>Confirm Allotment</Text>
-                    <MaterialIcons name="check-circle-outline" size={20} color="#fff" />
-                  </LinearGradient>
-                </TouchableOpacity>
               </View>
-              <View style={{ height: 40 }} />
             </View>
-          )}
-        </ScrollView>
+
+            {/* PAGE 1: STUDENT ALLOTMENT FORM */}
+            <View key="1" style={{ flex: 1 }}>
+              <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+                {/* Form Card */}
+                <View style={styles.card}>
+                  <View style={{ marginBottom: 24 }}>
+                    <Text style={styles.sectionTitle}>Student Details</Text>
+                    <Text style={styles.sectionSubtitle}>Enter the information below to allot a room.</Text>
+                  </View>
+
+                  {/* Profile Photo Input */}
+                  <View style={[styles.profilePhotoContainer, { marginBottom: 24 }]}>
+                    <TouchableOpacity onPress={pickImage} style={styles.photoPlaceholder}>
+                      {image ? (
+                        <Image source={{ uri: image }} style={styles.profilePhoto} contentFit="cover" />
+                      ) : (
+                        <MaterialIcons name="camera-plus" size={32} color={colors.textSecondary} />
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={pickImage}>
+                      <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 13 }}>
+                        {image ? 'Change Photo' : 'Upload Profile Photo'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Generated Password Input */}
+                  <View style={{ marginBottom: 16 }}>
+                    <InputField
+                      label="Login Password"
+                      icon="key-variant"
+                      value={generatedPassword}
+                      onChangeText={setGeneratedPassword}
+                      placeholder="Auto-generated password"
+                      required
+                      hasSubmitted={hasSubmitted}
+                    />
+                    <Text style={{ fontSize: 12, color: '#64748B', marginLeft: 4, marginTop: -8, marginBottom: 12 }}>
+                      Auto-generated (8 characters max). You can edit if needed.
+                    </Text>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <InputField
+                    label="Full Name"
+                    icon="account"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    placeholder="e.g. John Doe"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Roll No"
+                    icon="identifier"
+                    value={rollNo}
+                    onChangeText={setRollNo}
+                    placeholder="e.g. CS-24-001"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Room"
+                    icon="door"
+                    value={room}
+                    onChangeText={setRoom}
+                    placeholder="e.g. 101"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Personal Email (Login ID)"
+                    icon="email-lock"
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="student@college.edu"
+                    keyboardType="email-address"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Google Mail (For Login)"
+                    icon="google"
+                    value={googleEmail}
+                    onChangeText={setGoogleEmail}
+                    placeholder="student.google@gmail.com"
+                    keyboardType="email-address"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="College Email"
+                    icon="email"
+                    value={collegeEmail}
+                    onChangeText={setCollegeEmail}
+                    placeholder="student@college.edu"
+                    keyboardType="email-address"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Phone Number"
+                    icon="phone"
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="10-digit mobile number"
+                    keyboardType="phone-pad"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Address"
+                    icon="map-marker"
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder="Permanent Address"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Father Name"
+                    icon="account-tie"
+                    value={fatherName}
+                    onChangeText={setFatherName}
+                    placeholder="Father Name"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Father Phone"
+                    icon="phone"
+                    value={fatherPhone}
+                    onChangeText={setFatherPhone}
+                    placeholder="10-digit phone number"
+                    keyboardType="phone-pad"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Mother Name"
+                    icon="face-woman"
+                    value={motherName}
+                    onChangeText={setMotherName}
+                    placeholder="Mother Name"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Mother Phone"
+                    icon="phone"
+                    value={motherPhone}
+                    onChangeText={setMotherPhone}
+                    placeholder="10-digit phone number"
+                    keyboardType="phone-pad"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Fees Amount (Dues)"
+                    icon="cash"
+                    value={initialDues}
+                    onChangeText={setInitialDues}
+                    placeholder="e.g. 15000"
+                    keyboardType="numeric"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Fee Frequency</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {['Monthly', 'Semester', 'Yearly'].map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          onPress={() => setFeeFrequency(type as any)}
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            paddingVertical: 12,
+                            borderRadius: 12,
+                            backgroundColor: feeFrequency === type
+                              ? (theme === 'dark' ? 'rgba(59, 130, 246, 0.2)' : '#EFF6FF')
+                              : (theme === 'dark' ? '#1E293B' : '#F8FAFC'),
+                            borderWidth: 1,
+                            borderColor: feeFrequency === type ? colors.primary : colors.border
+                          }}
+                        >
+                          <Text style={{
+                            color: feeFrequency === type ? colors.primary : colors.textSecondary,
+                            fontWeight: feeFrequency === type ? '700' : '500',
+                            fontSize: 13
+                          }}>{type}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.label}>Date of Birth <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                        <TouchableOpacity
+                          onPress={() => setShowDatePicker(true)}
+                          style={[styles.inputWrapper, { paddingVertical: 12, justifyContent: 'center' }]}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <MaterialIcons name="calendar-account" size={20} color={colors.textSecondary} style={{ marginRight: 10 }} />
+                            <Text style={{ color: dob ? colors.text : colors.textSecondary, fontSize: 16 }}>
+                              {dob || 'Select Date'}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                        {showDatePicker && (
+                          <DateTimePicker
+                            value={dob && dob.includes('/') ? new Date(dob.split('/').reverse().join('-')) : new Date()}
+                            mode="date"
+                            display="default"
+                            onChange={onDateChange}
+                            maximumDate={new Date()}
+                          />
+                        )}
+                      </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.label}>Status</Text>
+                        <View style={styles.inputWrapper}>
+                          <Switch
+                            trackColor={{ false: "#FEE2E2", true: "#DCFCE7" }}
+                            thumbColor={status === 'active' ? "#16A34A" : "#EF4444"}
+                            ios_backgroundColor="#FEE2E2"
+                            onValueChange={(val) => setStatus(val ? 'active' : 'inactive')}
+                            value={status === 'active'}
+                          />
+                          <Text style={{
+                            marginLeft: 12,
+                            fontSize: 14,
+                            fontWeight: '600',
+                            color: status === 'active' ? '#16A34A' : '#EF4444'
+                          }}>
+                            {status === 'active' ? 'Active' : 'Inactive'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <Text style={[styles.sectionTitle, { color: colors.primary }]}>Medical Information (Optional)</Text>
+
+                  <InputField
+                    label="Blood Group"
+                    icon="water"
+                    value={bloodGroup}
+                    onChangeText={setBloodGroup}
+                    placeholder="e.g. O+, A+, B+, AB+"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Emergency Contact Name"
+                    icon="account-alert"
+                    value={emergencyContactName}
+                    onChangeText={setEmergencyContactName}
+                    placeholder="Emergency Contact Name"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Emergency Phone"
+                    icon="phone-alert"
+                    value={emergencyContactPhone}
+                    onChangeText={setEmergencyContactPhone}
+                    placeholder="10-digit emergency contact number"
+                    keyboardType="phone-pad"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Medical History / Allergies"
+                    icon="medical-bag"
+                    value={medicalHistory}
+                    onChangeText={setMedicalHistory}
+                    placeholder="Any known allergies, medical conditions, or medications"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <View style={styles.divider} />
+
+                  <Text style={styles.sectionTitle}>College Info</Text>
+
+                  <InputField
+                    label="WiFi SSID"
+                    icon="wifi"
+                    value={wifiSSID}
+                    onChangeText={setWifiSSID}
+                    placeholder="e.g. Hostel_Wifi_101"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="WiFi Password"
+                    icon="lock"
+                    value={wifiPassword}
+                    onChangeText={setWifiPassword}
+                    placeholder="WiFi Password"
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="College Name"
+                    icon="school"
+                    value={collegeName}
+                    onChangeText={setCollegeName}
+                    placeholder="e.g. Engineering College"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <InputField
+                    label="Hostel Name"
+                    icon="office-building"
+                    value={hostelName}
+                    onChangeText={setHostelName}
+                    placeholder="e.g. Block A"
+                    required
+                    hasSubmitted={hasSubmitted}
+                  />
+
+                  <TouchableOpacity style={styles.submitButton} onPress={handleAllotmentSubmit}>
+                    <LinearGradient
+                      colors={['#004e92', '#000428']}
+                      style={styles.gradientButton}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <Text style={styles.submitButtonText}>Confirm Allotment</Text>
+                      <MaterialIcons name="check-circle-outline" size={20} color="#fff" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+                <View style={{ height: 40 }} />
+
+              </ScrollView>
+            </View>
+          </PagerView>
+        </View>
+
 
       </KeyboardAvoidingView >
 
     </SafeAreaView >
   );
 }
+
 
 

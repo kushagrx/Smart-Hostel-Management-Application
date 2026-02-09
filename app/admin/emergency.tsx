@@ -17,7 +17,7 @@ import InputField from '../../components/InputField';
 import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
 import { isAdmin, useUser } from '../../utils/authUtils';
-import { addContact, deleteContact, EmergencyContact, subscribeToContacts } from '../../utils/emergencySyncUtils';
+import { addContact, deleteContact, EmergencyContact, subscribeToContacts, updateContact } from '../../utils/emergencySyncUtils';
 
 const HOSTEL_ICONS = [
     { name: 'phone-in-talk', label: 'General' },
@@ -50,7 +50,7 @@ export default function ManageEmergencyPage() {
 
     // Modal State
     const [modalVisible, setModalVisible] = useState(false);
-    // const [newTitle, setNewTitle] = useState(''); // Removed as per request
+    const [editingId, setEditingId] = useState<string | null>(null); // New State for Edit Mode
     const [newName, setNewName] = useState('');
     const [newNumber, setNewNumber] = useState('');
     const [selectedIcon, setSelectedIcon] = useState('phone-in-talk');
@@ -67,7 +67,23 @@ export default function ManageEmergencyPage() {
         return () => unsubscribe();
     }, [user]);
 
-    const handleCreate = async () => {
+    const handleEdit = (contact: EmergencyContact) => {
+        setEditingId(contact.id);
+        setNewName(contact.name || '');
+        setNewNumber(contact.number);
+        setSelectedIcon(contact.icon || 'phone-in-talk');
+        setModalVisible(true);
+    };
+
+    const handleAddNew = () => {
+        setEditingId(null);
+        setNewName('');
+        setNewNumber('');
+        setSelectedIcon('phone-in-talk');
+        setModalVisible(true);
+    };
+
+    const handleSave = async () => {
         if (!newNumber.trim()) {
             showAlert("Error", "Phone Number is required");
             return;
@@ -80,21 +96,33 @@ export default function ManageEmergencyPage() {
 
         setSaving(true);
         try {
-            await addContact({
-                title: title,
-                name: newName,
-                number: newNumber,
-                icon: selectedIcon
-            });
+            if (editingId) {
+                // UPDATE Existing
+                await updateContact(editingId, {
+                    title: title,
+                    name: newName,
+                    number: newNumber,
+                    icon: selectedIcon
+                });
+                showAlert("Success", "Contact updated successfully");
+            } else {
+                // CREATE New
+                await addContact({
+                    title: title,
+                    name: newName,
+                    number: newNumber,
+                    icon: selectedIcon
+                });
+                showAlert("Success", "Contact added successfully");
+            }
             setModalVisible(false);
-            // setNewTitle('');
+            setEditingId(null);
             setNewName('');
             setNewNumber('');
             setSelectedIcon('phone-in-talk');
-            showAlert("Success", "Contact added successfully");
         } catch (error) {
             console.error(error);
-            showAlert("Error", "Failed to add contact");
+            showAlert("Error", `Failed to ${editingId ? 'update' : 'add'} contact`);
         } finally {
             setSaving(false);
         }
@@ -208,6 +236,12 @@ export default function ManageEmergencyPage() {
         cardSubtitle: {
             fontSize: 13,
             color: colors.textSecondary,
+        },
+        editBtn: {
+            padding: 8,
+            backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.2)' : '#EFF6FF',
+            borderRadius: 10,
+            marginRight: 8,
         },
         deleteBtn: {
             padding: 8,
@@ -323,7 +357,7 @@ export default function ManageEmergencyPage() {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.list}
                     ListHeaderComponent={
-                        <TouchableOpacity style={styles.createBtn} onPress={() => setModalVisible(true)}>
+                        <TouchableOpacity style={styles.createBtn} onPress={handleAddNew}>
                             <MaterialCommunityIcons name="plus" size={24} color="#fff" />
                             <Text style={styles.createBtnText}>Add New Contact</Text>
                         </TouchableOpacity>
@@ -339,9 +373,14 @@ export default function ManageEmergencyPage() {
                                     {item.name ? `${item.name} • ` : ''}{item.number}
                                 </Text>
                             </View>
-                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-                                <MaterialCommunityIcons name="trash-can-outline" size={20} color="#EF4444" />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity onPress={() => handleEdit(item)} style={styles.editBtn}>
+                                    <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
+                                    <MaterialCommunityIcons name="trash-can-outline" size={20} color="#EF4444" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
                     ListEmptyComponent={
@@ -352,7 +391,7 @@ export default function ManageEmergencyPage() {
                 />
             )}
 
-            {/* Add Contact Modal */}
+            {/* Add/Edit Contact Modal */}
             <Modal
                 visible={modalVisible}
                 transparent
@@ -362,7 +401,7 @@ export default function ManageEmergencyPage() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Add Contact</Text>
+                            <Text style={styles.modalTitle}>{editingId ? 'Edit Contact' : 'Add Contact'}</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)}>
                                 <MaterialCommunityIcons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
@@ -438,13 +477,13 @@ export default function ManageEmergencyPage() {
 
                             <TouchableOpacity
                                 style={[styles.submitBtn, saving && { opacity: 0.7 }]}
-                                onPress={handleCreate}
+                                onPress={handleSave}
                                 disabled={saving}
                             >
                                 {saving ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
-                                    <Text style={styles.submitBtnText}>Save Contact</Text>
+                                    <Text style={styles.submitBtnText}>{editingId ? 'Update Contact' : 'Save Contact'}</Text>
                                 )}
                             </TouchableOpacity>
                         </ScrollView>

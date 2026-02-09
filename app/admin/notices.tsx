@@ -6,6 +6,7 @@ import { FlatList, Modal, RefreshControl, StyleSheet, Text, TextInput, Touchable
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAlert } from '../../context/AlertContext';
+import { useRefresh } from '../../hooks/useRefresh';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { createNotice, deleteNotice, Notice, subscribeToNotices } from '../../utils/noticesSyncUtils';
 import { useTheme } from '../../utils/ThemeContext';
@@ -262,14 +263,12 @@ export default function NoticesPage() {
 
   const [loading, setLoading] = useState(true);
 
-  const [refreshing, setRefreshing] = useState(false);
-
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    // Simulated refresh for real-time list
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }, () => {
+    setSelectedId(null);
+  });
 
   // Auto-expand if openId is provided
   useEffect(() => {

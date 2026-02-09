@@ -15,21 +15,24 @@ import { useAlert } from '../context/AlertContext';
 import { setStoredUser } from '../utils/authUtils';
 import { useTheme } from '../utils/ThemeContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DRAWER_WIDTH = 280;
 
-export const navItems = [
-  { id: 'dashboard', label: 'Home', icon: 'home', color: '#3B82F6' },
-  { id: 'students', label: 'Students', icon: 'account-group', color: '#6366F1' },
-  { id: 'rooms', label: 'Rooms', icon: 'door-closed', color: '#8B5CF6' },
-  { id: 'complaints', label: 'Complaints', icon: 'alert-circle', color: '#EC4899' },
-  { id: 'leaves', label: 'Leaves', icon: 'calendar-clock', color: '#06B6D4' },
-  { id: 'services', label: 'Services', icon: 'room-service', color: '#10B981' },
-  { id: 'notices', label: 'Notices', icon: 'bullhorn', color: '#3B82F6' },
-  { id: 'busTimings', label: 'Bus Timings', icon: 'bus-clock', color: '#F59E0B' },
-  { id: 'messMenu', label: 'Mess Menu', icon: 'food-fork-drink', color: '#EC4899' },
-  { id: 'laundry', label: 'Laundry', icon: 'washing-machine', color: '#06B6D4' },
-  { id: 'emergency', label: 'Emergency', icon: 'phone-alert', color: '#EF4444' },
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const DRAWER_WIDTH = SCREEN_WIDTH * 0.8;
+
+type NavItem = {
+  id: string;
+  label: string;
+  icon: any; // MaterialCommunityIcons name
+  color: string;
+  path?: string; // If leaf node
+  children?: NavItem[];
+};
+
+export const navItems: NavItem[] = [
+  { id: 'dashboard', label: 'Home', icon: 'home', color: '#3B82F6', path: '/admin' },
+  { id: 'studentManagement', label: 'Student Management', icon: 'account-school', color: '#6366F1', path: '/admin/student-management' },
+  { id: 'facilities', label: 'Hostel Management', icon: 'office-building', color: '#10B981', path: '/admin/facilities' },
 ];
 
 interface AdminSidebarProps {
@@ -68,41 +71,27 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
     return {
       transform: [
         { translateX: interpolate(progress.value, [0, 1], [-DRAWER_WIDTH, 0]) }
-      ]
+      ],
+      borderTopRightRadius: interpolate(progress.value, [0, 1], [0, 20]),
+      borderBottomRightRadius: interpolate(progress.value, [0, 1], [0, 20]),
     };
   });
 
-  const handleNavPress = (id: string) => {
+  const handleNavPress = (item: NavItem) => {
+    if (!item.path) return;
+
     onClose();
 
-    // Determine the target path
-    let targetPath = '';
-    if (id === 'dashboard') targetPath = '/admin';
-    else if (id === 'services') targetPath = '/admin/services';
-    else if (id === 'students') targetPath = '/admin/students';
-    else if (id === 'rooms') targetPath = '/admin/rooms';
-    else if (id === 'complaints') targetPath = '/admin/complaints';
-    else if (id === 'leaves') targetPath = '/admin/leaveRequests';
-    else if (id === 'notices') targetPath = '/admin/notices';
-    else if (id === 'busTimings') targetPath = '/admin/busTimings';
-    else if (id === 'messMenu') targetPath = '/admin/messMenu';
-    else if (id === 'laundry') targetPath = '/admin/laundry';
-    else if (id === 'emergency') targetPath = '/admin/emergency';
-
-    // If target is dashboard
-    if (id === 'dashboard') {
+    // Determine navigation method
+    if (item.id === 'dashboard') {
       if (activeNav !== 'dashboard') {
-        // Unwind to dashboard
         router.navigate('/admin');
       }
     } else {
-      // Navigating to sibling page
       if (activeNav === 'dashboard') {
-        // From dashboard, push
-        router.push(targetPath as any);
+        router.push(item.path as any);
       } else {
-        // From another sibling, replace to keep stack flat (Home -> Sibling)
-        router.replace(targetPath as any);
+        router.replace(item.path as any);
       }
     }
   };
@@ -118,10 +107,14 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
           style: "destructive",
           onPress: async () => {
             try {
-              const { getAuthSafe } = await import('../utils/firebase');
-              const { signOut } = await import('firebase/auth');
-              const auth = getAuthSafe();
-              if (auth) await signOut(auth);
+              // const { getAuthSafe } = await import('../utils/firebase');
+              // const { signOut } = await import('firebase/auth');
+              // const auth = getAuthSafe();
+              // if (auth) await signOut(auth);
+
+              await setStoredUser(null);
+              onClose();
+              router.replace('/login');
 
               await setStoredUser(null);
               onClose();
@@ -135,6 +128,37 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
     );
   };
 
+  const renderNavItem = (item: NavItem, level = 0) => {
+    const isActive = activeNav === item.id;
+
+    return (
+      <View key={item.id}>
+        <TouchableOpacity
+          style={[
+            styles.navItem,
+            isActive && styles.navItemActive,
+            { paddingLeft: 20 + (level * 20) }
+          ]}
+          onPress={() => handleNavPress(item)}
+        >
+          <View style={[styles.navIconContainer, isActive && { backgroundColor: item.color + '20' }]}>
+            <MaterialIcons
+              name={item.icon}
+              size={22}
+              color={isActive ? item.color : colors.textSecondary}
+            />
+          </View>
+          <Text style={[
+            styles.navText,
+            { color: isActive ? item.color : colors.textSecondary, fontWeight: isActive ? '700' : '600', flex: 1 }
+          ]}>
+            {item.label}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <Animated.View style={[styles.sidebarOverlay, { top: 0, bottom: 0 }, overlayStyle]}>
       <TouchableOpacity
@@ -144,57 +168,20 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
       />
       <Animated.View style={[styles.sidebarPanel, { backgroundColor: colors.card, shadowColor: '#000' }, panelStyle]}>
         <LinearGradient colors={['#000428', '#004e92']} style={[styles.sidebarHeader, { paddingTop: insets.top + 24 }]}>
-          <Text style={styles.sidebarTitle}>Smart Hostel</Text>
+          <Text style={styles.sidebarTitle}>SmartStay</Text>
           <TouchableOpacity onPress={onClose}>
             <MaterialIcons name="close" size={24} color="#fff" />
           </TouchableOpacity>
         </LinearGradient>
 
-        <ScrollView
-          style={styles.sidebarScrollView}
-          contentContainerStyle={styles.sidebarScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {navItems.map((item) => {
-            const isActive = activeNav === item.id;
-            // For active items, we use generic blue tint. 
-            // For inactive, separate colors for dark mode vs light mode
-            const bg = isActive ? (isDark ? 'rgba(59,130,246,0.2)' : '#EFF6FF') : 'transparent';
-            const iconBg = isActive ? colors.primary : (isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9');
-            const iconColor = isActive ? '#fff' : (isDark ? colors.textSecondary : '#64748B');
-            const textColor = isActive ? (isDark ? '#bfdbfe' : colors.primary) : colors.textSecondary;
-
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.sidebarItem, { backgroundColor: bg }]}
-                onPress={() => handleNavPress(item.id)}
-              >
-                <View style={[styles.sidebarIconContainer, { backgroundColor: iconBg }]}>
-                  <MaterialIcons name={item.icon as any} size={22} color={iconColor} />
-                </View>
-                <Text style={[styles.sidebarItemLabel, { color: textColor, fontWeight: isActive ? '700' : '600' }]}>
-                  {item.label}
-                </Text>
-                {isActive && (
-                  <MaterialIcons name="chevron-right" size={20} color={isDark ? '#bfdbfe' : colors.primary} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-
-          <View style={[styles.sidebarDivider, { backgroundColor: colors.border }]} />
-
-          <TouchableOpacity
-            style={styles.sidebarLogoutItem}
-            onPress={handleLogout}
-          >
-            <View style={[styles.sidebarIconContainer, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' }]}>
-              <MaterialIcons name="logout" size={22} color="#EF4444" />
-            </View>
-            <Text style={styles.sidebarLogoutLabel}>Log Out</Text>
-          </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.navContainer} showsVerticalScrollIndicator={false}>
+          {navItems.map(item => renderNavItem(item))}
         </ScrollView>
+
+        <TouchableOpacity style={[styles.logoutBtn, { borderTopColor: colors.border }]} onPress={handleLogout}>
+          <MaterialIcons name="logout" size={20} color="#EF4444" />
+          <Text style={styles.logoutText}>Log Out</Text>
+        </TouchableOpacity>
       </Animated.View>
     </Animated.View>
   );
@@ -206,27 +193,33 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 2000,
-    flexDirection: 'row',
   },
   overlayBackground: {
     position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sidebarPanel: {
-    width: 280,
-    height: '100%',
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: DRAWER_WIDTH,
     elevation: 20,
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    overflow: 'hidden',
   },
   sidebarHeader: {
-    paddingVertical: 24,
-    paddingHorizontal: 24,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingBottom: 24,
   },
   sidebarTitle: {
     fontSize: 22,
@@ -234,47 +227,43 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 0.5,
   },
-  sidebarScrollView: {
-    flex: 1,
-    paddingVertical: 12,
+  navContainer: {
+    paddingVertical: 16,
   },
-  sidebarScrollContent: {
-    paddingBottom: 40,
-  },
-  sidebarItem: {
+  navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 16,
+    paddingVertical: 14,
+    paddingRight: 20,
+    marginBottom: 4,
   },
-  sidebarIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  navItemActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    borderRightWidth: 3,
+    borderRightColor: '#3B82F6',
+  },
+  navIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
-  sidebarItemLabel: {
-    flex: 1,
+  navText: {
     fontSize: 15,
   },
-  sidebarDivider: {
-    height: 1,
-    marginHorizontal: 24,
-    marginVertical: 16,
-  },
-  sidebarLogoutItem: {
+  logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    marginHorizontal: 16,
+    padding: 24,
+    borderTopWidth: 1,
+    marginTop: 'auto',
   },
-  sidebarLogoutLabel: {
-    fontSize: 15,
+  logoutText: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#EF4444',
+    marginLeft: 12,
   },
 });

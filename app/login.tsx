@@ -1,292 +1,131 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Google from 'expo-auth-session/providers/google';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAlert } from '../context/AlertContext';
-import { useTheme } from '../utils/ThemeContext';
 import { setStoredUser } from '../utils/authUtils';
-import { getAuthSafe, getDbSafe } from '../utils/firebase';
-import { getRoleFromEmail } from '../utils/roleUtils';
 
-WebBrowser.maybeCompleteAuthSession();
+
 
 export default function Login() {
-  const { colors } = useTheme();
   const router = useRouter();
-  const { showAlert } = useAlert();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  // Force use of the Expo Auth Proxy to avoid "invalid_request" with local IPs
-  const redirectUri = 'https://auth.expo.io/@shaswat2004/smarthostel';
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    redirectUri,
-  });
 
   useEffect(() => {
-    if (request) {
-      console.log('Redirect URI:', request.redirectUri);
-    }
-  }, [request]);
+    GoogleSignin.configure({
+      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      offlineAccess: true,
+    });
+  }, []);
 
-
-
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      showAlert('Error', 'Please enter both email and password', [], 'error');
-      return;
-    }
-
-    setIsLoading(true);
+  const handleGoogleLogin = async () => {
     try {
-      const a = getAuthSafe();
-      if (!a) {
-        showAlert('Config error', 'Firebase is not configured.', [], 'error');
-        return;
-      }
+      setIsLoading(true);
+      await GoogleSignin.hasPlayServices();
+      const userInfo: any = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken || userInfo.idToken;
 
-      let cred;
+      if (idToken) {
+        console.log('Authenticating with backend...');
 
-      try {
-        // 1. Try to sign in first
-        cred = await signInWithEmailAndPassword(a, email.trim(), password.trim());
-      } catch (signInError: any) {
-        // 2. If user not found OR invalid-credential (email enumeration protection), try to Create Account
-        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
-          // Attempt creation
-          try {
-            const { createUserWithEmailAndPassword, deleteUser } = await import('firebase/auth');
-            cred = await createUserWithEmailAndPassword(a, email.trim(), password.trim());
+        // Call Backend API
+        const { default: api } = await import('../utils/api');
+        const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
 
-            // We are now Authenticated. Safe to read DB.
-            const db = getDbSafe();
-            if (!db || !cred.user) throw new Error('System verification failed.');
+        const response = await api.post('/auth/google', { token: idToken });
+        const { user, token } = response.data;
 
-            const { doc, getDoc } = await import('firebase/firestore');
-            const allocationRef = doc(db, 'allocations', email.toLowerCase().trim());
-            const allocationSnap = await getDoc(allocationRef);
+        // Store Token
+        await AsyncStorage.setItem('userToken', token);
 
-            // 3. Verify Allocation
-            if (allocationSnap.exists()) {
-              const data = allocationSnap.data();
-              // Check if the entered password matches the Temp Password assigned
-              if (data.tempPassword !== password.trim()) {
-                // WRONG Temp Password. 
-                // Rollback: Delete the auth user we just created.
-                await deleteUser(cred.user);
-                throw new Error('Invalid Credentials: Password does not match your assigned temporary password.');
-              }
-              // If match: Proceed (cred is valid, user is staying)
-            } else {
-              // Not Allotted (Stranger). 
-              // Rollback: Delete the auth user.
-              await deleteUser(cred.user);
-              throw new Error('Access Denied: You have not been allotted a room.');
-            }
-
-          } catch (createError: any) {
-            // If creation failed because email is in use, it means the user DID exist and 'invalid-credential' was just hiding it.
-            // So it's a wrong password case.
-            if (createError.code === 'auth/email-already-in-use') {
-              throw new Error('Invalid Credentials');
-            }
-            // For other errors (network, etc), throw them.
-            throw createError;
-          }
-        } else {
-          // Wrong Password (explicit) or other error for EXISTING user
-          throw signInError;
-        }
-      }
-
-      if (!cred || !cred.user) {
-        throw new Error('Authentication failed');
-      }
-
-      const u = cred.user;
-      const role = getRoleFromEmail(u.email || '');
-
-      const db = getDbSafe();
-
-      if (role !== 'admin') {
-        if (!db) throw new Error('Database not initialized');
-
-        const { doc, getDoc, setDoc } = await import('firebase/firestore');
-        const allocationRef = doc(db, 'allocations', u.email?.toLowerCase().trim() || 'unknown');
-        const allocationSnap = await getDoc(allocationRef);
-
-        if (!allocationSnap.exists()) {
-          const { signOut } = await import('firebase/auth');
-          await signOut(a);
-          await setStoredUser(null);
-          showAlert('Access Denied', 'You have not been allotted a room yet.\nPlease contact the Admin.', [], 'error');
-          return;
-        }
-
-        // Sync allocation data to user profile
-        const allocationData = allocationSnap.data();
-        const userRef = doc(db, 'users', u.uid);
-
-        await setDoc(userRef, {
-          email: u.email,
-          name: allocationData.name || u.displayName || u.email,
-          role: 'student',
-          room: allocationData.room,
-          rollNo: allocationData.rollNo,
-          collegeName: allocationData.collegeName,
-          age: allocationData.age,
-          phone: allocationData.phone,
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-        }, { merge: true });
-
+        // Store User Info
         await setStoredUser({
-          id: u.uid,
-          name: allocationData.name || u.displayName || u.email || '',
-          role: 'student'
+          id: user.id.toString(),
+          name: user.fullName,
+          role: user.role
         });
 
-        router.replace('/(tabs)');
-      } else {
-        // Admin Login
-        if (db) {
-          const { doc, setDoc } = await import('firebase/firestore');
-          const userRef = doc(db, 'users', u.uid);
-          await setDoc(userRef, {
-            email: u.email,
-            name: u.displayName || u.email,
-            role: 'admin',
-            lastLogin: new Date().toISOString(),
-          }, { merge: true });
+        // Navigate based on role
+        if (user.role === 'admin') {
+          router.replace('/admin');
+        } else {
+          router.replace('/(tabs)');
         }
-
-        await setStoredUser({ id: u.uid, name: u.displayName || u.email || '', role: 'admin' });
-        router.replace('/admin');
+      } else {
+        throw new Error('No ID token obtained');
       }
-    } catch (error: any) {
-      showAlert('Error', error.message || 'Login failed. Please try again.', [], 'error');
+    } catch (e: any) {
+      if (e.code === statusCodes.SIGN_IN_CANCELLED) {
+        // user cancelled the login flow
+        console.log('User cancelled login');
+      } else if (e.code === statusCodes.IN_PROGRESS) {
+        // operation (e.g. sign in) is in progress already
+        console.log('Login in progress');
+      } else if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        // play services not available or outdated
+        Alert.alert('Error', 'Google Play Services not available');
+      } else {
+        console.error('Login Error:', e);
+        const message = e.response?.data?.error || e.message || 'Login failed';
+        Alert.alert('Error', message);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const res = await promptAsync();
-      if (res?.type === 'success' && res.authentication?.idToken) {
-        const idToken = res.authentication.idToken;
-        // Import Firestore functions
-        const { collection, query, where, getDocs, doc, getDoc, setDoc } = await import('firebase/firestore');
-        const { GoogleAuthProvider, signInWithCredential } = await import('firebase/auth');
+      // Dynamic imports
+      const { default: api } = await import('../utils/api');
+      const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+      const { setStoredUser } = await import('../utils/authUtils');
+      const { getRoleFromEmail } = await import('../utils/roleUtils');
 
-        const a = getAuthSafe();
-        if (!a) {
-          showAlert('Config error', 'Firebase is not configured.', [], 'error');
-          return;
-        }
+      console.log('Attempting login with:', email);
+      const response = await api.post('/auth/login', {
+        email: email.trim().toLowerCase(),
+        password: password.trim()
+      });
 
-        // 1. Sign In to Firebase with Google Credential
-        const credential = GoogleAuthProvider.credential(idToken);
-        const cred = await signInWithCredential(a, credential);
-        const u = cred.user;
-        const googleEmail = u.email?.toLowerCase();
+      const { user, token } = response.data;
 
-        // 2. Identify Student via Allocation
-        const db = getDbSafe();
+      // Store Token
+      await AsyncStorage.setItem('userToken', token);
 
-        if (db && googleEmail) {
+      // Store User
+      await setStoredUser({
+        id: user.id.toString(),
+        name: user.fullName || user.email,
+        role: user.role
+      });
 
-          // Check Admin first (Hardcoded for safety)
-          if (googleEmail === 'shaswatrastogi91@gmail.com') {
-            // Admin Logic
-            await setDoc(doc(db, 'users', u.uid), {
-              email: u.email,
-              name: u.displayName || u.email,
-              role: 'admin',
-              lastLogin: new Date().toISOString(),
-            }, { merge: true });
-            await setStoredUser({ id: u.uid, name: u.displayName || u.email || '', role: 'admin' });
-            router.replace('/admin');
-            return;
-          }
-
-          let allocationData = null;
-          let allocationId = null; // This is the official email
-
-          // A. Try Direct Match (e.g., Student logged in with Official Email on Google)
-          const directRef = doc(db, 'allocations', googleEmail);
-          const directSnap = await getDoc(directRef);
-
-          if (directSnap.exists()) {
-            allocationData = directSnap.data();
-            allocationId = googleEmail;
-          } else {
-            // B. Try Secondary Match (Personal Email Link)
-            const q = query(collection(db, 'allocations'), where('personalEmail', '==', googleEmail));
-            const querySnap = await getDocs(q);
-
-            if (!querySnap.empty) {
-              const matchDoc = querySnap.docs[0]; // Assuming 1:1 mapping
-              allocationData = matchDoc.data();
-              allocationId = matchDoc.id; // Their official email
-            }
-          }
-
-          if (allocationData && allocationId) {
-            // 3. User is Allotted (Authorized)
-            const userRef = doc(db, 'users', u.uid);
-
-            // Sync Official Details to their User Profile (even if they used Personal Email)
-            await setDoc(userRef, {
-              email: u.email, // The email they used to login (Google)
-              officialEmail: allocationId, // Link to official record
-              name: allocationData.name || u.displayName,
-              role: 'student',
-              room: allocationData.room,
-              rollNo: allocationData.rollNo,
-              collegeName: allocationData.collegeName,
-              age: allocationData.age,
-              phone: allocationData.phone,
-              personalEmail: allocationData.personalEmail,
-              createdAt: new Date().toISOString(),
-              lastLogin: new Date().toISOString(),
-            }, { merge: true });
-
-            await setStoredUser({
-              id: u.uid,
-              name: allocationData.name || u.displayName || '',
-              role: 'student'
-            });
-
-            router.replace('/(tabs)');
-          } else {
-            // 4. Not Allotted
-            const { signOut } = await import('firebase/auth');
-            await signOut(a);
-            showAlert(
-              'Access Denied',
-              'This email is not linked to any allotted student.\n\nIf this is your personal email, ask the Admin to link it to your profile.',
-              [], 'error'
-            );
-          }
-        }
+      // Navigate
+      if (user.role === 'admin') {
+        router.replace('/admin');
+      } else {
+        router.replace('/(tabs)');
       }
+
     } catch (e: any) {
-      console.error(e);
-      showAlert('Error', 'Google sign-in failed: ' + e.message, [], 'error');
+      console.error('Login Error:', e);
+      const message = e.response?.data?.error || e.message || 'Login failed';
+      Alert.alert('Error', message);
+    } finally {
+      setIsLoading(false);
     }
   };
-
 
   return (
     <View style={{ flex: 1 }}>
@@ -310,7 +149,7 @@ export default function Login() {
                   <View style={styles.iconContainer}>
                     <MaterialCommunityIcons name="home-city" size={40} color="#004e92" />
                   </View>
-                  <Text style={styles.title}>Smart Hostel</Text>
+                  <Text style={styles.title}>SmartStay</Text>
                   <Text style={styles.subtitle}>Welcome Back</Text>
                 </View>
 
@@ -374,11 +213,15 @@ export default function Login() {
                   <TouchableOpacity
                     style={styles.googleButton}
                     onPress={handleGoogleLogin}
-                    disabled={isLoading || !request}
+                    disabled={isLoading}
                   >
                     <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
                     <Text style={styles.googleButtonText}>Google</Text>
                   </TouchableOpacity>
+
+                  <View style={{ marginTop: 20, alignItems: 'center' }}>
+                    {/* API Text Removed */}
+                  </View>
                 </View>
               </View>
             </ScrollView>

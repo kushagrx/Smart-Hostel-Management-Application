@@ -1,9 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
@@ -12,9 +12,13 @@ import { ServiceRequest, subscribeToAllServiceRequests, updateServiceStatus } fr
 
 export default function ServiceRequestsPage() {
     const { colors, theme } = useTheme();
+    const insets = useSafeAreaInsets();
     const user = useUser();
     const router = useRouter();
     const { showAlert } = useAlert();
+    const { openId } = useLocalSearchParams();
+    const [highlightedId, setHighlightedId] = useState<string | null>(null);
+    const flatListRef = React.useRef<FlatList<ServiceRequest>>(null);
 
     const styles = React.useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.background },
@@ -41,6 +45,11 @@ export default function ServiceRequestsPage() {
             shadowOpacity: 0.05,
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 }
+        },
+        highlightedCard: {
+            borderColor: colors.primary,
+            borderWidth: 2,
+            backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : '#EFF6FF',
         },
         cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
         userInfo: { flex: 1 },
@@ -104,6 +113,19 @@ export default function ServiceRequestsPage() {
         return () => unsubscribe();
     }, []);
 
+    useEffect(() => {
+        if (openId && requests.length > 0) {
+            const index = requests.findIndex(r => r.id === openId);
+            if (index !== -1) {
+                setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+                    setHighlightedId(openId as string);
+                    setTimeout(() => setHighlightedId(null), 3000);
+                }, 500);
+            }
+        }
+    }, [openId, requests]);
+
     const handleAction = (req: ServiceRequest, type: 'approve' | 'deny') => {
         setSelectedReq(req);
         setActionType(type);
@@ -148,7 +170,7 @@ export default function ServiceRequestsPage() {
     if (!isAdmin(user)) return <View style={styles.center}><Text>Access Denied</Text></View>;
 
     const renderItem = ({ item }: { item: ServiceRequest }) => (
-        <View style={styles.card}>
+        <View style={[styles.card, highlightedId === item.id && styles.highlightedCard]}>
             <View style={styles.cardHeader}>
                 <View style={styles.userInfo}>
                     <Text style={styles.serviceType}>{item.serviceType}</Text>
@@ -158,6 +180,12 @@ export default function ServiceRequestsPage() {
                     <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{item.status.toUpperCase()}</Text>
                 </View>
             </View>
+
+            {item.description ? (
+                <Text style={{ fontSize: 13, color: colors.textSecondary, fontStyle: 'italic', marginBottom: 8 }}>
+                    "{item.description}"
+                </Text>
+            ) : null}
 
             {/* Timestamps */}
             <Text style={styles.date}>Requested: {item.createdAt instanceof Date ? item.createdAt.toLocaleString() : ''}</Text>
@@ -193,8 +221,8 @@ export default function ServiceRequestsPage() {
     };
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
-            <LinearGradient colors={['#000428', '#004e92']} style={styles.header}>
+        <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+            <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: insets.top + 18 }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <MaterialIcons name="chevron-left" size={32} color="#fff" />
                 </TouchableOpacity>
@@ -203,17 +231,27 @@ export default function ServiceRequestsPage() {
 
             {loading ? <ActivityIndicator size="large" color="#004e92" style={{ marginTop: 50 }} /> : (
                 <FlatList
+                    ref={flatListRef}
                     data={requests}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
                     ListEmptyComponent={<Text style={styles.empty}>No requests found.</Text>}
+                    onScrollToIndexFailed={(info) => {
+                        const wait = new Promise(resolve => setTimeout(resolve, 500));
+                        wait.then(() => {
+                            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                        });
+                    }}
                 />
             )}
 
-            <Modal visible={modalVisible} transparent animationType="slide">
-                <View style={styles.modalOverlay}>
+            <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>{actionType === 'approve' ? 'Approve Request' : 'Deny Request'}</Text>
 
@@ -249,7 +287,7 @@ export default function ServiceRequestsPage() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
 

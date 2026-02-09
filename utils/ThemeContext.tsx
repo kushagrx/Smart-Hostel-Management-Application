@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SystemUI from 'expo-system-ui';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
@@ -76,6 +77,14 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     loadTheme();
   }, []);
+
+  useEffect(() => {
+    const updateSystemBackground = async () => {
+      const bgColor = theme === 'light' ? lightColors.background : darkColors.background;
+      await SystemUI.setBackgroundColorAsync(bgColor);
+    };
+    updateSystemBackground();
+  }, [theme]);
 
   const loadTheme = async () => {
     try {

@@ -1,15 +1,17 @@
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { getAuthSafe, getDbSafe } from './firebase';
+import { DeviceEventEmitter } from 'react-native';
+import api from './api';
+
+const REFRESH_EVENT = 'REFRESH_SERVICE_REQUESTS';
 
 export type ServiceRequest = {
     id: string;
     studentName: string;
     studentEmail: string;
     roomNo: string;
-    serviceType: string; // e.g., 'Room Cleaning', 'Bathroom Cleaning'
+    serviceType: string;
     description?: string;
     status: 'pending' | 'approved' | 'completed' | 'rejected';
-    estimatedTime?: string; // e.g., "Today 5:00 PM"
+    estimatedTime?: string;
     adminNote?: string;
     createdAt: Date;
     updatedAt: Date;
@@ -23,22 +25,8 @@ export const requestService = async (
     roomNo: string
 ) => {
     try {
-        const db = getDbSafe();
-        const auth = getAuthSafe();
-
-        if (!db || !auth?.currentUser?.email) throw new Error("Not authenticated");
-
-        const requestsRef = collection(db, 'service_requests');
-        await addDoc(requestsRef, {
-            studentEmail: auth.currentUser.email,
-            studentName,
-            roomNo,
-            serviceType,
-            description,
-            status: 'pending',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-        });
+        await api.post('/services/requests', { serviceType, description });
+        DeviceEventEmitter.emit(REFRESH_EVENT);
         return true;
     } catch (error) {
         console.error("Error requesting service:", error);
@@ -50,53 +38,69 @@ export const requestService = async (
 export const subscribeToStudentRequests = (
     callback: (requests: ServiceRequest[]) => void
 ) => {
-    const db = getDbSafe();
-    const auth = getAuthSafe();
-
-    if (!db || !auth?.currentUser?.email) return () => { };
-
-    const q = query(
-        collection(db, 'service_requests'),
-        where('studentEmail', '==', auth.currentUser.email),
-        orderBy('createdAt', 'desc')
-    );
-
-    return onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        } as ServiceRequest));
-        callback(data);
-    }, (error) => {
-        console.error("Error subscribing to student service requests:", error);
-    });
+    const fetch = async () => {
+        try {
+            const response = await api.get('/services/requests');
+            const data = response.data.map((r: any) => ({
+                id: r.id.toString(),
+                serviceType: r.serviceType,
+                description: r.description,
+                status: r.status,
+                estimatedTime: r.estimatedTime,
+                adminNote: r.adminNote,
+                createdAt: new Date(r.createdAt),
+                updatedAt: new Date(r.updatedAt),
+                studentName: '', // Backend doesn't return name for student view (redundant)
+                studentEmail: '',
+                roomNo: ''
+            }));
+            callback(data);
+        } catch (error) {
+            console.error("Error fetching service requests:", error);
+            callback([]);
+        }
+    };
+    fetch();
+    const sub = DeviceEventEmitter.addListener(REFRESH_EVENT, fetch);
+    const interval = setInterval(fetch, 10000);
+    return () => {
+        clearInterval(interval);
+        sub.remove();
+    };
 };
 
 // Admin: Subscribe to ALL requests
 export const subscribeToAllServiceRequests = (
     callback: (requests: ServiceRequest[]) => void
 ) => {
-    const db = getDbSafe();
-    if (!db) return () => { };
-
-    const q = query(
-        collection(db, 'service_requests'),
-        orderBy('createdAt', 'desc')
-    );
-
-    return onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        } as ServiceRequest));
-        callback(data);
-    }, (error) => {
-        console.error("Error subscribing to all service requests:", error);
-    });
+    const fetch = async () => {
+        try {
+            const response = await api.get('/services/requests/all');
+            const data = response.data.map((r: any) => ({
+                id: r.id.toString(),
+                serviceType: r.serviceType,
+                description: r.description,
+                status: r.status,
+                estimatedTime: r.estimatedTime,
+                adminNote: r.adminNote,
+                createdAt: new Date(r.createdAt),
+                updatedAt: new Date(r.updatedAt),
+                studentName: r.studentName,
+                roomNo: r.roomNo
+            }));
+            callback(data);
+        } catch (error) {
+            console.error("Error fetching all service requests:", error);
+            callback([]);
+        }
+    };
+    fetch();
+    const sub = DeviceEventEmitter.addListener(REFRESH_EVENT, fetch);
+    const interval = setInterval(fetch, 10000);
+    return () => {
+        clearInterval(interval);
+        sub.remove();
+    };
 };
 
 // Admin: Update Status (Approve/Deny)
@@ -106,14 +110,11 @@ export const updateServiceStatus = async (
     estimatedTime?: string,
     adminNote?: string
 ) => {
-    const db = getDbSafe();
-    if (!db) throw new Error("DB not init");
-
-    const ref = doc(db, 'service_requests', id);
-    await updateDoc(ref, {
-        status,
-        ...(estimatedTime && { estimatedTime }),
-        ...(adminNote && { adminNote }),
-        updatedAt: serverTimestamp()
-    });
+    try {
+        await api.put(`/services/requests/${id}`, { status, estimatedTime, adminNote });
+        DeviceEventEmitter.emit(REFRESH_EVENT);
+    } catch (error) {
+        console.error("Error updating service status:", error);
+        throw error;
+    }
 };
