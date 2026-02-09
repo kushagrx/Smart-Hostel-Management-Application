@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, RefreshControl, ScrollView, SectionList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAlert } from '../../context/AlertContext';
@@ -19,6 +20,7 @@ export default function FinancePage() {
     const { showAlert } = useAlert();
 
     const [activeTab, setActiveTab] = useState<'requests' | 'history'>('requests');
+    const pagerRef = React.useRef<PagerView>(null);
     const [payments, setPayments] = useState<Payment[]>([]);
     const [requests, setRequests] = useState<any[]>([]); // Pending requests
     const [loading, setLoading] = useState(true);
@@ -555,22 +557,86 @@ export default function FinancePage() {
             <View style={styles.navBar}>
                 <TouchableOpacity
                     style={[styles.navItem, activeTab === 'requests' && styles.navItemActive]}
-                    onPress={() => setActiveTab('requests')}
+                    onPress={() => {
+                        setActiveTab('requests');
+                        pagerRef.current?.setPage(0);
+                    }}
                 >
                     <MaterialIcons name="clipboard-check-outline" size={20} color={activeTab === 'requests' ? colors.primary : colors.textSecondary} />
                     <Text style={[styles.navItemLabel, activeTab === 'requests' && styles.navItemLabelActive]}>Requests & Verify</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.navItem, activeTab === 'history' && styles.navItemActive]}
-                    onPress={() => setActiveTab('history')}
+                    onPress={() => {
+                        setActiveTab('history');
+                        pagerRef.current?.setPage(1);
+                    }}
                 >
                     <MaterialIcons name="history" size={20} color={activeTab === 'history' ? colors.primary : colors.textSecondary} />
                     <Text style={[styles.navItemLabel, activeTab === 'history' && styles.navItemLabelActive]}>Payment History</Text>
                 </TouchableOpacity>
             </View>
 
-            {activeTab === 'history' ? (
-                <View style={{ flex: 1 }}>
+            <PagerView
+                ref={pagerRef}
+                style={{ flex: 1 }}
+                initialPage={0}
+                onPageSelected={(e) => setActiveTab(e.nativeEvent.position === 0 ? 'requests' : 'history')}
+            >
+
+                {/* TAB 1: REQUESTS (Page 0) */}
+                <View key="requests" style={{ flex: 1 }}>
+                    <FlatList
+                        data={requests}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={styles.listContent}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+                        ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: colors.textSecondary }}>No pending requests.</Text>}
+                        renderItem={({ item }) => (
+                            <View style={[styles.card, item.status === 'paid_unverified' && { borderColor: '#F59E0B', borderWidth: 1 }]}>
+                                <View style={styles.cardHeader}>
+                                    <View style={styles.iconContainer}>
+                                        <View style={[styles.iconBox, { backgroundColor: item.status === 'paid_unverified' ? '#FFFBEB' : '#F1F5F9' }]}>
+                                            <MaterialIcons
+                                                name={item.status === 'paid_unverified' ? 'alert-circle' : 'clock-outline'}
+                                                size={24}
+                                                color={item.status === 'paid_unverified' ? '#D97706' : '#64748B'}
+                                            />
+                                        </View>
+                                    </View>
+                                    <View style={styles.info}>
+                                        <Text style={styles.name}>{item.studentName}</Text>
+                                        <View style={styles.metaContainer}>
+                                            <View style={styles.pill}>
+                                                <Text style={styles.detailSmall}>{item.type}</Text>
+                                            </View>
+                                        </View>
+                                        {item.status === 'paid_unverified' && (
+                                            <Text style={[styles.detailSmall, { color: '#D97706', marginTop: 4 }]}>
+                                                Ref: {item.transactionId || 'N/A'}
+                                            </Text>
+                                        )}
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={styles.amount}>₹{item.amount.toLocaleString()}</Text>
+                                        {item.status === 'paid_unverified' ? (
+                                            <TouchableOpacity onPress={() => handleVerify(item)} style={styles.verifyBtn}>
+                                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Verify</Text>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <View style={[styles.pill, { marginTop: 4, backgroundColor: '#E2E8F0' }]}>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>PENDING</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+                    />
+                </View>
+
+                {/* TAB 2: HISTORY (Page 1) */}
+                <View key="history" style={{ flex: 1 }}>
                     {/* Revenue Card */}
                     <LinearGradient
                         colors={['#10B981', '#059669']}
@@ -717,56 +783,7 @@ export default function FinancePage() {
                         }
                     />
                 </View>
-            ) : (
-                <FlatList
-                    data={requests}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={styles.listContent}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-                    ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: colors.textSecondary }}>No pending requests.</Text>}
-                    renderItem={({ item }) => (
-                        <View style={[styles.card, item.status === 'paid_unverified' && { borderColor: '#F59E0B', borderWidth: 1 }]}>
-                            <View style={styles.cardHeader}>
-                                <View style={styles.iconContainer}>
-                                    <View style={[styles.iconBox, { backgroundColor: item.status === 'paid_unverified' ? '#FFFBEB' : '#F1F5F9' }]}>
-                                        <MaterialIcons
-                                            name={item.status === 'paid_unverified' ? 'alert-circle' : 'clock-outline'}
-                                            size={24}
-                                            color={item.status === 'paid_unverified' ? '#D97706' : '#64748B'}
-                                        />
-                                    </View>
-                                </View>
-                                <View style={styles.info}>
-                                    <Text style={styles.name}>{item.studentName}</Text>
-                                    <View style={styles.metaContainer}>
-                                        <View style={styles.pill}>
-                                            <Text style={styles.detailSmall}>{item.type}</Text>
-                                        </View>
-                                    </View>
-                                    {item.status === 'paid_unverified' && (
-                                        <Text style={[styles.detailSmall, { color: '#D97706', marginTop: 4 }]}>
-                                            Ref: {item.transactionId || 'N/A'}
-                                        </Text>
-                                    )}
-                                </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={styles.amount}>₹{item.amount.toLocaleString()}</Text>
-                                    {item.status === 'paid_unverified' ? (
-                                        <TouchableOpacity onPress={() => handleVerify(item)} style={styles.verifyBtn}>
-                                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Verify</Text>
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <View style={[styles.pill, { marginTop: 4, backgroundColor: '#E2E8F0' }]}>
-                                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>PENDING</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            </View>
-                        </View>
-                    )}
-                />
-            )
-            }
+            </PagerView>
 
             <TouchableOpacity
                 style={styles.fab}

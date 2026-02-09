@@ -2,12 +2,12 @@ import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { FlatList, Image, LayoutAnimation, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
+import { API_BASE_URL } from '../../utils/api';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { getAllLeaves, LeaveRequest, updateLeaveStatus } from '../../utils/leavesUtils';
 
@@ -18,6 +18,362 @@ export default function LeaveRequestsPage() {
   const router = useRouter();
   const { showAlert } = useAlert();
   const { openId } = useLocalSearchParams();
+  const flatListRef = useRef<FlatList<LeaveRequest>>(null);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Filter state
+  const [activeTab, setActiveTab] = useState(0); // 0: All, 1: Pending, 2: Approved, 3: Rejected
+
+  const tabs = [
+    { id: 'all', label: 'All' },
+    { id: 'pending', label: 'Pending' },
+    { id: 'approved', label: 'Approved' },
+    { id: 'rejected', label: 'Rejected' },
+  ];
+
+
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
+
+  // Enable LayoutAnimation for Android
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    }
+  }, []);
+
+  // Track if we've already handled the deep link for a specific ID
+  const handledOpenIdRef = useRef<string | null>(null);
+
+  // Auto-expand and scroll if openId is provided
+  useEffect(() => {
+    // If we have an openId, and we haven't handled it yet (or it's a new one)
+    if (openId && requests.length > 0 && handledOpenIdRef.current !== openId) {
+      console.log(`[Leaves] Deep link processing for ID: ${openId}`);
+      const targetIndex = requests.findIndex(r => String(r.id) === String(openId));
+
+      if (targetIndex !== -1) {
+        // 1. Ensure we are on the 'All' tab
+        if (activeTab !== 0) {
+          console.log('[Leaves] Switching to ALL tab to find item');
+          setActiveTab(0);
+          // Don't mark as handled yet, wait for the tab switch to trigger effect again
+          return;
+        }
+
+        // 2. Scroll and Expand simultaneously
+        console.log(`[Leaves] Scrolling and Expanding index: ${targetIndex}`);
+
+        // Scroll
+        flatListRef.current?.scrollToIndex({
+          index: targetIndex,
+          animated: true,
+          viewPosition: 0.1
+        });
+
+        // Expand (with animation)
+        const targetId = requests[targetIndex].id;
+        if (selectedId !== targetId) {
+          console.log('[Leaves] expanding item');
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setSelectedId(targetId);
+        }
+
+        // Mark as handled so we don't force-switch tabs again
+        handledOpenIdRef.current = openId as string;
+      } else {
+        console.log('[Leaves] Target ID not found. Available:', requests.map(r => r.id).slice(0, 5));
+      }
+    }
+  }, [openId, requests, activeTab]);
+
+  const loadRequests = async () => {
+    try {
+      const data = await getAllLeaves();
+      setRequests(data);
+    } catch (error) {
+      console.error("Failed to load leaves:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadRequests();
+    setRefreshing(false);
+  };
+
+
+
+  const handleUpdateStatus = (id: string, status: 'approved' | 'rejected') => {
+    showAlert(
+      'Confirm Action',
+      `Mark leave request as ${status}?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Confirm",
+          style: status === 'rejected' ? "destructive" : "default",
+          onPress: async () => {
+            try {
+              await updateLeaveStatus(id, status);
+              loadRequests();
+              showAlert("Success", `Request ${status} successfully.`, [], 'success');
+            } catch (error) {
+              console.error(error);
+              showAlert("Error", "Failed to update status.", [], 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getFilteredRequests = () => {
+    switch (activeTab) {
+      case 1: return requests.filter(r => r.status === 'pending');
+      case 2: return requests.filter(r => r.status === 'approved');
+      case 3: return requests.filter(r => r.status === 'rejected');
+      default: return requests;
+    }
+  };
+
+  const renderHeader = () => {
+    const pendingCount = requests.filter((l) => l.status === 'pending').length;
+    const approvedCount = requests.filter((l) => l.status === 'approved').length;
+
+    return (
+      <View>
+        <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: 24 + insets.top }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="chevron-left" size={32} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Leave Requests</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.statsGrid}>
+          {/* Hero Card: Pending Leaves */}
+          <LinearGradient
+            colors={['#D97706', '#B45309']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View>
+              <Text style={styles.heroLabel}>Pending Request{pendingCount !== 1 ? 's' : ''}</Text>
+              <Text style={styles.heroValue}>{pendingCount}</Text>
+            </View>
+            <MaterialIcons name="clock-outline" size={48} color="rgba(255,255,255,0.9)" />
+            <View style={styles.cardWatermark}>
+              <MaterialIcons name="clock-outline" size={100} color="#fff" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.statsRow}>
+            {/* Approved */}
+            <LinearGradient
+              colors={['#059669', '#064E3B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="check-circle-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Approved</Text>
+              </View>
+              <Text style={styles.miniValue}>{approvedCount}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="check-circle-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+
+            {/* Total */}
+            <LinearGradient
+              colors={['#4F46E5', '#312E81']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="calendar-month" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Total</Text>
+              </View>
+              <Text style={styles.miniValue}>{requests.length}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="calendar-month" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+
+        <View style={styles.filterContainer}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={tabs}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.filterScroll}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                style={[styles.filterBtn, activeTab === index && styles.filterBtnActive]}
+                onPress={() => setActiveTab(index)}
+              >
+                <Text style={[styles.filterBtnText, activeTab === index && styles.filterBtnTextActive]}>{item.label}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+
+
+      </View>
+    );
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return '#F59E0B';
+      case 'approved': return '#10B981';
+      case 'rejected': return '#EF4444';
+      default: return '#64748B';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return 'clock-outline';
+      case 'approved': return 'check-circle';
+      case 'rejected': return 'close-circle';
+      default: return 'help-circle';
+    }
+  };
+
+
+
+  function renderLeaveItem(item: LeaveRequest) {
+    return (
+      <View style={{ marginHorizontal: 20 }}>
+        <TouchableOpacity
+          style={[
+            styles.requestCard,
+            selectedId === item.id && styles.requestCardActive,
+          ]}
+          activeOpacity={0.9}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setSelectedId(selectedId === item.id ? null : item.id);
+          }}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.studentInfo}>
+              <View
+                style={[
+                  styles.studentAvatar,
+                  { backgroundColor: getStatusColor(item.status), overflow: 'hidden' },
+                ]}
+              >
+                {item.studentProfilePhoto ? (
+                  <Image
+                    source={{ uri: `${API_BASE_URL}${item.studentProfilePhoto}` }}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                ) : (
+                  <Text style={styles.studentInitial}>
+                    {item.studentName.charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.textInfo}>
+                <Text style={styles.studentName}>{item.studentName}</Text>
+                <Text style={styles.dateRange}>
+                  {new Date(item.startDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} - {new Date(item.endDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+              <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
+              <Text style={styles.statusText}>{item.status}</Text>
+            </View>
+          </View>
+
+          {selectedId === item.id && (
+            <View style={styles.expandedContent}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Room No:</Text>
+                <Text style={styles.detailValue}>{item.studentRoom}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Reason:</Text>
+                <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]}>{item.reason}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Duration:</Text>
+                <Text style={styles.detailValue}>{item.days} days</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Current Status:</Text>
+                <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
+                  {item.status.toUpperCase()}
+                </Text>
+              </View>
+
+              {item.status === 'pending' && (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.approveBtn]}
+                    onPress={() => handleUpdateStatus(item.id, 'approved')}
+                  >
+                    <MaterialIcons name="check" size={16} color="#fff" />
+                    <Text style={styles.actionBtnText}>Approve</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.rejectBtn]}
+                    onPress={() => handleUpdateStatus(item.id, 'rejected')}
+                  >
+                    <MaterialIcons name="close" size={16} color="#fff" />
+                    <Text style={styles.actionBtnText}>Reject</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {item.status !== 'pending' && (
+                <View style={styles.statusMessage}>
+                  <Text style={styles.statusMessageText}>
+                    This request has already been{' '}
+                    <Text style={{ fontWeight: '700' }}>{item.status}</Text>
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </TouchableOpacity>
+
+      </View >
+    );
+
+  }
+
+  function EmptyLeaves() {
+    return (
+      <View style={{ alignItems: 'center', padding: 40 }}>
+        <MaterialIcons name="calendar-remove" size={80} color="#CBD5E1" style={{ marginBottom: 16 }} />
+        <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '600' }}>No leave requests found</Text>
+      </View>
+    );
+  }
 
   const styles = React.useMemo(() => StyleSheet.create({
     container: {
@@ -312,85 +668,6 @@ export default function LeaveRequestsPage() {
     },
   }), [colors, theme]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [requests, setRequests] = useState<LeaveRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const [refreshing, setRefreshing] = useState(false);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadRequests();
-    setRefreshing(false);
-  };
-
-  // Ref to store Swipeable instances
-  const swipeableRefs = useRef(new Map<string, Swipeable>());
-
-  useEffect(() => {
-    loadRequests();
-  }, []);
-
-  // Auto-expand if openId is provided
-  useEffect(() => {
-    if (openId && requests.length > 0) {
-      if (requests.some(l => l.id === openId)) {
-        setSelectedId(openId as string);
-      }
-    }
-  }, [openId, requests]);
-
-  const loadRequests = async () => {
-    try {
-      const data = await getAllLeaves();
-      setRequests(data);
-    } catch (error) {
-      console.error("Failed to load leaves:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const closeSwipeable = (id: string) => {
-    const ref = swipeableRefs.current.get(id);
-    if (ref) {
-      ref.close();
-    }
-  };
-
-
-
-  const handleUpdateStatus = (id: string, status: 'approved' | 'rejected') => {
-    showAlert(
-      'Confirm Action',
-      `Mark leave request as ${status}?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => closeSwipeable(id),
-        },
-        {
-          text: "Confirm",
-          style: status === 'rejected' ? "destructive" : "default",
-          onPress: async () => {
-            try {
-              await updateLeaveStatus(id, status);
-              loadRequests();
-              showAlert("Success", `Request ${status} successfully.`, [], 'success');
-            } catch (error) {
-              console.error(error);
-              showAlert("Error", "Failed to update status.", [], 'error');
-            } finally {
-              closeSwipeable(id);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   if (!isAdmin(user))
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -398,301 +675,28 @@ export default function LeaveRequestsPage() {
       </View>
     );
 
-  const filteredRequests = filterStatus
-    ? requests.filter((l) => l.status === filterStatus)
-    : requests;
 
-  const pendingCount = requests.filter((l) => l.status === 'pending').length;
-  const approvedCount = requests.filter((l) => l.status === 'approved').length;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return '#F59E0B';
-      case 'approved': return '#10B981';
-      case 'rejected': return '#EF4444';
-      default: return '#64748B';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return 'clock-outline';
-      case 'approved': return 'check-circle';
-      case 'rejected': return 'close-circle';
-      default: return 'help-circle';
-    }
-  };
-
-  const renderLeftActions = (progress: any, dragX: any, item: LeaveRequest) => {
-    if (item.status !== 'pending') return null;
-    const trans = dragX.interpolate({
-      inputRange: [0, 50, 100],
-      outputRange: [-20, 0, 0],
-    });
-    return (
-      <View style={{ width: 80, marginBottom: 16 }}>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
-          <View
-            style={[styles.actionBtn, styles.approveBtn, { borderRadius: 20, height: '100%', justifyContent: 'center' }]}
-          >
-            <MaterialIcons name="check" size={28} color="#fff" />
-          </View>
-        </Animated.View>
-      </View>
-    );
-  };
-
-  const renderRightActions = (progress: any, dragX: any, item: LeaveRequest) => {
-    if (item.status !== 'pending') return null;
-    const trans = dragX.interpolate({
-      inputRange: [-100, -50, 0],
-      outputRange: [0, 0, 20],
-    });
-    return (
-      <View style={{ width: 80, marginBottom: 16 }}>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
-          <View
-            style={[styles.actionBtn, styles.rejectBtn, { borderRadius: 20, height: '100%', justifyContent: 'center' }]}
-          >
-            <MaterialIcons name="close" size={28} color="#fff" />
-          </View>
-        </Animated.View>
-      </View>
-    );
-  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['left', 'right', 'bottom']}>
-      <ScrollView
+      <FlatList
+        ref={flatListRef}
+        data={getFilteredRequests()}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => renderLeaveItem(item)}
+        extraData={selectedId} // Ensure list updates when selectedId changes
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={<EmptyLeaves />}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-      >
-        <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: 24 + insets.top }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="chevron-left" size={32} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Leave Requests</Text>
-          </View>
-
-        </LinearGradient>
-
-
-
-        <View style={styles.statsGrid}>
-          {/* Hero Card: Pending Leaves */}
-          <LinearGradient
-            colors={['#D97706', '#B45309']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <View>
-              <Text style={styles.heroLabel}>Pending Request{pendingCount !== 1 ? 's' : ''}</Text>
-              <Text style={styles.heroValue}>{pendingCount}</Text>
-            </View>
-            <MaterialIcons name="clock-outline" size={48} color="rgba(255,255,255,0.9)" />
-            <View style={styles.cardWatermark}>
-              <MaterialIcons name="clock-outline" size={100} color="#fff" />
-            </View>
-          </LinearGradient>
-
-          <View style={styles.statsRow}>
-            {/* Approved */}
-            <LinearGradient
-              colors={['#059669', '#064E3B']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.miniCard}
-            >
-              <View style={styles.miniHeader}>
-                <MaterialIcons name="check-circle-outline" size={18} color="rgba(255,255,255,0.9)" />
-                <Text style={styles.miniLabel}>Approved</Text>
-              </View>
-              <Text style={styles.miniValue}>{approvedCount}</Text>
-              <View style={styles.cardWatermark}>
-                <MaterialIcons name="check-circle-outline" size={80} color="#fff" />
-              </View>
-            </LinearGradient>
-
-            {/* Total */}
-            <LinearGradient
-              colors={['#4F46E5', '#312E81']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.miniCard}
-            >
-              <View style={styles.miniHeader}>
-                <MaterialIcons name="calendar-month" size={18} color="rgba(255,255,255,0.9)" />
-                <Text style={styles.miniLabel}>Total</Text>
-              </View>
-              <Text style={styles.miniValue}>{requests.length}</Text>
-              <View style={styles.cardWatermark}>
-                <MaterialIcons name="calendar-month" size={80} color="#fff" />
-              </View>
-            </LinearGradient>
-          </View>
-        </View>
-
-        <View style={styles.filterContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            <TouchableOpacity
-              style={[styles.filterBtn, !filterStatus && styles.filterBtnActive]}
-              onPress={() => setFilterStatus(null)}
-            >
-              <Text style={[styles.filterBtnText, !filterStatus && styles.filterBtnTextActive]}>All</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterBtn, filterStatus === 'pending' && styles.filterBtnActive]}
-              onPress={() => setFilterStatus('pending')}
-            >
-              <Text style={[styles.filterBtnText, filterStatus === 'pending' && styles.filterBtnTextActive]}>Pending</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterBtn, filterStatus === 'approved' && styles.filterBtnActive]}
-              onPress={() => setFilterStatus('approved')}
-            >
-              <Text style={[styles.filterBtnText, filterStatus === 'approved' && styles.filterBtnTextActive]}>Approved</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterBtn, filterStatus === 'rejected' && styles.filterBtnActive]}
-              onPress={() => setFilterStatus('rejected')}
-            >
-              <Text style={[styles.filterBtnText, filterStatus === 'rejected' && styles.filterBtnTextActive]}>Rejected</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {(!filterStatus || filterStatus === 'pending') && (
-          <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
-            <Text style={{ fontSize: 13, color: '#64748B', fontStyle: 'italic', textAlign: 'center' }}>
-              Swipe Right <MaterialIcons name="arrow-right" size={14} /> to Approve, Swipe Left <MaterialIcons name="arrow-left" size={14} /> to Reject
-            </Text>
-          </View>
-        )}
-
-        <FlatList
-          data={filteredRequests}
-          scrollEnabled={false}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Swipeable
-              ref={(ref) => {
-                if (ref) {
-                  swipeableRefs.current.set(item.id, ref);
-                } else {
-                  swipeableRefs.current.delete(item.id);
-                }
-              }}
-              renderLeftActions={(p, d) => renderLeftActions(p, d, item)}
-              renderRightActions={(p, d) => renderRightActions(p, d, item)}
-              onSwipeableLeftOpen={() => handleUpdateStatus(item.id, 'approved')}
-              onSwipeableRightOpen={() => handleUpdateStatus(item.id, 'rejected')}
-              enabled={item.status === 'pending'}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.requestCard,
-                  selectedId === item.id && styles.requestCardActive,
-                ]}
-                activeOpacity={1}
-                onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.studentInfo}>
-                    <View
-                      style={[
-                        styles.studentAvatar,
-                        { backgroundColor: getStatusColor(item.status) },
-                      ]}
-                    >
-                      <Text style={styles.studentInitial}>
-                        {item.studentName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.textInfo}>
-                      <Text style={styles.studentName}>{item.studentName}</Text>
-                      <Text style={styles.dateRange}>
-                        {item.startDate} to {item.endDate}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                    <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
-                    <Text style={styles.statusText}>{item.status}</Text>
-                  </View>
-                </View>
-
-                {selectedId === item.id && (
-                  <View style={styles.expandedContent}>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Room No:</Text>
-                      <Text style={styles.detailValue}>{item.studentRoom}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Reason:</Text>
-                      <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]}>{item.reason}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Duration:</Text>
-                      <Text style={styles.detailValue}>{item.days} days</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Current Status:</Text>
-                      <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
-                        {item.status.toUpperCase()}
-                      </Text>
-                    </View>
-
-                    {item.status === 'pending' && (
-                      <View style={styles.actionButtons}>
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.approveBtn]}
-                          onPress={() => handleUpdateStatus(item.id, 'approved')}
-                        >
-                          <MaterialIcons name="check" size={16} color="#fff" />
-                          <Text style={styles.actionBtnText}>Approve</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.rejectBtn]}
-                          onPress={() => handleUpdateStatus(item.id, 'rejected')}
-                        >
-                          <MaterialIcons name="close" size={16} color="#fff" />
-                          <Text style={styles.actionBtnText}>Reject</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-
-                    {item.status !== 'pending' && (
-                      <View style={styles.statusMessage}>
-                        <Text style={styles.statusMessageText}>
-                          This request has already been{' '}
-                          <Text style={{ fontWeight: '700' }}>{item.status}</Text>
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
-            </Swipeable>
-          )}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', padding: 40 }}>
-              <Image
-                source={require('../../assets/images/empty-leaves.png')}
-                style={{ width: 200, height: 200, resizeMode: 'contain', marginBottom: 16 }}
-              />
-              <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '600' }}>No pending leaves</Text>
-            </View>
-          }
-        />
-      </ScrollView>
-
-
+        onScrollToIndexFailed={(info) => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500));
+          wait.then(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+          });
+        }}
+      />
     </SafeAreaView>
   );
 }
-
-

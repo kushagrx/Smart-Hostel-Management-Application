@@ -15,6 +15,7 @@ const ITEM_WIDTH = (width - 48 - GAP) / COLUMN_count; // 48 = paddingHorizontal 
 
 const functionalities = [
     { id: 'students', label: 'Students', icon: 'account-group', color: '#6366F1', path: '/admin/students', desc: 'Manage profiles & allocations' },
+    { id: 'attendance', label: 'Attendance', icon: 'calendar-check', color: '#10B981', path: '/admin/attendance', desc: 'Track daily attendance' },
     { id: 'contacts', label: 'Student Contacts', icon: 'contacts', color: '#10B981', path: '/admin/contacts', desc: 'Directory & Quick Actions' },
     { id: 'rooms', label: 'Rooms', icon: 'door-closed', color: '#8B5CF6', path: '/admin/rooms', desc: 'Occupancy & availability' },
     { id: 'services', label: 'Room Services', icon: 'room-service', color: '#F59E0B', path: '/admin/services', desc: 'Housekeeping & repairs' },
@@ -25,6 +26,7 @@ const functionalities = [
     { id: 'messMenu', label: 'Mess Menu', icon: 'food-fork-drink', color: '#EC4899', path: '/admin/messMenu', desc: 'Weekly food plan' },
     { id: 'finance', label: 'Fees', icon: 'cash-multiple', color: '#10B981', path: '/admin/finance', desc: 'Fees & payments' },
     { id: 'laundry', label: 'Laundry', icon: 'washing-machine', color: '#06B6D4', path: '/admin/laundry', desc: 'Status & requests' },
+    { id: 'visitors', label: 'Visitors', icon: 'account-multiple-check', color: '#8B5CF6', path: '/admin/visitors', desc: 'Approve & track visitors' },
     { id: 'emergency', label: 'Emergency', icon: 'phone-alert', color: '#EF4444', path: '/admin/emergency', desc: 'Contacts & SOS' },
 ];
 

@@ -26,6 +26,14 @@ export default function AdminLayout() {
                 <Stack.Screen name="messMenu" />
                 <Stack.Screen name="laundry" />
                 <Stack.Screen name="services" />
+                <Stack.Screen
+                    name="notifications"
+                    options={{
+                        presentation: 'transparentModal',
+                        animation: 'fade',
+                        headerShown: false
+                    }}
+                />
             </Stack>
         </View>
     );

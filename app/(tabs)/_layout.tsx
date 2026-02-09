@@ -6,7 +6,9 @@ import {
 } from '@react-navigation/material-top-tabs';
 import { ParamListBase, TabNavigationState } from '@react-navigation/native';
 import { withLayoutContext } from 'expo-router';
+import React from 'react';
 import { View } from 'react-native';
+import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useTheme } from '../../utils/ThemeContext';
 
 const { Navigator } = createMaterialTopTabNavigator();
@@ -18,41 +20,63 @@ export const MaterialTopTabs = withLayoutContext<
   MaterialTopTabNavigationEventMap
 >(Navigator);
 
+const AnimatedIcon = ({ name, focused, color }: { name: any, focused: boolean, color: string }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: withSpring(focused ? 1.2 : 1, { mass: 0.5, damping: 10, stiffness: 150 }) }
+      ],
+      // No opacity change effectively, letting the color handle focus state visibility clearly
+    };
+  });
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <MaterialCommunityIcons name={name} size={24} color={color} />
+    </Animated.View>
+  );
+};
+
 const _layout = () => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <MaterialTopTabs
         tabBarPosition="bottom"
         screenOptions={{
-          tabBarActiveTintColor: colors.primary,
+          tabBarActiveTintColor: colors.primary, // Brand Color for active
           tabBarInactiveTintColor: colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: colors.card,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-            elevation: 8,
+            backgroundColor: isDark ? '#1e293b' : '#ffffff', // Clean capsule
+            position: 'absolute',
+            bottom: 10,
+            left: 30, // Increased margin
+            right: 30, // Increased margin
+            borderRadius: 35,
+            height: 55, // Reduced height
+            borderTopWidth: 0,
+            elevation: 4,
             shadowColor: '#000',
             shadowOpacity: 0.1,
-            shadowRadius: 4,
-            shadowOffset: { width: 0, height: -2 },
-            paddingBottom: 4, // Add some padding for bottom safe area look
-            height: 60,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            justifyContent: 'center',
+            paddingBottom: 0,
           },
           tabBarIndicatorStyle: {
-            backgroundColor: colors.primary,
-            height: 3,
-            top: 0, // Indicator at the top of the bottom tab bar
+            height: 0,
+            backgroundColor: 'transparent',
           },
           tabBarLabelStyle: {
-            fontSize: 10,
+            fontSize: 9,
             fontWeight: '600',
             textTransform: 'capitalize',
             marginTop: -4,
+            marginBottom: 2,
           },
           tabBarIconStyle: {
-            marginBottom: -2,
+            marginTop: 4,
           },
           swipeEnabled: true,
           animationEnabled: true,
@@ -63,11 +87,7 @@ const _layout = () => {
           options={{
             title: 'Home',
             tabBarIcon: ({ color, focused }) => (
-              <MaterialCommunityIcons
-                name={focused ? "home" : "home-outline"}
-                size={24}
-                color={color}
-              />
+              <AnimatedIcon name={focused ? "home" : "home-outline"} focused={focused} color={color} />
             )
           }}
         />
@@ -77,11 +97,7 @@ const _layout = () => {
           options={{
             title: 'Emergency',
             tabBarIcon: ({ color, focused }) => (
-              <MaterialCommunityIcons
-                name={focused ? "phone-alert" : "phone-alert-outline"}
-                size={24}
-                color={color}
-              />
+              <AnimatedIcon name={focused ? "phone-alert" : "phone-alert-outline"} focused={focused} color={color} />
             )
           }}
         />
@@ -91,11 +107,7 @@ const _layout = () => {
           options={{
             title: 'Payments',
             tabBarIcon: ({ color, focused }) => (
-              <MaterialCommunityIcons
-                name={focused ? "wallet" : "wallet-outline"}
-                size={24}
-                color={color}
-              />
+              <AnimatedIcon name={focused ? "wallet" : "wallet-outline"} focused={focused} color={color} />
             )
           }}
         />
@@ -105,11 +117,7 @@ const _layout = () => {
           options={{
             title: 'Settings',
             tabBarIcon: ({ color, focused }) => (
-              <MaterialCommunityIcons
-                name={focused ? "cog" : "cog-outline"}
-                size={24}
-                color={color}
-              />
+              <AnimatedIcon name={focused ? "cog" : "cog-outline"} focused={focused} color={color} />
             )
           }}
         />

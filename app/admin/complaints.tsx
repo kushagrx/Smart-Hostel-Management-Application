@@ -2,20 +2,388 @@ import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { FlatList, Image, LayoutAnimation, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AdminComplaintListSkeleton } from '../../components/SkeletonLists';
 import { useAlert } from '../../context/AlertContext';
-import { useTheme } from '../../utils/ThemeContext';
+import { useRefresh } from '../../hooks/useRefresh';
+import { API_BASE_URL } from '../../utils/api';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { Complaint, getAllComplaints, updateComplaintStatus } from '../../utils/complaintsSyncUtils';
+import { useTheme } from '../../utils/ThemeContext';
 
 export default function ComplaintsPage() {
   const { colors, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const user = useUser();
+  const router = useRouter();
+  const { showAlert } = useAlert();
+  const { openId } = useLocalSearchParams();
+  const flatListRef = useRef<FlatList<Complaint>>(null);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filter state
+  const [activeTab, setActiveTab] = useState(0); // 0: All, 1: Open, 2: InProgress, 3: Resolved
+
+  const tabs = [
+    { id: 'all', label: 'All' },
+    { id: 'open', label: 'Open' },
+    { id: 'inProgress', label: 'In Progress' },
+    { id: 'resolved', label: 'Resolved' },
+  ];
+
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    await loadComplaints();
+  }, () => {
+    setFilterStatus(null);
+    setSelectedId(null);
+  });
+
+  useEffect(() => {
+    loadComplaints();
+  }, []);
+
+  // Enable LayoutAnimation for Android
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    }
+  }, []);
+
+  // Track if we've already handled the deep link for a specific ID
+  const handledOpenIdRef = useRef<string | null>(null);
+
+  // Auto-expand and scroll if openId is provided
+  useEffect(() => {
+    // If we have an openId, and we haven't handled it yet (or it's a new one)
+    if (openId && complaints.length > 0 && handledOpenIdRef.current !== openId) {
+      console.log(`[Complaints] Deep link processing for ID: ${openId} `);
+      // Use loose comparison or string conversion to handle number/string mismatches
+      const targetIndex = complaints.findIndex(c => String(c.id) === String(openId));
+
+      if (targetIndex !== -1) {
+        // 1. Ensure we are on the 'All' tab so the item is definitely in the list
+        if (activeTab !== 0) {
+          console.log('[Complaints] Switching to ALL tab to find item');
+          setActiveTab(0);
+          // Don't mark as handled yet, wait for the tab switch to trigger effect again
+          return;
+        }
+
+        // 2. Scroll and Expand simultaneously
+        console.log(`[Complaints] Scrolling and Expanding index: ${targetIndex} `);
+
+        // Scroll
+        flatListRef.current?.scrollToIndex({
+          index: targetIndex,
+          animated: true,
+          viewPosition: 0.1 // Scroll near top
+        });
+
+        // Expand (with animation)
+        const targetId = complaints[targetIndex].id;
+        if (selectedId !== targetId) {
+          console.log('[Complaints] expanding item');
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setSelectedId(targetId);
+        }
+
+        // Mark as handled so we don't force-switch tabs again
+        handledOpenIdRef.current = openId as string;
+      } else {
+        console.log('[Complaints] Target ID not found. Available:', complaints.map(c => c.id).slice(0, 5));
+      }
+    }
+  }, [openId, complaints, activeTab]);
+
+  const loadComplaints = async () => {
+    try {
+      const data = await getAllComplaints();
+      setComplaints(data);
+    } catch (error) {
+      console.error("Failed to load complaints:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
+  const handleUpdateStatus = (id: string, status: 'inProgress' | 'resolved' | 'closed') => {
+    const actionText = status === 'resolved' ? 'resolve' : status === 'closed' ? 'close' : 'start working on';
+
+    showAlert(
+      'Confirm Action',
+      `Are you sure you want to ${actionText} this complaint?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              await updateComplaintStatus(id, status);
+              loadComplaints();
+              showAlert("Success", `Complaint marked as ${status}.`, [], 'success');
+            } catch (error) {
+              console.error(error);
+              showAlert("Error", "Failed to update status.", [], 'error');
+            }
+          },
+        },
+      ],
+      'warning'
+    );
+  };
+
+  const getFilteredComplaints = () => {
+    switch (activeTab) {
+      case 1: return complaints.filter(c => c.status === 'open');
+      case 2: return complaints.filter(c => c.status === 'inProgress');
+      case 3: return complaints.filter(c => c.status === 'resolved' || c.status === 'closed');
+      default: return complaints;
+    }
+  };
+
+  const renderHeader = () => {
+    const openCount = complaints.filter((c) => c.status === 'open').length;
+    const inProgressCount = complaints.filter((c) => c.status === 'inProgress').length;
+    const resolvedCount = complaints.filter((c) => c.status === 'resolved').length;
+
+    return (
+      <View>
+        <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: 24 + insets.top }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="chevron-left" size={32} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Manage Complaints</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.statsGrid}>
+          {/* Hero Card: Open Complaints */}
+          <LinearGradient
+            colors={['#DC2626', '#991B1B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View>
+              <Text style={styles.heroLabel}>Open Issues</Text>
+              <Text style={styles.heroValue}>{openCount}</Text>
+            </View>
+            <MaterialIcons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.9)" />
+            <View style={styles.cardWatermark}>
+              <MaterialIcons name="alert-circle-outline" size={100} color="#fff" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.statsRow}>
+            {/* In Progress */}
+            <LinearGradient
+              colors={['#D97706', '#B45309']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="clock-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>In Progress</Text>
+              </View>
+              <Text style={styles.miniValue}>{inProgressCount}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="clock-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+
+            {/* Resolved */}
+            <LinearGradient
+              colors={['#059669', '#064E3B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="check-circle-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Resolved</Text>
+              </View>
+              <Text style={styles.miniValue}>{resolvedCount}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="check-circle-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+
+        <View style={styles.filterContainer}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={tabs}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.filterScroll}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                style={[styles.filterBtn, activeTab === index && styles.filterBtnActive]}
+                onPress={() => setActiveTab(index)}
+              >
+                <Text style={[styles.filterBtnText, activeTab === index && styles.filterBtnTextActive]}>{item.label}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+
+
+      </View>
+    );
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'open': return '#FF6B6B';
+      case 'inProgress': return '#FF9800';
+      case 'resolved': return '#4CAF50';
+      case 'closed': return '#94A3B8';
+      default: return '#999';
+    }
+  };
+
+  const getStatusIcon = (status: string): any => {
+    switch (status) {
+      case 'open': return 'alert-circle';
+      case 'inProgress': return 'clock-outline';
+      case 'resolved': return 'check-circle';
+      case 'closed': return 'close-circle';
+      default: return 'help-circle';
+    }
+  };
+
+
+
+  function renderComplaintItem(item: Complaint) {
+    return (
+      <View style={{ marginHorizontal: 20 }}>
+        <TouchableOpacity
+          style={[
+            styles.complaintCard,
+            selectedId === item.id && styles.complaintCardActive,
+          ]}
+          activeOpacity={0.9} // Improved feedback
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setSelectedId(selectedId === item.id ? null : item.id);
+          }}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.studentInfo}>
+              <View
+                style={[
+                  styles.studentAvatar,
+                  { backgroundColor: getStatusColor(item.status), overflow: 'hidden' },
+                ]}
+              >
+                {item.studentProfilePhoto ? (
+                  <Image
+                    source={{ uri: `${API_BASE_URL}${item.studentProfilePhoto}` }}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                ) : (
+                  <Text style={styles.studentInitial}>
+                    {item.studentName?.charAt(0).toUpperCase() || '?'}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.textInfo}>
+                <Text style={styles.studentName}>{item.studentName || 'Unknown Student'}</Text>
+                <Text style={styles.complaintPreview} numberOfLines={1}>
+                  {item.title}
+                </Text>
+              </View>
+            </View>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: getStatusColor(item.status) },
+              ]}
+            >
+              <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
+              <Text style={styles.statusText}>
+                {item.status === 'inProgress' ? 'In Progress' : item.status}
+              </Text>
+            </View>
+          </View>
+
+          {selectedId === item.id && (
+            <View style={styles.expandedContent}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Email:</Text>
+                <Text style={styles.detailValue}>{item.studentEmail}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Date:</Text>
+                <Text style={styles.detailValue}>
+                  {item.createdAt instanceof Date
+                    ? item.createdAt.toLocaleDateString() + ', ' + item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : 'N/A'}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Priority:</Text>
+                <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
+                  {item.status.toUpperCase()}
+                </Text>
+              </View>
+
+              <View style={styles.complaintText}>
+                <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
+                <Text style={styles.complaintTextContent}>{item.description}</Text>
+              </View>
+
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.progressBtn]}
+                  onPress={() => handleUpdateStatus(item.id, 'inProgress')}
+                >
+                  <MaterialIcons name="clock-outline" size={16} color="#fff" />
+                  <Text style={styles.actionBtnText}>In Progress</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.resolveBtn]}
+                  onPress={() => handleUpdateStatus(item.id, 'resolved')}
+                >
+                  <MaterialIcons name="check" size={16} color="#fff" />
+                  <Text style={styles.actionBtnText}>Resolve</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+
+      </View >
+    );
+
+  }
+
+  function EmptyComplaints() {
+    return (
+      <View style={{ alignItems: 'center', padding: 40 }}>
+        <Image
+          source={require('../../assets/images/empty-complaints.png')}
+          style={{ width: 220, height: 220, resizeMode: 'contain', marginBottom: 16 }}
+        />
+        <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '600' }}>No complaints found</Text>
+      </View>
+    );
+  }
 
   const styles = React.useMemo(() => StyleSheet.create({
     container: {
@@ -350,90 +718,6 @@ export default function ComplaintsPage() {
       fontWeight: '600',
     },
   }), [colors, theme]);
-  const router = useRouter();
-  const { showAlert } = useAlert();
-  const { openId } = useLocalSearchParams();
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const [refreshing, setRefreshing] = useState(false);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadComplaints();
-    setRefreshing(false);
-  };
-
-  // Ref to store Swipeable instances
-  const swipeableRefs = useRef(new Map<string, Swipeable>());
-
-  useEffect(() => {
-    loadComplaints();
-  }, []);
-
-  // Auto-expand if openId is provided
-  useEffect(() => {
-    if (openId && complaints.length > 0) {
-      if (complaints.some(c => c.id === openId)) {
-        setSelectedId(openId as string);
-      }
-    }
-  }, [openId, complaints]);
-
-  const loadComplaints = async () => {
-    try {
-      const data = await getAllComplaints();
-      setComplaints(data);
-    } catch (error) {
-      console.error("Failed to load complaints:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const closeSwipeable = (id: string) => {
-    const ref = swipeableRefs.current.get(id);
-    if (ref) {
-      ref.close();
-    }
-  };
-
-  const handleUpdateStatus = (id: string, status: 'inProgress' | 'resolved' | 'closed') => {
-    // If it's just 'inProgress', maybe don't show a full confirmation if not needed, 
-    // or just show it for consistency. Let's show it for all major state changes.
-    const actionText = status === 'resolved' ? 'resolve' : status === 'closed' ? 'close' : 'start working on';
-
-    showAlert(
-      'Confirm Action',
-      `Are you sure you want to ${actionText} this complaint?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => closeSwipeable(id),
-        },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              await updateComplaintStatus(id, status);
-              loadComplaints();
-              showAlert("Success", `Complaint marked as ${status}.`, [], 'success');
-            } catch (error) {
-              console.error(error);
-              showAlert("Error", "Failed to update status.", [], 'error');
-            } finally {
-              closeSwipeable(id);
-            }
-          },
-        },
-      ],
-      'warning'
-    );
-  };
 
   if (!isAdmin(user))
     return (
@@ -442,357 +726,28 @@ export default function ComplaintsPage() {
       </View>
     );
 
-  const filteredComplaints = filterStatus
-    ? complaints.filter((c) => c.status === filterStatus)
-    : complaints;
 
-  const openCount = complaints.filter((c) => c.status === 'open').length;
-  const inProgressCount = complaints.filter((c) => c.status === 'inProgress').length;
-  const resolvedCount = complaints.filter((c) => c.status === 'resolved').length;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'open': return '#FF6B6B';
-      case 'inProgress': return '#FF9800';
-      case 'resolved': return '#4CAF50';
-      case 'closed': return '#94A3B8';
-      default: return '#999';
-    }
-  };
-
-  const getStatusIcon = (status: string): any => {
-    switch (status) {
-      case 'open': return 'alert-circle';
-      case 'inProgress': return 'clock-outline';
-      case 'resolved': return 'check-circle';
-      case 'closed': return 'close-circle';
-      default: return 'help-circle';
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return '#F44336';
-      case 'medium': return '#FF9800';
-      case 'low': return '#4CAF50';
-      case 'emergency': return '#B91C1C';
-      default: return '#999';
-    }
-  };
-
-  const getPriorityIcon = (priority: string): any => {
-    switch (priority) {
-      case 'high': return 'alert';
-      case 'medium': return 'minus-circle';
-      case 'low': return 'check-circle';
-      case 'emergency': return 'alert-decagram';
-      default: return 'help-circle';
-    }
-  };
-
-  const renderLeftActions = (progress: any, dragX: any, item: Complaint) => {
-    if (item.status === 'resolved' || item.status === 'closed') return null;
-    const trans = dragX.interpolate({
-      inputRange: [0, 50, 100],
-      outputRange: [-20, 0, 0],
-    });
-    return (
-      <View style={{ width: 80, marginBottom: 16 }}>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
-          <View
-            style={[styles.actionBtn, styles.resolveBtn, { borderRadius: 20, height: '100%', justifyContent: 'center' }]}
-          >
-            <MaterialIcons name="check" size={24} color="#fff" />
-          </View>
-        </Animated.View>
-      </View>
-    );
-  };
-
-  const renderRightActions = (progress: any, dragX: any, item: Complaint) => {
-    if (item.status === 'resolved' || item.status === 'closed') return null;
-    const trans = dragX.interpolate({
-      inputRange: [-100, -50, 0],
-      outputRange: [0, 0, 20],
-    });
-    return (
-      <View style={{ width: 80, marginBottom: 16 }}>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
-          <View
-            style={[styles.actionBtn, styles.closeBtn, { borderRadius: 20, height: '100%', justifyContent: 'center' }]}
-          >
-            <MaterialIcons name="close" size={28} color="#fff" />
-          </View>
-        </Animated.View>
-      </View>
-    );
-  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['left', 'right', 'bottom']}>
-      <ScrollView
+      <FlatList
+        ref={flatListRef}
+        data={getFilteredComplaints()}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => renderComplaintItem(item)}
+        extraData={selectedId} // Ensure list updates when selectedId changes
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={<EmptyComplaints />}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-      >
-        <LinearGradient colors={['#000428', '#004e92']} style={[styles.header, { paddingTop: 24 + insets.top }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="chevron-left" size={32} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Manage Complaints</Text>
-          </View>
-
-        </LinearGradient>
-
-
-
-        <View style={styles.statsGrid}>
-          {/* Hero Card: Open Complaints */}
-          <LinearGradient
-            colors={['#DC2626', '#991B1B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <View>
-              <Text style={styles.heroLabel}>Open Issues</Text>
-              <Text style={styles.heroValue}>{openCount}</Text>
-            </View>
-            <MaterialIcons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.9)" />
-            <View style={styles.cardWatermark}>
-              <MaterialIcons name="alert-circle-outline" size={100} color="#fff" />
-            </View>
-          </LinearGradient>
-
-          <View style={styles.statsRow}>
-            {/* In Progress */}
-            <LinearGradient
-              colors={['#D97706', '#B45309']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.miniCard}
-            >
-              <View style={styles.miniHeader}>
-                <MaterialIcons name="clock-outline" size={18} color="rgba(255,255,255,0.9)" />
-                <Text style={styles.miniLabel}>In Progress</Text>
-              </View>
-              <Text style={styles.miniValue}>{inProgressCount}</Text>
-              <View style={styles.cardWatermark}>
-                <MaterialIcons name="clock-outline" size={80} color="#fff" />
-              </View>
-            </LinearGradient>
-
-            {/* Resolved */}
-            <LinearGradient
-              colors={['#059669', '#064E3B']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.miniCard}
-            >
-              <View style={styles.miniHeader}>
-                <MaterialIcons name="check-circle-outline" size={18} color="rgba(255,255,255,0.9)" />
-                <Text style={styles.miniLabel}>Resolved</Text>
-              </View>
-              <Text style={styles.miniValue}>{resolvedCount}</Text>
-              <View style={styles.cardWatermark}>
-                <MaterialIcons name="check-circle-outline" size={80} color="#fff" />
-              </View>
-            </LinearGradient>
-          </View>
-        </View>
-
-        <View style={styles.filterContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            <TouchableOpacity
-              style={[styles.filterBtn, !filterStatus && styles.filterBtnActive]}
-              onPress={() => setFilterStatus(null)}
-            >
-              <Text style={[styles.filterBtnText, !filterStatus && styles.filterBtnTextActive]}>All</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterBtn, filterStatus === 'open' && styles.filterBtnActive]}
-              onPress={() => setFilterStatus('open')}
-            >
-              <Text style={[styles.filterBtnText, filterStatus === 'open' && styles.filterBtnTextActive]}>Open</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterBtn, filterStatus === 'inProgress' && styles.filterBtnActive]}
-              onPress={() => setFilterStatus('inProgress')}
-            >
-              <Text style={[styles.filterBtnText, filterStatus === 'inProgress' && styles.filterBtnTextActive]}>In Progress</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterBtn, filterStatus === 'resolved' && styles.filterBtnActive]}
-              onPress={() => setFilterStatus('resolved')}
-            >
-              <Text style={[styles.filterBtnText, filterStatus === 'resolved' && styles.filterBtnTextActive]}>Resolved</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {(!filterStatus || filterStatus === 'open') && (
-          <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
-            <Text style={{ fontSize: 13, color: '#64748B', fontStyle: 'italic', textAlign: 'center' }}>
-              Swipe Right <MaterialIcons name="arrow-right" size={14} /> to Resolve, Swipe Left <MaterialIcons name="arrow-left" size={14} /> to Deny/Close
-            </Text>
-          </View>
-        )}
-
-        {loading ? (
-          <AdminComplaintListSkeleton />
-        ) : (
-          <FlatList
-            data={filteredComplaints}
-            scrollEnabled={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <Swipeable
-                ref={(ref) => {
-                  if (ref) {
-                    swipeableRefs.current.set(item.id, ref);
-                  } else {
-                    swipeableRefs.current.delete(item.id);
-                  }
-                }}
-                renderLeftActions={(p, d) => renderLeftActions(p, d, item)}
-                renderRightActions={(p, d) => renderRightActions(p, d, item)}
-                onSwipeableLeftOpen={() => handleUpdateStatus(item.id, 'resolved')}
-                onSwipeableRightOpen={() => handleUpdateStatus(item.id, 'closed')}
-                enabled={item.status !== 'resolved' && item.status !== 'closed'}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.complaintCard,
-                    selectedId === item.id && styles.complaintCardActive,
-                  ]}
-                  activeOpacity={1}
-                  onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
-                >
-                  <View style={styles.cardHeader}>
-                    <View style={styles.studentInfo}>
-                      <View
-                        style={[
-                          styles.studentAvatar,
-                          { backgroundColor: getStatusColor(item.status) },
-                        ]}
-                      >
-                        <Text style={styles.studentInitial}>
-                          {item.studentName?.charAt(0).toUpperCase() || '?'}
-                        </Text>
-                      </View>
-                      <View style={styles.textInfo}>
-                        <Text style={styles.studentName}>{item.studentName || 'Unknown Student'}</Text>
-                        <Text style={styles.complaintPreview} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                      </View>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: getStatusColor(item.status) },
-                      ]}
-                    >
-                      <MaterialIcons name={getStatusIcon(item.status)} size={14} color="#fff" />
-                      <Text style={styles.statusText}>
-                        {item.status === 'inProgress' ? 'In Progress' : item.status}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {selectedId === item.id && (
-                    <View style={styles.expandedContent}>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Email:</Text>
-                        <Text style={styles.detailValue}>{item.studentEmail}</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Date:</Text>
-                        <Text style={styles.detailValue}>
-                          {item.createdAt instanceof Date
-                            ? item.createdAt.toLocaleDateString() + ', ' + item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            : 'N/A'}
-                        </Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Status:</Text>
-                        <View style={[styles.priorityBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                          <MaterialIcons name={getStatusIcon(item.status)} size={12} color="#fff" />
-                          <Text style={styles.badgeText}>{item.status}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Priority:</Text>
-                        <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
-                          <MaterialIcons name={getPriorityIcon(item.priority)} size={12} color="#fff" />
-                          <Text style={styles.badgeText}>{item.priority}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.complaintText}>
-                        <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
-                        <Text style={styles.complaintTextContent}>{item.description}</Text>
-                      </View>
-
-                      {item.status !== 'resolved' && item.status !== 'closed' && (
-                        <View style={styles.actionButtons}>
-                          {item.status !== 'inProgress' && (
-                            <TouchableOpacity
-                              style={[styles.actionBtn, styles.progressBtn]}
-                              onPress={() => handleUpdateStatus(item.id, 'inProgress')}
-                            >
-                              <MaterialIcons name="progress-clock" size={16} color="#fff" />
-                              <Text style={styles.actionBtnText}>In Progress</Text>
-                            </TouchableOpacity>
-                          )}
-                          <TouchableOpacity
-                            style={[styles.actionBtn, styles.resolveBtn]}
-                            onPress={() => handleUpdateStatus(item.id, 'resolved')}
-                          >
-                            <MaterialIcons name="check" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Resolve</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.actionBtn, styles.closeBtn]}
-                            onPress={() => handleUpdateStatus(item.id, 'closed')}
-                          >
-                            <MaterialIcons name="close" size={16} color="#fff" />
-                            <Text style={styles.actionBtnText}>Deny/Close</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-
-                      {(item.status === 'resolved' || item.status === 'closed') && (
-                        <View style={[styles.resolvedMessage, item.status === 'closed' && { backgroundColor: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : '#F1F5F9', borderColor: theme === 'dark' ? 'rgba(148, 163, 184, 0.2)' : '#E2E8F0' }]}>
-                          <MaterialIcons name={item.status === 'resolved' ? "check-circle" : "close-circle"} size={20} color={item.status === 'resolved' ? "#4CAF50" : "#94A3B8"} />
-                          <Text style={[styles.resolvedMessageText, item.status === 'closed' && { color: theme === 'dark' ? '#94A3B8' : '#475569' }]}>
-                            This complaint is {item.status}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </Swipeable>
-            )}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <View style={{ alignItems: 'center', padding: 40 }}>
-                <Image
-                  source={require('../../assets/images/empty-complaints.png')}
-                  style={{ width: 220, height: 220, resizeMode: 'contain', marginBottom: 16 }}
-                />
-                <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '600' }}>No complaints found</Text>
-              </View>
-            }
-          />
-        )}
-      </ScrollView>
-
-
+        onScrollToIndexFailed={(info) => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500));
+          wait.then(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+          });
+        }}
+      />
     </SafeAreaView>
   );
 }
-
-

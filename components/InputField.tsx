@@ -11,7 +11,8 @@ const InputField = React.memo(({
     placeholder,
     keyboardType = 'default',
     required = false,
-    hasSubmitted
+    hasSubmitted,
+    ...props
 }: any) => {
     const { colors, theme } = useTheme();
     const [isFocused, setIsFocused] = useState(false);
@@ -34,8 +35,9 @@ const InputField = React.memo(({
             borderRadius: 16,
             borderWidth: 1.5,
             borderColor: colors.border,
-            height: 56,
+            height: props.multiline ? 120 : 56, // Adjust height for multiline
             paddingHorizontal: 16,
+            paddingVertical: props.multiline ? 12 : 0, // Add padding for multiline
         },
         inputWrapperFocused: {
             borderColor: colors.primary,
@@ -49,6 +51,7 @@ const InputField = React.memo(({
             fontSize: 15,
             color: colors.text,
             height: '100%',
+            textAlignVertical: props.multiline ? 'top' : 'center', // Align text for multiline
         },
         errorText: {
             color: '#EF4444',
@@ -56,16 +59,18 @@ const InputField = React.memo(({
             marginTop: 4,
             marginLeft: 4,
         },
-    }), [colors, theme]);
+    }), [colors, theme, props.multiline]);
 
     return (
         <View style={styles.inputContainer}>
-            <Text style={[
-                styles.label,
-                isFocused && { color: colors.primary }
-            ]}>
-                {label} {required && <Text style={{ color: '#EF4444' }}>*</Text>}
-            </Text>
+            {label && (
+                <Text style={[
+                    styles.label,
+                    isFocused && { color: colors.primary }
+                ]}>
+                    {label} {required && <Text style={{ color: '#EF4444' }}>*</Text>}
+                </Text>
+            )}
             <View style={[
                 styles.inputWrapper,
                 isFocused && styles.inputWrapperFocused,
@@ -75,7 +80,7 @@ const InputField = React.memo(({
                     name={icon}
                     size={20}
                     color={isFocused ? colors.primary : colors.textSecondary}
-                    style={styles.inputIcon}
+                    style={[styles.inputIcon, props.multiline && { alignSelf: 'flex-start', marginTop: 4 }]} // Align icon for multiline
                 />
                 <TextInput
                     style={styles.input}
@@ -87,10 +92,11 @@ const InputField = React.memo(({
                     autoCapitalize="none"
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
+                    {...props}
                 />
             </View>
             {hasSubmitted && required && !value && (
-                <Text style={styles.errorText}>{label} is required</Text>
+                <Text style={styles.errorText}>{label || 'This field'} is required</Text>
             )}
         </View>
     );

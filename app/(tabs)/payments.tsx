@@ -6,11 +6,19 @@ import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, Vi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
 import { useUser } from '../../utils/authUtils';
-import { getPaymentSettings, getStudentRequests, markRequestAsPaid, PaymentRequest } from '../../utils/financeUtils';
-import { fetchUserData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
 export default function PaymentsPage() {
+    interface PaymentRequest {
+        id: string;
+        amount: number;
+        type: string; // 'purpose' in DB
+        status: 'pending' | 'verified' | 'paid_unverified' | 'overdue';
+        dueDate?: string;
+        description?: string;
+        receiptNumber?: string;
+    }
+
     const router = useRouter();
     const user = useUser();
     const { showAlert } = useAlert();
@@ -19,10 +27,7 @@ export default function PaymentsPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [requests, setRequests] = useState<PaymentRequest[]>([]);
-    const [upiSettings, setUpiSettings] = useState<{ upiId: string, payeeName: string } | null>(null);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
-
-    // Verify Modal State (Removed Zombie Code)
 
     useEffect(() => {
         if (user) {
@@ -33,15 +38,22 @@ export default function PaymentsPage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const studentData = await fetchUserData();
-            if (studentData?.email) {
-                const [reqs, settings] = await Promise.all([
-                    getStudentRequests(studentData.email),
-                    getPaymentSettings()
-                ]);
-                setRequests(reqs);
-                setUpiSettings(settings);
-            }
+            const { default: api } = await import('../../utils/api');
+            const response = await api.get('/services/payments');
+
+            // Map DB response to UI model
+            // DB: { id, amount, purpose, status, due_date, ... }
+            const mapped = response.data.map((p: any) => ({
+                id: p.id,
+                amount: Number(p.amount),
+                type: p.purpose,
+                status: p.status,
+                dueDate: p.due_date,
+                description: p.description,
+                receiptNumber: p.transaction_id
+            }));
+
+            setRequests(mapped);
         } catch (error) {
             console.error("Error loading payments:", error);
             showAlert('Error', 'Failed to load payment info', [], 'error');
@@ -61,9 +73,10 @@ export default function PaymentsPage() {
                     text: "Pay Now",
                     onPress: async () => {
                         try {
-                            // GENERATE DUMMY TRANSACTION ID
+                            const { default: api } = await import('../../utils/api');
                             const dummyId = "SIM-" + Date.now();
-                            await markRequestAsPaid(req.id, dummyId);
+                            await api.post(`/services/payments/${req.id}/pay`, { transactionId: dummyId });
+
                             loadData(); // Refresh list
                             showAlert('Success', 'Payment Successful! Waiting for admin verification.', [], 'success');
                         } catch (error) {
@@ -316,7 +329,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     listContent: {
-        paddingBottom: 20,
+        paddingBottom: 120,
         gap: 16,
     },
     card: {
@@ -417,5 +430,3 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
 });
-
-

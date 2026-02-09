@@ -1,18 +1,5 @@
+import api from './api';
 
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  Timestamp,
-  updateDoc,
-} from "firebase/firestore";
-import { getDbSafe } from "./firebase";
-
-// Shape of a notice used in the app
 export interface Notice {
   id: string;
   title: string;
@@ -21,57 +8,29 @@ export interface Notice {
   date: Date;
 }
 
-/**
- * Subscribe to all hostel notices.
- * Used in (tabs)/alerts.tsx
- */
 export const subscribeToNotices = (
   callback: (notices: Notice[]) => void
 ) => {
-  const db = getDbSafe();
-  if (!db) {
-    console.warn("Firestore not initialized");
-    return () => { };
-  }
-  const noticesRef = collection(db, "notices");
-
-  // Latest first
-  const q = query(noticesRef, orderBy("date", "desc"));
-
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const notices: Notice[] = snapshot.docs.map((d) => {
-      const data = d.data() as any;
-
-      let date: Date;
-      if (data.date instanceof Timestamp) {
-        date = data.date.toDate();
-      } else if (data.date) {
-        date = new Date(data.date);
-      } else {
-        date = new Date();
-      }
-
-      return {
-        id: d.id,
-        title: data.title ?? "",
-        body: data.body ?? "",
-        priority: (data.priority as Notice["priority"]) ?? "low",
-        date,
-      };
-    });
-
-    callback(notices);
-  }, (error) => {
-    console.error("Error subscribing to notices:", error);
-  });
-
-  return unsubscribe;
+  const fetch = async () => {
+    try {
+      const response = await api.get('/notices');
+      const notices = response.data.map((n: any) => ({
+        id: n.id.toString(),
+        title: n.title,
+        body: n.content,
+        priority: n.priority,
+        date: new Date(n.created_at)
+      }));
+      callback(notices);
+    } catch (error) {
+      console.error("Error fetching notices:", error);
+      callback([]);
+    }
+  };
+  fetch();
+  const interval = setInterval(fetch, 30000);
+  return () => clearInterval(interval);
 };
-
-/**
- * Helper functions for admin side
- * (optional, but useful for your admin dashboard)
- */
 
 export const createNotice = async (notice: {
   title: string;
@@ -79,36 +38,31 @@ export const createNotice = async (notice: {
   priority?: Notice["priority"];
   date?: Date;
 }) => {
-  const db = getDbSafe();
-  if (!db) throw new Error("Firestore not initialized");
-  const noticesRef = collection(db, "notices");
-  await addDoc(noticesRef, {
-    title: notice.title,
-    body: notice.body,
-    priority: notice.priority ?? "low",
-    date: notice.date ? Timestamp.fromDate(notice.date) : Timestamp.now(),
-  });
+  try {
+    await api.post('/notices', {
+      title: notice.title,
+      content: notice.body,
+      priority: notice.priority
+    });
+  } catch (error) {
+    console.error("Error creating notice:", error);
+    throw error;
+  }
 };
 
 export const updateNotice = async (
   id: string,
   updates: Partial<Omit<Notice, "id">>
 ) => {
-  const db = getDbSafe();
-  if (!db) throw new Error("Firestore not initialized");
-  const ref = doc(db, "notices", id);
-  const payload: any = { ...updates };
-
-  if (updates.date) {
-    payload.date = Timestamp.fromDate(updates.date);
-  }
-
-  await updateDoc(ref, payload);
+  // TODO: Implement update endpoint in backend if needed
+  console.warn("updateNotice API not implemented in backend yet");
 };
 
 export const deleteNotice = async (id: string) => {
-  const db = getDbSafe();
-  if (!db) throw new Error("Firestore not initialized");
-  const ref = doc(db, "notices", id);
-  await deleteDoc(ref);
+  try {
+    await api.delete(`/notices/${id}`);
+  } catch (error) {
+    console.error("Error deleting notice:", error);
+    throw error;
+  }
 };

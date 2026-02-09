@@ -20,11 +20,6 @@ export default function Index() {
       await new Promise(r => setTimeout(r, 1500));
 
       try {
-        const { getAuthSafe } = await import('../utils/firebase');
-        const { signOut } = await import('firebase/auth');
-        const auth = getAuthSafe();
-        if (auth) await signOut(auth);
-
         const { setStoredUser } = await import('../utils/authUtils');
         await setStoredUser(null);
       } catch (error) {
@@ -74,7 +69,7 @@ export default function Index() {
 
           {/* Text Container */}
           <View style={styles.textContainer}>
-            <Text style={styles.title}>SMART HOSTEL</Text>
+            <Text style={styles.title}>SMARTSTAY</Text>
             <View style={styles.divider} />
             <Text style={styles.subtitle}>The Future of Hostel Living</Text>
           </View>

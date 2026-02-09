@@ -1,15 +1,4 @@
-import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    updateDoc
-} from 'firebase/firestore';
-import { getDbSafe } from './firebase';
+import api from './api';
 
 export interface EmergencyContact {
     id: string;
@@ -20,61 +9,45 @@ export interface EmergencyContact {
     createdAt?: any;
 }
 
-const COLLECTION_NAME = 'emergencyContacts';
-
 /**
- * Subscribe to emergency contacts
+ * Fetch emergency contacts (Polled for updates)
  */
 export const subscribeToContacts = (onUpdate: (contacts: EmergencyContact[]) => void) => {
-    const db = getDbSafe();
-    if (!db) return () => { };
+    const fetch = async () => {
+        try {
+            const res = await api.get('/services/contacts');
 
-    const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
+            // Transform to match interface if needed
+            // Controller returns { id, name, role, phone, type, icon }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const contacts: EmergencyContact[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as EmergencyContact));
-        onUpdate(contacts);
-    }, (error) => {
-        console.error("Error fetching emergency contacts:", error);
-    });
+            const transformed = res.data.map((c: any) => ({
+                id: c.id.toString(),
+                title: c.role || c.type,
+                name: c.name,
+                number: c.phone,
+                icon: c.icon || 'phone',
+                createdAt: null
+            }));
+            onUpdate(transformed);
+        } catch (error) {
+            console.error("Error fetching emergency contacts:", error);
+            onUpdate([]);
+        }
+    };
 
-    return unsubscribe;
+    fetch();
+    const interval = setInterval(fetch, 60000);
+    return () => clearInterval(interval);
 };
 
-/**
- * Add a new emergency contact
- */
 export const addContact = async (contact: Omit<EmergencyContact, 'id' | 'createdAt'>) => {
-    const db = getDbSafe();
-    if (!db) throw new Error("Database not initialized");
-
-    await addDoc(collection(db, COLLECTION_NAME), {
-        ...contact,
-        createdAt: serverTimestamp()
-    });
+    await api.post('/services/contacts', contact);
 };
 
-/**
- * Delete an emergency contact
- */
 export const deleteContact = async (id: string) => {
-    const db = getDbSafe();
-    if (!db) throw new Error("Database not initialized");
-
-    const ref = doc(db, COLLECTION_NAME, id);
-    await deleteDoc(ref);
+    await api.delete(`/services/contacts/${id}`);
 };
 
-/**
- * Update an emergency contact
- */
 export const updateContact = async (id: string, updates: Partial<EmergencyContact>) => {
-    const db = getDbSafe();
-    if (!db) throw new Error("Database not initialized");
-
-    const ref = doc(db, COLLECTION_NAME, id);
-    await updateDoc(ref, updates);
+    await api.put(`/services/contacts/${id}`, updates);
 };

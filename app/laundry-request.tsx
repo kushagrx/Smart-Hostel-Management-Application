@@ -2,25 +2,43 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { submitLaundryRequest } from '../utils/laundryRequestUtils';
+import { useAlert } from '../context/AlertContext';
+import { useRefresh } from '../hooks/useRefresh';
+import { fetchLaundrySettings, LaundryRequestDisplay, LaundrySettings, subscribeToLaundry, subscribeToMyLaundryRequests } from '../utils/laundrySyncUtils';
 import { fetchUserData, StudentData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
 
 export default function LaundryRequest() {
     const router = useRouter();
     const { colors, isDark } = useTheme();
+    const { showAlert } = useAlert();
     const [student, setStudent] = useState<StudentData | null>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [settings, setSettings] = useState<LaundrySettings | null>(null);
+    const [history, setHistory] = useState<LaundryRequestDisplay[]>([]);
 
     // Form State
     const [clothesDetails, setClothesDetails] = useState('');
     const [totalClothes, setTotalClothes] = useState('');
 
+    const { refreshing, onRefresh } = useRefresh(async () => {
+        await Promise.all([loadUserData(), fetchLaundrySettings().then(setSettings)]);
+    }, () => {
+        setClothesDetails('');
+        setTotalClothes('');
+    });
+
     useEffect(() => {
         loadUserData();
+        const unsubSettings = subscribeToLaundry(setSettings);
+        const unsubHistory = subscribeToMyLaundryRequests(setHistory);
+        return () => {
+            unsubSettings();
+            unsubHistory();
+        };
     }, []);
 
     const loadUserData = async () => {
@@ -36,27 +54,31 @@ export default function LaundryRequest() {
 
     const handleSubmit = async () => {
         if (!clothesDetails.trim()) {
-            Alert.alert('Missing Details', 'Please describe the clothes you are sending.');
+            showAlert('Missing Details', 'Please describe the clothes you are sending.', [], 'error');
             return;
         }
         if (!totalClothes.trim() || isNaN(Number(totalClothes))) {
-            Alert.alert('Invalid Count', 'Please enter a valid total number of clothes.');
+            showAlert('Invalid Count', 'Please enter a valid total number of clothes.', [], 'error');
             return;
         }
 
         setSubmitting(true);
         try {
-            await submitLaundryRequest(
-                student?.roomNo || 'Unknown',
-                student?.fullName || 'Unknown',
-                clothesDetails,
-                Number(totalClothes)
-            );
-            Alert.alert('Success', 'Your laundry request has been submitted!', [
-                { text: 'OK', onPress: () => router.back() }
-            ]);
+            const { default: api } = await import('../utils/api');
+            await api.post('/services/laundry', {
+                pickupDate: new Date().toISOString(), // Defaulting to now for pickup request
+                itemsCount: Number(totalClothes),
+                notes: clothesDetails
+            });
+
+            showAlert('Success', 'Your laundry request has been submitted!', [
+                { text: 'OK' }
+            ], 'success');
+            setClothesDetails('');
+            setTotalClothes('');
         } catch (error) {
-            Alert.alert('Error', 'Failed to submit request. Please try again.');
+            console.error(error);
+            showAlert('Error', 'Failed to submit request. Please try again.', [], 'error');
         } finally {
             setSubmitting(false);
         }
@@ -73,108 +95,203 @@ export default function LaundryRequest() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <LinearGradient
-                colors={['#000428', '#004e92']}
-                style={styles.headerGradient}
-            >
-                <SafeAreaView edges={['top']} style={styles.safeArea}>
-                    <View style={styles.header}>
-                        <Pressable onPress={() => router.back()} style={styles.backButton}>
-                            <Ionicons name="arrow-back" size={24} color="#fff" />
-                        </Pressable>
-                        <Text style={styles.headerTitle}>Laundry Request</Text>
-                        <View style={{ width: 40 }} />
-                    </View>
-                </SafeAreaView>
-            </LinearGradient>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+                <View style={{ flex: 1 }}>
+                    <LinearGradient
+                        colors={['#000428', '#004e92']}
+                        style={[styles.headerGradient, { zIndex: 10, elevation: 5 }]}
+                    >
+                        <SafeAreaView edges={['top']} style={styles.safeArea}>
+                            <View style={styles.header}>
+                                <Pressable onPress={() => router.back()} style={styles.backButton}>
+                                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                                </Pressable>
+                                <Text style={styles.headerTitle}>Laundry Request</Text>
+                                <View style={{ width: 40 }} />
+                            </View>
+                        </SafeAreaView>
+                    </LinearGradient>
+                    <ScrollView
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
+                        keyboardShouldPersistTaps="handled"
+                        keyboardDismissMode="on-drag"
+                    >
+                        <View style={{ padding: 24 }}>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
-            >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <ScrollView contentContainerStyle={styles.content}>
-
-                        {/* Student Info Card */}
-                        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <View style={styles.infoRow}>
-                                <View style={[styles.iconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
-                                    <MaterialCommunityIcons name="account-circle-outline" size={24} color={isDark ? '#60A5FA' : '#3B82F6'} />
+                            {/* Student Info Card */}
+                            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <View style={styles.infoRow}>
+                                    <View style={[styles.iconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
+                                        <MaterialCommunityIcons name="account-circle-outline" size={24} color={isDark ? '#60A5FA' : '#3B82F6'} />
+                                    </View>
+                                    <View>
+                                        <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Student Name</Text>
+                                        <Text style={[styles.infoValue, { color: colors.text }]}>{student?.fullName || '--'}</Text>
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Student Name</Text>
-                                    <Text style={[styles.infoValue, { color: colors.text }]}>{student?.fullName || '--'}</Text>
+                                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                                <View style={styles.infoRow}>
+                                    <View style={[styles.iconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
+                                        <MaterialCommunityIcons name="door-open" size={24} color={isDark ? '#60A5FA' : '#3B82F6'} />
+                                    </View>
+                                    <View>
+                                        <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Room Number</Text>
+                                        <Text style={[styles.infoValue, { color: colors.text }]}>{student?.roomNo || '--'}</Text>
+                                    </View>
                                 </View>
                             </View>
-                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                            <View style={styles.infoRow}>
-                                <View style={[styles.iconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
-                                    <MaterialCommunityIcons name="door-open" size={24} color={isDark ? '#60A5FA' : '#3B82F6'} />
+
+                            {/* Laundry Settings Info Card */}
+                            {settings && (
+                                <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                    <View style={styles.headerRow}>
+                                        <View style={[styles.iconBox, { backgroundColor: isDark ? '#172554' : '#EFF6FF' }]}>
+                                            <MaterialCommunityIcons name="washing-machine" size={24} color={isDark ? '#60A5FA' : '#3B82F6'} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Service Status</Text>
+                                            <Text style={[styles.infoValue, {
+                                                color: settings.status === 'On Schedule' ? '#10B981' :
+                                                    settings.status === 'Delayed' ? '#F59E0B' :
+                                                        settings.status === 'No Service' ? '#EF4444' : '#6366F1'
+                                            }]}>
+                                                {settings.status}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                                    <View style={styles.infoRow}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Next Pickup</Text>
+                                            <Text style={[styles.infoValue, { color: colors.text }]}>
+                                                {settings.pickupDay}, {settings.pickupTime} {settings.pickupPeriod}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Next Drop-off</Text>
+                                            <Text style={[styles.infoValue, { color: colors.text }]}>
+                                                {settings.dropoffDay}, {settings.dropoffTime} {settings.dropoffPeriod}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {settings.message ? (
+                                        <>
+                                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                                            <View>
+                                                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Message from Admin</Text>
+                                                <Text style={[styles.messageText, { color: colors.text }]}>
+                                                    "{settings.message}"
+                                                </Text>
+                                            </View>
+                                        </>
+                                    ) : null}
                                 </View>
-                                <View>
-                                    <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Room Number</Text>
-                                    <Text style={[styles.infoValue, { color: colors.text }]}>{student?.roomNo || '--'}</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Request Details</Text>
-
-                        {/* Form */}
-                        <View style={styles.formContainer}>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: colors.textSecondary }]}>Clothes Details</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-                                    placeholder="E.g., 2 Shirts, 1 Jeans, 1 Towel..."
-                                    placeholderTextColor={colors.textSecondary}
-                                    multiline
-                                    textAlignVertical="top"
-                                    value={clothesDetails}
-                                    onChangeText={setClothesDetails}
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: colors.textSecondary }]}>Total Count</Text>
-                                <TextInput
-                                    style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-                                    placeholder="e.g. 5"
-                                    placeholderTextColor={colors.textSecondary}
-                                    keyboardType="numeric"
-                                    value={totalClothes}
-                                    onChangeText={setTotalClothes}
-                                />
-                            </View>
-                        </View>
-
-                        <Pressable
-                            onPress={handleSubmit}
-                            style={({ pressed }) => [
-                                styles.submitButton,
-                                submitting && styles.disabledButton,
-                                pressed && styles.buttonPressed
-                            ]}
-                            disabled={submitting}
-                        >
-                            {submitting ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <>
-                                    <MaterialCommunityIcons name="send" size={20} color="#fff" style={{ marginRight: 8 }} />
-                                    <Text style={styles.buttonText}>Submit Request</Text>
-                                </>
                             )}
-                        </Pressable>
 
+                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Request Details</Text>
+
+                            {/* Form */}
+                            <View style={styles.formContainer}>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Clothes Details</Text>
+                                    <TextInput
+                                        style={[styles.input, styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                                        placeholder="E.g., 2 Shirts, 1 Jeans, 1 Towel..."
+                                        placeholderTextColor={colors.textSecondary}
+                                        multiline
+                                        textAlignVertical="top"
+                                        value={clothesDetails}
+                                        onChangeText={setClothesDetails}
+                                    />
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Total Count</Text>
+                                    <TextInput
+                                        style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                                        placeholder="e.g. 5"
+                                        placeholderTextColor={colors.textSecondary}
+                                        keyboardType="numeric"
+                                        value={totalClothes}
+                                        onChangeText={setTotalClothes}
+                                    />
+                                </View>
+                            </View>
+
+                            <Pressable
+                                onPress={handleSubmit}
+                                style={({ pressed }) => [
+                                    styles.submitButton,
+                                    submitting && styles.disabledButton,
+                                    pressed && styles.buttonPressed
+                                ]}
+                                disabled={submitting}
+                            >
+                                {submitting ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <>
+                                        <MaterialCommunityIcons name="send" size={20} color="#fff" style={{ marginRight: 8 }} />
+                                        <Text style={styles.buttonText}>Submit Request</Text>
+                                    </>
+                                )}
+                            </Pressable>
+
+                            {/* Recent Requests History */}
+                            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 32 }]}>Recent Activity</Text>
+                            {history.length === 0 ? (
+                                <View style={[styles.emptyState, { borderColor: colors.border }]}>
+                                    <Text style={{ color: colors.textSecondary }}>No recent requests found</Text>
+                                </View>
+                            ) : (
+                                history.slice(0, 3).map((req, index) => (
+                                    <View key={index} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                            <Text style={[styles.historyDate, { color: colors.text }]}>
+                                                {new Date(req.createdAt).toLocaleDateString()}
+                                            </Text>
+                                            {/* Dynamic Status Badge */}
+                                            {(() => {
+                                                const statusConfig = {
+                                                    pending: { label: 'Requested', color: '#6366F1', bg: isDark ? 'rgba(99, 102, 241, 0.2)' : '#E0E7FF' },
+                                                    processing: { label: 'Processing', color: '#F59E0B', bg: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7' },
+                                                    ready: { label: 'Ready', color: '#10B981', bg: isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5' },
+                                                    completed: { label: 'Deivered', color: '#10B981', bg: isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5' },
+                                                    rejected: { label: 'Rejected', color: '#EF4444', bg: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2' },
+                                                };
+                                                // Default to pending if unknown status
+                                                const config = statusConfig[req.status as keyof typeof statusConfig] || statusConfig.pending;
+
+                                                return (
+                                                    <View style={[styles.statusBadge, { backgroundColor: config.bg }]}>
+                                                        <Text style={[styles.statusText, { color: config.color }]}>{config.label}</Text>
+                                                    </View>
+                                                );
+                                            })()}
+                                        </View>
+                                        <Text style={[styles.historyDetails, { color: colors.textSecondary }]}>
+                                            {req.clothesDetails}
+                                        </Text>
+                                        <Text style={[styles.historyTotal, { color: colors.textSecondary, marginTop: 4 }]}>
+                                            {req.totalClothes} Items
+                                        </Text>
+                                    </View>
+                                ))
+                            )}
+
+                        </View>
                     </ScrollView>
-                </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
-        </View>
+                </View>
+            </KeyboardAvoidingView >
+        </View >
     );
 }
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -218,10 +335,8 @@ const styles = StyleSheet.create({
         color: '#fff',
     },
     content: {
-        padding: 24,
+        flexGrow: 1,
     },
-
-    // Info Card
     infoCard: {
         borderRadius: 20,
         padding: 20,
@@ -237,6 +352,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 16,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    messageText: {
+        fontSize: 14,
+        fontStyle: 'italic',
+        marginTop: 4,
+        lineHeight: 20,
     },
     iconBox: {
         width: 44,
@@ -262,7 +388,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#F1F5F9',
         marginVertical: 16,
     },
-
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
@@ -290,7 +415,6 @@ const styles = StyleSheet.create({
     textArea: {
         height: 120,
     },
-
     submitButton: {
         backgroundColor: '#004e92',
         flexDirection: 'row',
@@ -315,5 +439,39 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 18,
         fontWeight: '700',
+    },
+    emptyState: {
+        padding: 20,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderRadius: 12,
+    },
+    historyCard: {
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginBottom: 12,
+    },
+    historyDate: {
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    statusBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    statusText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    historyDetails: {
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    historyTotal: {
+        fontSize: 12,
+        fontWeight: '600',
     },
 });
