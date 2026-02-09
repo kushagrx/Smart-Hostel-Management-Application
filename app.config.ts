@@ -24,8 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     usesCleartextTraffic: true, // Allow HTTP for local dev
-    package: "com.anonymous.smartstay",
-    googleServicesFile: "./google-services.json"
+    package: "com.anonymous.smartstay"
   },
   web: {
     output: "static",
@@ -52,11 +51,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   experiments: {
     typedRoutes: true,
     reactCompiler: true
-  },
-  extra: {
-    firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    firebaseAuthDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-    firebaseAppId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID
   }
 });

@@ -1,50 +1,142 @@
-# Welcome to your Expo app 👋
+# 🏠 SmartStay - Smart Hostel Management Application
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A comprehensive mobile application for managing hostel operations, built with React Native and Expo. SmartStay streamlines hostel administration with features for student management, attendance tracking, facility management, and real-time communication.
 
-## Get started
+## ✨ Features
 
-1. Install dependencies
+### For Students
+- 📱 **Dashboard** - Overview of hostel activities and personal information
+- 📅 **Attendance** - View attendance records and history
+- 🎫 **Leave Requests** - Submit and track leave applications
+- 🛠️ **Complaints** - Report and monitor facility issues
+- 💬 **Chat** - Direct communication with hostel administrators
+- 🔔 **Notifications** - Real-time updates and announcements
+- 📢 **Notice Board** - Access hostel notices and announcements
 
+### For Administrators
+- 👥 **Student Management** - Manage student profiles and records
+- ✅ **Attendance Tracking** - Record and monitor student attendance with calendar view
+- 📋 **Leave Management** - Review and approve/reject leave requests
+- 🔧 **Facility Management** - Track and resolve maintenance complaints
+- 📊 **Analytics** - View hostel statistics and insights
+- 💬 **Student Communication** - Chat with students individually
+- 📢 **Notice Board** - Create and manage hostel announcements
+
+## 🚀 Technology Stack
+
+### Frontend
+- **React Native** - Cross-platform mobile development
+- **Expo** - Development platform and build tools
+- **TypeScript** - Type-safe JavaScript
+- **React Navigation** - Navigation and routing
+- **Expo Router** - File-based routing
+- **React Native Reanimated** - Smooth animations
+
+### Backend
+- **Node.js** - JavaScript runtime
+- **Express** - Web application framework
+- **TypeScript** - Type-safe server code
+- **PostgreSQL** - Relational database
+- **JWT** - Authentication tokens
+- **Multer** - File upload handling
+
+### Authentication
+- **Google OAuth 2.0** - Secure sign-in
+- **JWT Tokens** - Session management
+
+## 📦 Getting Started
+
+For detailed setup instructions, including database configuration, environment variables, and Google OAuth setup, please refer to:
+
+**📖 [SETUP.md](./SETUP.md)** - Complete setup guide
+
+### Quick Start
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/ShaswatRastogi/Smart-Hostel-Management-Application.git
+   cd Smart-Hostel-Management-Application
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
+   cd backend && npm install && cd ..
    ```
 
-2. Start the app
+3. **Configure environment**
+   - Follow the [SETUP.md](./SETUP.md) guide to configure PostgreSQL and environment variables
 
+4. **Start the application**
    ```bash
-   npx expo start
+   .\start-dev.bat  # Windows
+   # OR manually start backend and frontend in separate terminals
    ```
 
-In the output, you'll find options to open the app in a
+## 🗄️ Database
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+The application uses **PostgreSQL** as its primary database. The system has been migrated from Firebase to PostgreSQL for:
+- Better performance and scalability
+- Full data control and ownership
+- Advanced querying capabilities
+- Relational data integrity
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+See [SETUP.md](./SETUP.md) for database setup instructions.
 
-## Get a fresh project
+## 📱 Development
 
-When you're ready, run:
+### Prerequisites
+- Node.js (v18+)
+- PostgreSQL (v14+)
+- Android Studio (for Android development)
+- Expo CLI
 
+### Running Development Server
+
+**Backend:**
 ```bash
-npm run reset-project
+cd backend
+npm run dev
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Frontend:**
+```bash
+npx expo start
+```
 
-## Learn more
+## 🏗️ Project Structure
 
-To learn more about developing your project with Expo, look at the following resources:
+```
+smarthostel/
+├── app/                    # Frontend pages (Expo Router)
+├── components/             # Reusable UI components
+├── context/               # React context providers
+├── utils/                 # Utility functions and helpers
+├── assets/                # Images, fonts, and static assets
+├── backend/               # Backend server
+│   ├── src/
+│   │   ├── controllers/   # Request handlers
+│   │   ├── routes/        # API routes
+│   │   ├── config/        # Configuration files
+│   │   ├── middleware/    # Express middleware
+│   │   └── scripts/       # Database scripts
+│   └── backups/           # Database backups
+└── SETUP.md               # Setup guide
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 🤝 Contributing
 
-## Join the community
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-Join our community of developers creating universal apps.
+## 📄 License
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project is available for educational and personal use.
+
+## 👨‍💻 Author
+
+**Shaswat Rastogi**
+- GitHub: [@ShaswatRastogi](https://github.com/ShaswatRastogi)
+
+---
+
+**Built with ❤️ using React Native and PostgreSQL**
