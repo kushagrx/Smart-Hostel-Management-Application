@@ -1,66 +1,47 @@
-import { doc, getDoc } from 'firebase/firestore';
-import { getAuthSafe, getDbSafe } from './firebase';
-
-export const getInitial = (name: string): string => {
-  if (!name) return '';
-  return name.trim().charAt(0).toUpperCase();
-};
+import api from './api';
 
 export interface StudentData {
   fullName: string;
+  rollNo: string;
   roomNo: string;
-  rollNo?: string;
-  collegeName?: string;
-  hostelName?: string;
-  age?: string;
-  phone?: string;
-  personalEmail?: string;
-  status?: string;
-  dues?: number;
-  wifiSSID?: string;
-  email?: string;
+  collegeName: string;
+  hostelName: string;
+  dob: string;
+  phone: string;
+  personalEmail: string;
+  googleEmail?: string;
+  collegeEmail?: string;
+  status: 'active' | 'inactive';
+  dues: number;
+  wifiSSID: string;
+  wifiPassword: string;
+  email: string;
+  address: string;
+  fatherName: string;
+  fatherPhone: string;
+  motherName: string;
+  motherPhone: string;
+  bloodGroup: string;
+  medicalHistory: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  feeFrequency: string;
+  profilePhoto?: string;
+  lastNotificationsClearedAt?: number;
+  id?: string; // Added field because backend returns it now
 }
 
-export const userData: StudentData = {
-  fullName: 'Loading...',
-  roomNo: 'Loading...',
+export const fetchUserData = async (): Promise<StudentData> => {
+  try {
+    const response = await api.get('/students/profile');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching user data:", error);
+    throw error;
+  }
 };
 
-// Fetch user data from Firestore based on authenticated user
-export const fetchUserData = async (): Promise<StudentData | null> => {
-  try {
-    const auth = getAuthSafe();
-    const db = getDbSafe();
-
-    if (!auth?.currentUser || !db) return null;
-
-    const userEmail = auth.currentUser.email;
-
-    // Try to fetch from allocations collection using email as ID
-    const allocationRef = doc(db, 'allocations', userEmail || '');
-    const allocationSnap = await getDoc(allocationRef);
-
-    if (allocationSnap.exists()) {
-      const data = allocationSnap.data();
-      return {
-        fullName: data.name || 'N/A',
-        roomNo: data.room || 'N/A',
-        rollNo: data.rollNo || 'N/A',
-        collegeName: data.collegeName || 'N/A',
-        hostelName: data.hostelName || 'N/A',
-        age: data.age || 'N/A',
-        phone: data.phone || 'N/A',
-        personalEmail: data.personalEmail || userEmail || 'N/A',
-        status: data.status || 'active',
-        dues: data.dues || 0,
-        wifiSSID: data.wifiSSID || 'ENET_' + (data.room || 'N/A'),
-        email: userEmail || undefined,
-      };
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    return null;
-  }
+export const getInitial = (name: string) => {
+  if (!name) return 'U';
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 };

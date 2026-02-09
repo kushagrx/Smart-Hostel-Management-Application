@@ -20,7 +20,7 @@ import InputField from '../../components/InputField';
 import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
 import { isAdmin, useUser } from '../../utils/authUtils';
-import { addBusRoute, BusRoute, deleteBusRoute, subscribeToBusTimings } from '../../utils/busTimingsSyncUtils';
+import { addBusRoute, BusRoute, deleteBusRoute, subscribeToBusTimings, updateBusRoute } from '../../utils/busTimingsSyncUtils';
 
 export default function ManageBusTimingsPage() {
     const { colors, theme } = useTheme();
@@ -35,7 +35,15 @@ export default function ManageBusTimingsPage() {
 
     // Modal State
     const [modalVisible, setModalVisible] = useState(false);
-    const [newRouteName, setNewRouteName] = useState('');
+    const [editingId, setEditingId] = useState<string | null>(null);
+
+    // Route logic split
+    // Route logic split
+    const [startPoint, setStartPoint] = useState('');
+    const [endPoint, setEndPoint] = useState('');
+    const [stops, setStops] = useState<string[]>([]);
+    const [message, setMessage] = useState('');
+
     const [newTimes, setNewTimes] = useState<{ time: string, period: 'AM' | 'PM' }[]>([{ time: '', period: 'AM' }]);
 
     useEffect(() => {
@@ -49,7 +57,6 @@ export default function ManageBusTimingsPage() {
 
     const onRefresh = () => {
         setRefreshing(true);
-        // Real-time listener handles updates, just sim delay
         setTimeout(() => setRefreshing(false), 1000);
     };
 
@@ -74,11 +81,83 @@ export default function ManageBusTimingsPage() {
         setNewTimes(updatedTimes);
     };
 
-    const handleCreate = async () => {
-        if (!newRouteName.trim()) {
-            showAlert("Error", "Route name is required");
+    const handleSwapPoints = () => {
+        const temp = startPoint;
+        setStartPoint(endPoint);
+        setEndPoint(temp);
+        setStops(prev => [...prev].reverse());
+    };
+
+    const handleAddStop = () => {
+        setStops([...stops, '']);
+    };
+
+    const handleRemoveStop = (index: number) => {
+        setStops(stops.filter((_, i) => i !== index));
+    };
+
+    const handleStopChange = (text: string, index: number) => {
+        const updatedStops = [...stops];
+        updatedStops[index] = text;
+        setStops(updatedStops);
+    };
+
+    const openCreateModal = () => {
+        setEditingId(null);
+        setStartPoint('');
+        setEndPoint('');
+        setStops([]);
+        setMessage('');
+        setNewTimes([{ time: '', period: 'AM' }]);
+        setModalVisible(true);
+    };
+
+    const openEditModal = (item: BusRoute) => {
+        setEditingId(item.id);
+        setMessage(item.message || '');
+
+        // Parse Route String: "A -> B -> C"
+        const parts = item.route.split(' -> ').map(s => s.trim());
+        if (parts.length >= 2) {
+            setStartPoint(parts[0]);
+            setEndPoint(parts[parts.length - 1]);
+            setStops(parts.slice(1, parts.length - 1));
+        } else {
+            // Fallback for non-standard strings
+            setStartPoint(item.route);
+            setEndPoint('');
+            setStops([]);
+        }
+
+        const parsedTimes = item.times.map(t => {
+            // Basic parsing logic: "14:30" -> "2:30" "PM"
+            // or "09:00" -> "9:00" "AM"
+            const [hStr, mStr] = t.split(':');
+            let h = parseInt(hStr || '0', 10);
+            const m = mStr || '00';
+            const period = h >= 12 ? 'PM' : 'AM';
+
+            if (h > 12) h -= 12;
+            if (h === 0) h = 12;
+
+            return { time: `${h}:${m}`, period: period as 'AM' | 'PM' };
+        });
+
+        setNewTimes(parsedTimes.length > 0 ? parsedTimes : [{ time: '', period: 'AM' }]);
+        setModalVisible(true);
+    };
+
+    const handleSubmit = async () => {
+        if (!startPoint.trim() || !endPoint.trim()) {
+            showAlert("Error", "Start and Destination are required");
             return;
         }
+
+        // Construct Route Name
+        const cleanStops = stops.filter(s => s.trim().length > 0);
+        const routeComponents = [startPoint.trim(), ...cleanStops.map(s => s.trim()), endPoint.trim()];
+        const finalRouteName = routeComponents.join(' -> ');
+
         const validTimes = newTimes
             .filter(t => t.time.trim().length > 0)
             .map(t => `${t.time.trim()} ${t.period}`);
@@ -89,14 +168,31 @@ export default function ManageBusTimingsPage() {
         }
 
         try {
-            await addBusRoute(newRouteName, validTimes);
+            if (editingId) {
+                // Update Logic
+                await updateBusRoute(editingId, finalRouteName, validTimes[0], message);
+
+                // 2. If there are EXTRA time slots added in the modal (index > 0), create them as NEW routes
+                if (validTimes.length > 1) {
+                    const extraTimes = validTimes.slice(1);
+                    await addBusRoute(finalRouteName, extraTimes, message);
+                }
+
+                showAlert("Success", "Route updated successfully");
+            } else {
+                // Create Logic
+                await addBusRoute(finalRouteName, validTimes, message);
+                showAlert("Success", "Bus route added successfully");
+            }
             setModalVisible(false);
-            setNewRouteName('');
+            setStartPoint('');
+            setEndPoint('');
+            setStops([]);
+            setMessage('');
             setNewTimes([{ time: '', period: 'AM' }]);
-            showAlert("Success", "Bus route added successfully");
         } catch (error) {
             console.error(error);
-            showAlert("Error", "Failed to add route");
+            showAlert("Error", `Failed to ${editingId ? 'update' : 'add'} route`);
         }
     };
 
@@ -356,7 +452,7 @@ export default function ManageBusTimingsPage() {
                     contentContainerStyle={styles.list}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
                     ListHeaderComponent={
-                        <TouchableOpacity style={styles.createBtn} onPress={() => setModalVisible(true)}>
+                        <TouchableOpacity style={styles.createBtn} onPress={openCreateModal}>
                             <MaterialCommunityIcons name="plus" size={24} color="#fff" />
                             <Text style={styles.createBtnText}>Add New Route</Text>
                         </TouchableOpacity>
@@ -376,9 +472,14 @@ export default function ManageBusTimingsPage() {
                                     ))}
                                 </View>
                             </View>
-                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-                                <MaterialCommunityIcons name="trash-can-outline" size={24} color="#EF4444" />
-                            </TouchableOpacity>
+                            <View style={{ gap: 8 }}>
+                                <TouchableOpacity onPress={() => openEditModal(item)} style={[styles.deleteBtn, { backgroundColor: theme === 'dark' ? 'rgba(59,130,246,0.2)' : '#EFF6FF' }]}>
+                                    <MaterialCommunityIcons name="pencil" size={20} color={colors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleDelete(item.id)} style={[styles.deleteBtn, { backgroundColor: theme === 'dark' ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' }]}>
+                                    <MaterialCommunityIcons name="trash-can-outline" size={20} color="#EF4444" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
                     ListEmptyComponent={
@@ -399,20 +500,109 @@ export default function ManageBusTimingsPage() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Add Bus Route</Text>
+                            <Text style={styles.modalTitle}>{editingId ? 'Edit Bus Route' : 'Add Bus Route'}</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)}>
                                 <MaterialCommunityIcons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
                         </View>
 
                         <ScrollView style={styles.modalScroll}>
-                            <Text style={styles.label}>Route Name</Text>
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={styles.label}>Route Path</Text>
+
+                                <View style={{ flexDirection: 'row', gap: 12 }}>
+                                    {/* Timeline Visuals */}
+                                    <View style={{ alignItems: 'center', paddingTop: 18 }}>
+                                        {/* Start Dot */}
+                                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.card, shadowColor: colors.primary, shadowOpacity: 0.5, shadowRadius: 4, elevation: 4 }} />
+
+                                        {/* Connecting Line */}
+                                        <View style={{ flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 4 }} />
+
+                                        {/* Dest Pin */}
+                                        <MaterialCommunityIcons name="map-marker" size={16} color="#EF4444" />
+                                    </View>
+
+                                    {/* Inputs Container */}
+                                    <View style={{ flex: 1, gap: 12 }}>
+                                        {/* Start Input */}
+                                        <View>
+                                            <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', marginBottom: 4, marginLeft: 4 }}>START POINT</Text>
+                                            <TextInput
+                                                style={[styles.timeInput, { height: 44 }]}
+                                                placeholder="e.g. Hostel"
+                                                placeholderTextColor={colors.textSecondary}
+                                                value={startPoint}
+                                                onChangeText={setStartPoint}
+                                            />
+                                        </View>
+
+                                        {/* Stops List */}
+                                        {stops.map((stop, index) => (
+                                            <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <TextInput
+                                                    style={[styles.timeInput, { height: 40, flex: 1, fontSize: 13 }]}
+                                                    placeholder={`Stop ${index + 1}`}
+                                                    placeholderTextColor={colors.textSecondary}
+                                                    value={stop}
+                                                    onChangeText={(text: string) => handleStopChange(text, index)}
+                                                />
+                                                <TouchableOpacity onPress={() => handleRemoveStop(index)} style={{ padding: 6 }}>
+                                                    <MaterialCommunityIcons name="close" size={18} color={colors.textSecondary} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ))}
+
+                                        {/* Add Stop Button */}
+                                        <TouchableOpacity
+                                            onPress={handleAddStop}
+                                            style={{ alignSelf: 'flex-start', marginLeft: 4, paddingVertical: 4 }}
+                                        >
+                                            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>+ ADD STOP</Text>
+                                        </TouchableOpacity>
+
+                                        {/* Destination Input */}
+                                        <View>
+                                            <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', marginBottom: 4, marginLeft: 4 }}>DESTINATION</Text>
+                                            <TextInput
+                                                style={[styles.timeInput, { height: 44 }]}
+                                                placeholder="e.g. College"
+                                                placeholderTextColor={colors.textSecondary}
+                                                value={endPoint}
+                                                onChangeText={setEndPoint}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* Swap Button (Vertical Centered) */}
+                                    <View style={{ justifyContent: 'center' }}>
+                                        <TouchableOpacity
+                                            onPress={handleSwapPoints}
+                                            style={{
+                                                width: 36,
+                                                height: 36,
+                                                borderRadius: 18,
+                                                backgroundColor: theme === 'dark' ? '#334155' : '#F1F5F9',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                borderWidth: 1,
+                                                borderColor: colors.border
+                                            }}
+                                        >
+                                            <MaterialCommunityIcons name="swap-vertical" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+
+                            <Text style={styles.label}>Note / Message (Optional)</Text>
                             <InputField
-                                icon="bus"
-                                placeholder="e.g. Hostel -> College"
-                                value={newRouteName}
-                                onChangeText={setNewRouteName}
+                                icon="message-text-outline"
+                                placeholder="E.g. Route via Main Market"
+                                value={message}
+                                onChangeText={setMessage}
                             />
+                            <View style={{ height: 12 }} />
 
                             <Text style={styles.label}>Timings</Text>
                             {newTimes.map((item, index) => (
@@ -456,8 +646,8 @@ export default function ManageBusTimingsPage() {
                             </TouchableOpacity>
                         </ScrollView>
 
-                        <TouchableOpacity onPress={handleCreate} style={styles.submitBtn}>
-                            <Text style={styles.submitBtnText}>Create Route</Text>
+                        <TouchableOpacity onPress={handleSubmit} style={styles.submitBtn}>
+                            <Text style={styles.submitBtnText}>{editingId ? 'Update Route' : 'Create Route'}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

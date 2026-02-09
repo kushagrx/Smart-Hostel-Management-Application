@@ -1,21 +1,93 @@
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, DeviceEventEmitter, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
-import { MenuItem, subscribeToMenu, WeekMenu } from '../../utils/messSyncUtils';
-import { fetchUserData, getInitial, StudentData } from '../../utils/nameUtils';
+
+import Animated, {
+  Extrapolate,
+  interpolate,
+  useAnimatedStyle,
+  useDerivedValue,
+  withSpring
+} from 'react-native-reanimated';
+import { useRefresh } from '../../hooks/useRefresh';
+import api, { API_BASE_URL } from '../../utils/api';
+import { fetchLaundrySettings, LaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
+import { fetchMenu, subscribeToMenu, WeekMenu } from '../../utils/messSyncUtils';
+
+import StudentNotificationOverlay from '../../components/StudentNotificationOverlay';
+import { fetchUserData, StudentData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
+
+const toggleStyles = StyleSheet.create({
+  toggleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  }
+});
+
+const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleTheme: () => void }) => {
+  // 0 = Light, 1 = Dark
+  const progress = useDerivedValue(() => {
+    return isDark ? withSpring(1) : withSpring(0);
+  }, [isDark]);
+
+  const rStyle = useAnimatedStyle(() => {
+    const rotate = interpolate(progress.value, [0, 1], [0, 360], Extrapolate.CLAMP);
+    const scale = interpolate(progress.value, [0, 0.5, 1], [1, 0.8, 1], Extrapolate.CLAMP);
+
+    return {
+      transform: [
+        { rotate: `${rotate}deg` },
+        { scale: scale }
+      ]
+    };
+  });
+
+  return (
+    <TouchableOpacity
+      style={[
+        toggleStyles.toggleBtn,
+        { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.9)' }
+      ]}
+      onPress={toggleTheme}
+      activeOpacity={0.8}
+    >
+      <Animated.View style={rStyle}>
+        <MaterialCommunityIcons
+          name={isDark ? "weather-sunny" : "weather-night"}
+          size={24}
+          color={isDark ? "#fbbf24" : "#004e92"}
+        />
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+const { width } = Dimensions.get('window');
+const SPACING = 20;
 
 export default function Index() {
   const router = useRouter();
-  const { colors, theme } = useTheme();
+  const { colors, isDark, toggleTheme } = useTheme();
   const [student, setStudent] = useState<StudentData | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  // const [refreshing, setRefreshing] = useState(false); // Managed by useRefresh
   const [laundry, setLaundry] = useState<LaundrySettings | null>(null);
   const [fullMenu, setFullMenu] = useState<WeekMenu>({});
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationVisible, setNotificationVisible] = useState(false);
 
   const loadUserData = useCallback(async () => {
     try {
@@ -23,222 +95,401 @@ export default function Index() {
       setStudent(data);
     } catch (error) {
       console.error('Failed to load user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const res = await api.get('/notifications/student');
+      setUnreadCount(res.data.length);
+    } catch (error) {
+      console.error('Failed to fetch notification count:', error);
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       loadUserData();
+      fetchUnreadCount();
+      const unsubscribeLaundry = subscribeToLaundry(setLaundry);
+      const unsubscribeMenu = subscribeToMenu(setFullMenu);
 
-      const unsubscribeLaundry = subscribeToLaundry((data) => {
-        setLaundry(data);
-      });
-
-      const unsubscribeMenu = subscribeToMenu((data) => {
-        setFullMenu(data);
+      const updateListener = DeviceEventEmitter.addListener('profileUpdated', () => {
+        loadUserData();
       });
 
       return () => {
         unsubscribeLaundry();
         unsubscribeMenu();
+        updateListener.remove();
       };
-    }, [loadUserData])
+    }, [loadUserData, fetchUnreadCount])
   );
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadUserData();
-    setRefreshing(false);
-  }, [loadUserData]);
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    // Reload all data
+    await Promise.all([
+      loadUserData(),
+      fetchLaundrySettings().then(setLaundry),
+      fetchMenu().then(setFullMenu),
+      fetchUnreadCount()
+    ]);
+  });
+
+  const handleClearNotifications = async () => {
+    try {
+      const res = await api.post('/students/profile/notifications/clear');
+      if (res.data.success) {
+        setStudent(prev => prev ? ({ ...prev, lastNotificationsClearedAt: res.data.timestamp }) : null);
+      }
+    } catch (e) {
+      console.error("Failed to clear notifications", e);
+    }
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
+    if (hour < 5) return 'Good Night';
     if (hour < 12) return 'Good Morning';
     if (hour < 18) return 'Good Afternoon';
     return 'Good Evening';
   };
 
   const getDynamicDinner = () => {
-    const today = new Date().toLocaleString('en-US', { weekday: 'long' });
-    // @ts-ignore
-    const dinnerItems = fullMenu[today]?.dinner;
-    if (!dinnerItems || dinnerItems.length === 0) return 'Loading...';
-
-    // Find highlight or first item
-    const highlight = dinnerItems.find((i: MenuItem) => i.highlight);
-    return highlight ? highlight.dish : dinnerItems[0].dish;
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const dayMenu = fullMenu?.[today];
+    if (!dayMenu?.dinner || dayMenu.dinner.length === 0) return 'Check Menu';
+    // Return first 2 items to avoid overflow, or join all
+    return dayMenu.dinner.map((m: any) => m.dish).join(', ');
   };
 
-  if (!student) {
+  const getInitial = (name?: string) => name ? name.charAt(0).toUpperCase() : 'S';
+
+  if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <LinearGradient
-          colors={['#000428', '#004e92']}
-          style={styles.loadingHeader}
-        >
-          <SafeAreaView edges={['top']}>
-            <Text style={styles.title}>Loading...</Text>
-          </SafeAreaView>
-        </LinearGradient>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading Dashboard...</Text>
       </View>
     );
   }
 
+  // Network Error State
+  if (!student) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <MaterialCommunityIcons name="wifi-off" size={48} color={isDark ? '#94a3b8' : '#64748b'} />
+        <Text style={[styles.loadingText, { color: colors.text, marginTop: 16, fontSize: 18, fontWeight: '600' }]}>
+          Connection Failed
+        </Text>
+        <Text style={{ color: colors.textSecondary, marginBottom: 24, textAlign: 'center', maxWidth: '80%' }}>
+          Could not reach the server. Please check your WiFi connection.
+        </Text>
+        <TouchableOpacity
+          onPress={loadUserData}
+          style={{
+            backgroundColor: colors.primary,
+            paddingHorizontal: 24,
+            paddingVertical: 12,
+            borderRadius: 12,
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const QuickAction = ({ icon, label, route, desc, bg, iconColor, borderColor }: any) => (
+    <View style={styles.gridItemFlexible}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.premiumServiceCard,
+          {
+            backgroundColor: bg,
+            borderColor: borderColor || '#E2E8F0'
+          },
+          pressed && styles.premiumCardPressed
+        ]}
+        onPress={() => router.push(route)}
+      >
+        <View style={styles.serviceIconContainer}>
+          <MaterialCommunityIcons name={icon} size={28} color={iconColor} />
+        </View>
+        <View style={{ gap: 2 }}>
+          <Text style={[styles.serviceLabel, { color: isDark ? colors.text : '#0F172A' }]}>{label}</Text>
+          <Text style={[styles.serviceDesc, { color: isDark ? colors.textSecondary : '#64748B' }]}>{desc}</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+
   return (
-    <View style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="light" />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#004e92']} tintColor="#004e92" />}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
       >
-        {/* Modern Header Section */}
-        <View style={styles.headerWrapper}>
+        {/* TOP HERO SECTION */}
+        {/* TOP HERO SECTION */}
+        <View style={[styles.heroWrapper, { backgroundColor: colors.background }]}>
           <LinearGradient
             colors={['#000428', '#004e92']}
-            style={styles.headerContainer}
+            style={styles.heroGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <SafeAreaView edges={['top']} style={styles.safeArea}>
-              <View style={styles.headerContent}>
-                <View>
-                  <Text style={styles.greeting}>{getGreeting()},</Text>
-                  <Text style={styles.userName}>{student.fullName}</Text>
-                  <View style={styles.hostelBadge}>
-                    <MaterialCommunityIcons name="office-building-marker" size={14} color="rgba(255,255,255,0.9)" />
-                    <Text style={styles.hostelName}>{student.hostelName || 'Smart Hostel'}</Text>
-                  </View>
-                </View>
-                <Pressable onPress={() => router.push('/profile')} style={styles.profileBtn}>
-                  <View style={styles.userInitialContainer}>
-                    <Text style={styles.userInitial}>{getInitial(student.fullName)}</Text>
-                  </View>
-                </Pressable>
-              </View>
-
-              {/* Stat Cards */}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Room</Text>
-                  <Text style={styles.statValue}>{student.roomNo || '--'}</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Status</Text>
-                  <Text style={styles.statValue}>{student.status?.toUpperCase() || 'ACTIVE'}</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>College</Text>
-                  <Text style={styles.statValue} numberOfLines={1}>{student.collegeName || 'N/A'}</Text>
-                </View>
-              </View>
-
-            </SafeAreaView>
-          </LinearGradient>
-        </View>
-
-        <View style={styles.mainContent}>
-          {/* Daily Highlights */}
-          <Text style={styles.sectionTitle}>TODAY'S HIGHLIGHTS</Text>
-
-          <View style={styles.highlightsContainer}>
-            {/* Dinner Card */}
-            <Pressable
-              style={[styles.highlightCard, styles.shadowProp]}
-              onPress={() => router.push('/mess')}
-            >
-              <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
-                <MaterialCommunityIcons name="silverware-fork-knife" size={24} color="#004e92" />
-              </View>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardLabel}>Tonight's Dinner</Text>
-                <Text style={styles.cardValue} numberOfLines={1}>{getDynamicDinner()}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color="#94A3B8" />
-            </Pressable>
-
-            {/* Laundry Card */}
-            <View style={[styles.highlightCard, styles.shadowProp, { alignItems: 'flex-start' }]}>
-              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4', marginTop: 4 }]}>
-                <MaterialCommunityIcons name="washing-machine" size={24} color="#16A34A" />
-              </View>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardLabel}>Laundry Service</Text>
-
-                {laundry ? (
-                  <View style={{ gap: 4, marginTop: 4 }}>
-                    {/* Status Badge */}
-                    <View style={{
-                      alignSelf: 'flex-start',
-                      backgroundColor: laundry.status === 'On Schedule' ? '#DCFCE7' : '#FEE2E2',
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
-                      borderRadius: 6,
-                      marginBottom: 4
-                    }}>
-                      <Text style={{
-                        color: laundry.status === 'On Schedule' ? '#166534' : '#991B1B',
-                        fontSize: 10,
-                        fontWeight: '700',
-                        textTransform: 'uppercase'
-                      }}>
-                        {laundry.status}
+              <View style={styles.headerTop}>
+                <View style={styles.headerLeft}>
+                  <Pressable onPress={() => router.push('/profile')} style={styles.profileFrame}>
+                    <View style={styles.avatar}>
+                      {student?.profilePhoto ? (
+                        <Image
+                          source={{ uri: `${API_BASE_URL}${student.profilePhoto}` }}
+                          style={{ width: '100%', height: '100%', borderRadius: 24 }}
+                          contentFit="cover"
+                          cachePolicy="none"
+                        />
+                      ) : (
+                        <Text style={styles.avatarText}>{getInitial(student?.fullName)}</Text>
+                      )}
+                    </View>
+                  </Pressable>
+                  <View>
+                    {/* Stacked Greeting + Name */}
+                    <View>
+                      <Text style={styles.greetingText}>{getGreeting()},</Text>
+                      <Text style={styles.userNameText} numberOfLines={1}>
+                        {student?.fullName?.split(' ')[0]}
                       </Text>
                     </View>
 
-                    {/* Schedule Info */}
-                    {laundry.status !== 'No Service' && laundry.status !== 'Holiday' ? (
-                      <>
-                        <Text style={{ fontSize: 13, color: '#334155' }}>
-                          <Text style={{ fontWeight: '700' }}>Pickup:</Text> {laundry.pickupDay}, {laundry.pickupTime} {laundry.pickupPeriod}
-                        </Text>
-                        <Text style={{ fontSize: 13, color: '#334155' }}>
-                          <Text style={{ fontWeight: '700' }}>Drop:</Text> {laundry.dropoffDay}, {laundry.dropoffTime} {laundry.dropoffPeriod}
-                        </Text>
-                      </>
-                    ) : null}
+                    {/* Room & Status Row */}
+                    <View style={styles.statusRow}>
+                      {/* Room Number */}
+                      <View style={styles.roomTag}>
+                        <MaterialCommunityIcons name="door-sliding" size={14} color="#E0F2FE" />
+                        <Text style={styles.roomTagText}>Room {student?.roomNo || '--'}</Text>
+                      </View>
 
-                    {/* Message */}
-                    {laundry.message ? (
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, fontStyle: 'italic', marginTop: 2 }}>
-                        "{laundry.message}"
-                      </Text>
-                    ) : null}
+                      <View style={styles.verticalLine} />
+
+                      {/* Status */}
+                      <View style={styles.statusTag}>
+                        <View style={[styles.statusDot, { backgroundColor: student?.status === 'active' ? '#4ADE80' : '#EF4444' }]} />
+                        <Text style={[styles.statusText, { color: student?.status === 'active' ? '#86EFAC' : '#FCA5A5' }]}>
+                          {student?.status === 'active' ? 'Active' : 'Inactive'}
+                        </Text>
+                      </View>
+
+                    </View>
                   </View>
-                ) : (
-                  <Text style={styles.cardValue}>Loading...</Text>
-                )}
-              </View>
-            </View>
-          </View>
-
-          {/* Quick Actions Grid */}
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>QUICK ACCESS</Text>
-          <View style={styles.gridContainer}>
-            {[
-              { icon: "bullhorn", label: "Notices", route: '/(tabs)/alerts', color: '#3B82F6', bg: '#EFF6FF' },
-              { icon: "alert-circle", label: "Complaint", route: '/complaints', color: '#EF4444', bg: '#FEF2F2' },
-              { icon: "broom", label: "Cleaning", route: '/roomservice', color: '#F59E0B', bg: '#FFFBEB' },
-              { icon: "bus-clock", label: "Timings", route: '/bustimings', color: '#10B981', bg: '#ECFDF5' },
-              { icon: "calendar-account-outline", label: "Leave", route: '/leave-request', color: '#7C3AED', bg: '#F5F3FF' }, // Added Leave
-              { icon: "phone", label: "Support", route: '/(tabs)/emergency', color: '#EC4899', bg: '#FDF2F8' },
-            ].map((item, index) => (
-              <Pressable
-                key={index}
-                style={[styles.gridItem, styles.shadowProp]}
-                onPress={() => router.push(item.route as any)}
-              >
-                <View style={[styles.gridIconBox, { backgroundColor: item.bg }]}>
-                  <MaterialCommunityIcons name={item.icon as any} size={28} color={item.color} />
                 </View>
-                <Text style={styles.gridLabel}>{item.label}</Text>
-              </Pressable>
-            ))}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
+
+                  {/* Notification Bell */}
+                  <Pressable style={styles.notificationBtn} onPress={() => setNotificationVisible(true)}>
+                    <Ionicons name="notifications-outline" size={24} color="#fff" />
+                    {unreadCount > 0 && (
+                      <View style={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 10,
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        backgroundColor: '#EF4444',
+                        borderWidth: 1.5,
+                        borderColor: '#004e92'
+                      }} />
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Beautiful Info Card - Unified Location Style */}
+              <View style={[styles.glassCard, {
+                backgroundColor: isDark ? colors.card : '#FFFFFF',
+                borderColor: isDark ? colors.border : '#E6EEF5'
+              }]}>
+                <View style={styles.locationBlock}>
+                  {/* Connector Line adjusted for smaller spacing */}
+                  <View style={[styles.connectorLine, {
+                    top: 30, bottom: 30, left: 18,
+                    backgroundColor: isDark ? colors.border : '#D1E0F0'
+                  }]} />
+
+                  {/* College Section */}
+                  <View style={styles.locItem}>
+                    <View style={[styles.locIcon, {
+                      backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                      borderColor: isDark ? colors.border : '#F1F5F9'
+                    }]}>
+                      <MaterialCommunityIcons name="school" size={20} color={isDark ? '#60A5FA' : '#004e92'} />
+                    </View>
+                    <View style={styles.locContent}>
+                      <Text style={[styles.locLabel, { color: colors.textSecondary }]}>Studying At</Text>
+                      <Text style={[styles.locValue, { color: colors.text }]} numberOfLines={2}>{student?.collegeName || 'Not Assigned'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Smaller Spacer */}
+                  <View style={{ height: 12 }} />
+
+                  {/* Hostel Section */}
+                  <View style={styles.locItem}>
+                    <View style={[styles.locIcon, {
+                      backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                      borderColor: isDark ? colors.border : '#F1F5F9'
+                    }]}>
+                      <MaterialCommunityIcons name="office-building" size={20} color={isDark ? '#60A5FA' : '#2B6CB0'} />
+                    </View>
+                    <View style={styles.locContent}>
+                      <Text style={[styles.locLabel, { color: colors.textSecondary }]}>Living At</Text>
+                      <Text style={[styles.locValue, { color: colors.text }]} numberOfLines={2}>{student?.hostelName || 'Not Assigned'}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </SafeAreaView>
+          </LinearGradient>
+          <View style={[styles.curveOverlay, { backgroundColor: colors.background }]} />
+        </View>
+
+        {/* LIVE STATUS CARDS */}
+        {/* LIVE STATUS CARDS */}
+        {/* LIVE STATUS CARDS */}
+        {/* DAILY ESSENTIALS - BLUE THEME */}
+        <View style={styles.essentialsSectionWrapper}>
+          <View style={styles.sectionHeaderContainer}>
+            <Text style={[styles.sectionHeader, {
+              backgroundColor: isDark ? '#172554' : '#EFF6FF',
+              color: isDark ? '#60A5FA' : '#1E40AF'
+            }]}>Daily Essentials</Text>
+          </View>
+          <View style={styles.essentialsGrid}>
+            {/* MESS CARD - Rich Amber (Warmth) */}
+            <Pressable onPress={() => router.push('/mess')} style={[styles.premiumCard, {
+              backgroundColor: isDark ? '#451a03' : '#FFF7ED',
+              borderColor: isDark ? '#78350f' : '#FFEDD5'
+            }]}>
+              <MaterialCommunityIcons name="silverware-fork-knife" size={26} color={isDark ? '#f97316' : '#EA580C'} style={{ marginBottom: 4 }} />
+              <Text style={[styles.simpleCardTitle, { color: isDark ? '#fdba74' : '#9A3412' }]}>Mess Menu</Text>
+              <Text style={[styles.simpleCardSub, { color: isDark ? '#fed7aa' : '#64748B', fontSize: 10, marginBottom: 2 }]}>Dinner</Text>
+              <Text style={[styles.simpleCardValue, { color: isDark ? '#fff7ed' : '#0F172A' }]} numberOfLines={1}>{getDynamicDinner()}</Text>
+              <Text style={[styles.simpleCardSub, { color: isDark ? '#fed7aa' : '#64748B' }]}>Tap for menu</Text>
+            </Pressable>
+
+            {/* LAUNDRY CARD - Rich Azure (Clean) */}
+            <Pressable onPress={() => router.push('/laundry-request')} style={[styles.premiumCard, {
+              backgroundColor: isDark ? '#083344' : '#ECFEFF',
+              borderColor: isDark ? '#155e75' : '#CFFAFE'
+            }]}>
+              <MaterialCommunityIcons name="washing-machine" size={26} color={isDark ? '#22d3ee' : '#0891B2'} style={{ marginBottom: 4 }} />
+              <Text style={[styles.simpleCardTitle, { color: isDark ? '#67e8f9' : '#155E75' }]}>Laundry</Text>
+              <Text style={[styles.simpleCardValue, { color: isDark ? '#ecfeff' : '#0F172A' }]}>{laundry?.status === 'On Schedule' ? 'On Time' : (laundry?.status || 'No Request')}</Text>
+              <Text style={[styles.simpleCardSub, { color: isDark ? '#a5f3fc' : '#64748B' }]}>{laundry?.pickupDay ? `Next: ${laundry.pickupDay}` : 'Check Status'}</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* CAMPUS SERVICES - BLUE SPECTRUM */}
+        <View style={styles.servicesSectionWrapper}>
+          <View style={styles.sectionHeaderContainer}>
+            <Text style={[styles.sectionHeader, {
+              backgroundColor: isDark ? '#172554' : '#EFF6FF',
+              color: isDark ? '#60A5FA' : '#1E40AF'
+            }]}>Campus Services</Text>
           </View>
 
+          <View style={styles.servicesGrid}>
+            {/* Row 1 */}
+            <View style={styles.gridRow}>
+              <QuickAction
+                icon="alert-circle-outline"
+                label="Complaints"
+                route="/complaints"
+                desc="Report Issues"
+                bg={isDark ? colors.card : "#FFFFFF"}
+                iconColor="#E11D48" // Rose-600
+                borderColor={colors.border}
+              />
+              <QuickAction
+                icon="account-group-outline"
+                label="Visitor Management"
+                route="/my-visitors"
+                desc="Register Visitor"
+                bg={isDark ? colors.card : "#FFFFFF"}
+                iconColor="#8B5CF6" // Violet-500
+                borderColor={colors.border}
+              />
+            </View>
+
+            {/* Row 2 */}
+            <View style={styles.gridRow}>
+              <QuickAction
+                icon="broom"
+                label="Room Services"
+                route="/roomservice"
+                desc="Housekeeping"
+                bg={isDark ? colors.card : "#FFFFFF"}
+                iconColor="#D97706" // Amber-600
+                borderColor={colors.border}
+              />
+              <QuickAction
+                icon="calendar-account-outline"
+                label="Leave Pass"
+                route="/leave-request"
+                desc="Gate Pass"
+                bg={isDark ? colors.card : "#FFFFFF"}
+                iconColor="#7C3AED" // Violet-600
+                borderColor={colors.border}
+              />
+            </View>
+
+            {/* Row 3 */}
+            <View style={styles.gridRow}>
+              <QuickAction
+                icon="bus-clock"
+                label="Bus Timings"
+                route="/bustimings"
+                desc="Schedule"
+                bg={isDark ? colors.card : "#FFFFFF"}
+                iconColor="#059669" // Emerald-600
+                borderColor={colors.border}
+              />
+              <QuickAction
+                icon="information-variant"
+                label="Hostel Profile"
+                route="/about"
+                desc="Facilities"
+                bg={isDark ? colors.card : "#FFFFFF"}
+                iconColor="#3B82F6" // Blue-500
+                borderColor={colors.border}
+              />
+            </View>
+
+
+          </View>
         </View>
+
+
       </ScrollView>
+
+
+
+      <StudentNotificationOverlay
+        visible={notificationVisible}
+        onClose={() => setNotificationVisible(false)}
+      />
     </View>
   );
 }
@@ -246,208 +497,359 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
   },
-  loadingHeader: {
-    height: 300,
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  headerWrapper: {
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#004e92',
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    marginBottom: 20, // Add space below header
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  headerContainer: {
-    paddingBottom: 32, // More breathing room
-    paddingTop: 10,
+  heroWrapper: {
+    paddingBottom: 40,
+    backgroundColor: '#F8FAFC',
+  },
+  heroGradient: {
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   safeArea: {
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
+    paddingTop: 10,
   },
-  headerContent: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 20,
-    marginBottom: 32,
-  },
-  greeting: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase', // Professional touch
-    letterSpacing: 1,
-  },
-  userName: {
-    fontSize: 32, // Larger
-    fontWeight: '800',
-    color: '#fff',
+    alignItems: 'center',
     marginBottom: 12,
-    letterSpacing: 0.5,
   },
-  hostelBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)', // Slightly more visible
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 100, // Pill shape
-    alignSelf: 'flex-start',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  hostelName: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  profileBtn: {
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-  },
-  userInitialContainer: {
-    width: 64, // Slightly larger
-    height: 64,
-    borderRadius: 24, // Squircle
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    backdropFilter: 'blur(10px)', // Note: This prop doesn't work in RN natively but style implies intent
-  },
-  userInitial: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 24,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  statItem: {
-    alignItems: 'center',
+  headerLeft: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
-  statLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 6,
-    letterSpacing: 0.5,
-  },
-  statValue: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  statDivider: {
-    width: 1,
-    height: 30, // Taller divider
+  profileFrame: {
+    borderRadius: 50,
+    padding: 2,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  mainContent: {
-    padding: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 16,
-    letterSpacing: 1,
-  },
-  highlightsContainer: {
-    gap: 16,
-  },
-  highlightCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  iconBox: {
+  avatar: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 24,
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardContent: {
-    flex: 1,
-  },
-  cardLabel: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  cardValue: {
-    fontSize: 16,
-    color: '#1E293B',
+  avatarText: {
+    color: '#004e92',
+    fontSize: 20,
     fontWeight: '700',
   },
-  gridContainer: {
+  greetingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 0,
+  },
+  userNameText: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  statusRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  gridItem: {
-    width: '30%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
     alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    aspectRatio: 1,
-    justifyContent: 'center',
+    gap: 10,
+    marginTop: 2,
   },
-  gridIconBox: {
+  roomTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  roomTagText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  verticalLine: {
+    width: 1,
+    height: 14,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  statusTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  notificationBtn: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  gridLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-    textAlign: 'center',
+  glassCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    marginTop: 8, // Reduced from 18
+    shadowColor: '#004e92', // Brand Shadow
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    padding: 16, // Reduced from 24
+    borderWidth: 1,
+    borderColor: '#E6EEF5',
   },
-  shadowProp: {
-    shadowColor: '#64748B',
+  locationBlock: {
+    position: 'relative',
+  },
+  connectorLine: {
+    position: 'absolute',
+    left: 20,
+    top: 40,
+    bottom: 40,
+    width: 2,
+    backgroundColor: '#D1E0F0', // Light tint of Royal Blue
+    zIndex: -1,
+  },
+  locItem: {
+    flexDirection: 'row',
+    gap: 12, // Reduced from 16
+    alignItems: 'flex-start',
+  },
+  locIcon: {
+    width: 36, // Reduced from 40
+    height: 36, // Reduced from 40
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
+  },
+  locContent: {
+    flex: 1,
+    paddingTop: 0,
+    justifyContent: 'center',
+    minHeight: 36, // Reduced
+  },
+  locLabel: {
+    fontSize: 10, // Reduced from 11
+    color: '#64748B',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2, // Reduced
+  },
+  locValue: {
+    fontSize: 14, // Reduced from 16
+    color: '#0F172A',
+    fontWeight: '700',
+    lineHeight: 20, // Reduced from 22
+  },
+  curveOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    marginTop: -40,
+  },
+  essentialsSection: {
+    paddingHorizontal: 24,
+    marginTop: -20, // Overlap curve
+    marginBottom: 24,
+  },
+  essentialsSectionWrapper: {
+    paddingHorizontal: 20,
+    marginTop: -28, // Aggressive pull up to header
+    zIndex: 1,
+  },
+  servicesSectionWrapper: {
+    paddingHorizontal: 20,
+    marginTop: 24, // Clear separation from Essentials
+    paddingBottom: 40, // Bottom padding for scroll
+  },
+  sectionHeaderContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 0,
+  },
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E40AF', // Royal Blue Text
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    backgroundColor: '#EFF6FF', // Soft Blue Background
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 100, // Pill shape
+    overflow: 'hidden',
+  },
+  essentialsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  premiumCard: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    // Shadow will be subtle
+    shadowColor: '#1E293B',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  simpleCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 8,
+  },
+  simpleCardValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A', // Darkest slate for high contrast
+    letterSpacing: -0.5,
+  },
+  simpleCardSub: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  servicesGrid: {
+    gap: 14,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  gridItemFlexible: {
+    flex: 1,
+  },
+  premiumServiceCard: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0', // Visible border for white cards
+    // Modern Soft Shadow
+    shadowColor: '#1E293B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 4,
+    justifyContent: 'center',
+    gap: 6,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "white",
+  premiumCardPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
+  serviceLabel: {
+    fontSize: 16, // Slightly smaller than Essentials Value to fit layout
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  serviceDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  serviceIconContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  fullWidthCardWrapper: {
+    width: '100%',
+  },
+  fullWidthCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  actionSubtext: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  bannerSection: {
+    paddingHorizontal: 24,
+    marginTop: 10,
+  },
+  financeBanner: {
+    borderRadius: 28,
+    padding: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  bannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  }
 });
+
+

@@ -1,27 +1,36 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolate,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withSpring,
-  withTiming
+  withSpring
 } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AdminNotificationOverlay from '../../components/AdminNotificationOverlay';
 import AdminSidebar from '../../components/AdminSidebar';
+import MessStatsBanner from '../../components/MessStatsBanner';
+
 import AnimatedGradientHeader from '../../components/AnimatedGradientHeader';
+import { useRefresh } from '../../hooks/useRefresh';
 import { performGlobalSearch, SearchResult } from '../../utils/adminSearchUtils';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { Complaint, subscribeToAllComplaints } from '../../utils/complaintsSyncUtils';
 import { LeaveRequest, subscribeToPendingLeaves } from '../../utils/leavesUtils';
+import { subscribeToNotifications } from '../../utils/notificationUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
 // debounce import moved to require to avoid type issues if needed, or keep as is.
 const debounce = require('lodash.debounce');
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const DRAWER_WIDTH = SCREEN_WIDTH * 0.8;
 
 const toggleStyles = StyleSheet.create({
   toggleBtn: {
@@ -332,43 +341,120 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [activeNav, setActiveNav] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [recentNotices, setRecentNotices] = useState<any[]>([]);
+  const [notificationVisible, setNotificationVisible] = useState(false);
   const [recentComplaints, setRecentComplaints] = useState<Complaint[]>([]);
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Drawer Animation (Shared Value)
   const drawerProgress = useSharedValue(0);
 
+  // Sync Shared Value with State to avoid closure staleness in worklets
+  const isSidebarOpenSV = useSharedValue(sidebarOpen ? 1 : 0);
   useEffect(() => {
-    drawerProgress.value = sidebarOpen
-      ? withTiming(1, { duration: 300 })
-      : withTiming(0, { duration: 250 });
+    isSidebarOpenSV.value = sidebarOpen ? 1 : 0;
   }, [sidebarOpen]);
 
+  // Gesture Handler
+  const panGesture = Gesture.Pan()
+    // Require 20px horiz movement to start (filters out vertical scroll intentions)
+    .activeOffsetX([-20, 20])
+    // Fail if vertical movement exceeds 20px (let ScrollView have it)
+    .failOffsetY([-20, 20])
+    .onUpdate((e) => {
+      // Use SharedValue for current state reference on UI thread
+      const isOpen = isSidebarOpenSV.value === 1;
+
+      const targetValue = isOpen
+        ? 1 + (e.translationX / DRAWER_WIDTH)
+        : (e.translationX / DRAWER_WIDTH);
+
+      // Clamp between 0 and 1
+      drawerProgress.value = Math.min(Math.max(targetValue, 0), 1);
+    })
+    .onEnd((e) => {
+      const isOpen = isSidebarOpenSV.value === 1;
+      let shouldOpen = isOpen;
+
+      // If dragged significantly
+      if (Math.abs(e.translationX) > 40) {
+        // Swipe Velocity Check
+        if (Math.abs(e.velocityX) > 500) {
+          shouldOpen = e.velocityX > 0;
+        } else {
+          // Position check
+          // If opening (was closed): > 0.5
+          // If closing (was open): > 0.5
+          // User requested "if half opened, just close it" - we use 0.5 as split
+          shouldOpen = drawerProgress.value > 0.5;
+        }
+      } else {
+        // If barely moved, revert to original state
+        shouldOpen = isOpen;
+      }
+
+      // Important: Animate immediately on UI thread.
+      // If we rely solely on useEffect, React might skip the update if state doesn't change (e.g. true -> true),
+      // leaving the drawer stuck in the middle.
+      drawerProgress.value = withSpring(shouldOpen ? 1 : 0, {
+        damping: 20,
+        stiffness: 90,
+        mass: 0.5,
+        overshootClamping: false
+      });
+
+      runOnJS(setSidebarOpen)(shouldOpen);
+    });
+
+  useEffect(() => {
+    // Use spring for a natural, physical feeling
+    drawerProgress.value = withSpring(sidebarOpen ? 1 : 0, {
+      damping: 20,
+      stiffness: 90,
+      mass: 0.5,
+      overshootClamping: false
+    });
+  }, [sidebarOpen]);
+
+  // Derived style for the main content (Homepage)
   const contentStyle = useAnimatedStyle(() => {
-    // Slide content to the right by the width of the sidebar (280px)
-    const translateX = interpolate(drawerProgress.value, [0, 1], [0, 280]);
+    // Homepage slides right as sidebar opens
+    const translateX = interpolate(drawerProgress.value, [0, 1], [0, DRAWER_WIDTH + 7]); // +7px Gap
+    const borderRadius = interpolate(drawerProgress.value, [0, 1], [0, 20]); // Reduced Radius
 
     return {
       flex: 1,
       transform: [
         { translateX }
       ],
+      borderRadius,
+      overflow: 'hidden', // Ensure content clips to new radius
     };
   });
+
+  // Deep dark navy for the gap (void look)
+  const containerStyle = {
+    flex: 1,
+    backgroundColor: '#000212',
+    position: 'relative' as 'relative',
+  };
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  // const [refreshing, setRefreshing] = useState(false); // Managed by useRefresh
+  const searchRef = React.useRef('');
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    // Re-fetch all subscriptions/data
+    // Since subscriptions are real-time, we might just want to trigger a visual refresh or re-sync if needed
+    // But for "pull to refresh" usually expects an explicit fetch. 
+    // Given the current architecture uses subscriptions, we'll simulate a fetch delay or re-trigger subscriptions if possible.
+    // However, the user specifically asked: "reloads should get latest data". Subscriptions already do this.
+    // So we will just add a visual delay to indicate "checking".
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  });
 
   // Debounced Search Handler
   const debouncedSearch = useCallback(
@@ -380,16 +466,26 @@ export default function AdminDashboard() {
       }
       setIsSearching(true);
       const results = await performGlobalSearch(text);
+
+      // RACECONDITION FIX: Check if the search text still matches the current input
+      if (searchRef.current !== text) {
+        return;
+      }
+
       setSearchResults(results);
       setIsSearching(false);
-    }, 100),
+    }, 300), // Increased debounce slightly to reduce flicker
     []
   );
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
+    searchRef.current = text; // Update ref immediately
+
     if (!text) {
       setSearchResults([]);
+      setIsSearching(false);
+      debouncedSearch.cancel(); // Cancel any pending searches
       return;
     }
     debouncedSearch(text);
@@ -415,39 +511,7 @@ export default function AdminDashboard() {
     // Wait for user to be loaded and verified as admin before subscribing
     if (!isAdmin(user)) return;
 
-    let unsubscribeNotices: () => void;
     let unsubscribeComplaints: () => void;
-
-    const fetchRecentNotices = async () => {
-      try {
-        const { getDbSafe } = await import('../../utils/firebase');
-        const { collection, query, orderBy, limit, onSnapshot } = await import('firebase/firestore');
-        const db = getDbSafe();
-        if (!db) return;
-
-        const q = query(collection(db, 'notices'), orderBy('date', 'desc'), limit(3));
-        unsubscribeNotices = onSnapshot(q, (snapshot) => {
-          setRecentNotices(snapshot.docs.map(doc => {
-            const data = doc.data();
-            let dateVal = data.date;
-            if (dateVal?.toDate) dateVal = dateVal.toDate();
-            else if (typeof dateVal === 'string') dateVal = new Date(dateVal);
-
-            return {
-              id: doc.id,
-              ...data,
-              date: dateVal instanceof Date ? dateVal.toISOString().split('T')[0] : 'Today'
-            };
-          }));
-        }, (error) => {
-          console.error("Error subscribing to notices:", error);
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    };
-
-    fetchRecentNotices();
 
     // Subscribe to complaints
     unsubscribeComplaints = subscribeToAllComplaints((data) => {
@@ -459,10 +523,15 @@ export default function AdminDashboard() {
       setPendingLeaves(data.slice(0, 3)); // Only show top 3
     });
 
+    // Subscribe to notifications count
+    const unsubscribeNotifs = subscribeToNotifications((data) => {
+      setUnreadCount(data.length);
+    });
+
     return () => {
-      if (unsubscribeNotices) unsubscribeNotices();
       if (unsubscribeComplaints) unsubscribeComplaints();
       unsubscribeLeaves();
+      unsubscribeNotifs();
     };
   }, [user]);
 
@@ -487,211 +556,300 @@ export default function AdminDashboard() {
   };
 
   return (
-    <View style={styles.mainContainer}>
-      <AdminSidebar
-        onClose={() => setSidebarOpen(false)}
-        activeNav={activeNav}
-        drawerProgress={drawerProgress}
-      />
+    <GestureDetector gesture={panGesture}>
+      <View style={containerStyle}>
+        <AdminSidebar
+          onClose={() => setSidebarOpen(false)}
+          activeNav={activeNav}
+          drawerProgress={drawerProgress}
+        />
 
-      <Animated.View style={[contentStyle, { backgroundColor: colors.background }]}>
-        {/* ... blobs ... */}
+        <AdminNotificationOverlay
+          visible={notificationVisible}
+          onClose={() => setNotificationVisible(false)}
+        />
 
-        <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
-          {/* Animated Header */}
-          <AnimatedGradientHeader style={[styles.headerBar, { paddingTop: insets.top + 20 }]}>
-            <View style={styles.headerContentInner}>
-              <TouchableOpacity
-                style={styles.hamburgerBtn}
-                onPress={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <MaterialIcons name="menu" size={28} color="#fff" />
-              </TouchableOpacity>
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.headerBarTitle}>Admin Portal</Text>
-                <Text style={styles.headerBarSubtitle}>Welcome back, Admin</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
+        <Animated.View style={[contentStyle, { backgroundColor: colors.background }]}>
+          {/* ... blobs ... */}
 
-              </View>
-            </View>
-
-            {/* Search Bar */}
-            <View style={styles.searchBarContainer}>
-              <MaterialIcons name="magnify" size={20} color="#004e92" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search students, rooms..."
-                placeholderTextColor="rgba(0, 78, 146, 0.6)"
-                value={searchQuery}
-                onChangeText={handleSearch}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {isSearching && (
-                <ActivityIndicator size="small" color="#004e92" style={{ marginRight: 10 }} />
-              )}
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
-                  <MaterialIcons name="close-circle" size={20} color="rgba(0,0,0,0.3)" />
+          <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+            {/* Animated Header */}
+            <AnimatedGradientHeader style={[styles.headerBar, { paddingTop: insets.top + 20 }]}>
+              <View style={styles.headerContentInner}>
+                <TouchableOpacity
+                  style={styles.hamburgerBtn}
+                  onPress={() => setSidebarOpen(!sidebarOpen)}
+                >
+                  <MaterialIcons name="menu" size={28} color="#fff" />
                 </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Search Results Dropdown */}
-            {searchResults.length > 0 && (
-              <View style={styles.resultsDropdown}>
-                {searchResults.map((result) => (
-                  <TouchableOpacity
-                    key={`${result.type}-${result.id}`}
-                    style={styles.resultItem}
-                    onPress={() => handleSearchResultPress(result)}
-                  >
-                    <View style={[styles.resultIcon, { backgroundColor: result.type === 'student' ? '#E0E7FF' : '#F3E8FF' }]}>
-                      <MaterialIcons
-                        name={result.type === 'student' ? 'account' : 'door-closed'}
-                        size={20}
-                        color={result.type === 'student' ? '#4F46E5' : '#9333EA'}
-                      />
+                <View style={styles.headerTextContainer}>
+                  <Text style={styles.headerBarTitle}>Admin Portal</Text>
+                  <Text style={styles.headerBarSubtitle}>Welcome back, Admin</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
+                  <TouchableOpacity onPress={() => setNotificationVisible(true)}>
+                    <View style={styles.headerIcon}>
+                      <MaterialIcons name="bell-outline" size={24} color="#004e92" />
+                      {unreadCount > 0 && (
+                        <View style={{
+                          position: 'absolute',
+                          top: -2, right: -2,
+                          backgroundColor: '#EF4444',
+                          width: 16, height: 16,
+                          borderRadius: 8,
+                          justifyContent: 'center', alignItems: 'center',
+                          borderWidth: 2, borderColor: '#fff'
+                        }}>
+                          <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#fff' }}>
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                    <View style={styles.resultInfo}>
-                      <Text style={styles.resultTitle}>{result.title}</Text>
-                      <Text style={styles.resultSubtitle}>{result.subtitle}</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
                   </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </AnimatedGradientHeader>
-
-          {/* Side Sidebar Panel - Moved outside content wrapper */}
-
-
-          {/* Main Content */}
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-          >
-
-            {/* Recent Complaints */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Complaints</Text>
-                <TouchableOpacity onPress={() => handleNavPress('complaints')}>
-                  <Text style={styles.seeAllLink}>See All</Text>
-                </TouchableOpacity>
+                </View>
               </View>
 
-              {recentComplaints.length > 0 ? (
-                recentComplaints.map((c) => (
+              {/* Search Bar */}
+              <View style={styles.searchBarContainer}>
+                <MaterialIcons name="magnify" size={20} color={isDark ? "rgba(255,255,255,0.7)" : "#004e92"} style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search students, rooms..."
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.5)" : "rgba(0, 78, 146, 0.6)"}
+                  value={searchQuery}
+                  onChangeText={handleSearch}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {isSearching && (
+                  <ActivityIndicator size="small" color={isDark ? "#fff" : "#004e92"} style={{ marginRight: 10 }} />
+                )}
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                    <MaterialIcons name="close-circle" size={20} color={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)"} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Search Results Dropdown */}
+              {searchResults.length > 0 && (
+                <View style={styles.resultsDropdown}>
+                  {searchResults.map((result) => (
+                    <TouchableOpacity
+                      key={`${result.type}-${result.id}`}
+                      style={styles.resultItem}
+                      onPress={() => handleSearchResultPress(result)}
+                    >
+                      <View style={[styles.resultIcon, { backgroundColor: result.type === 'student' ? '#E0E7FF' : '#F3E8FF' }]}>
+                        <MaterialIcons
+                          name={result.type === 'student' ? 'account' : 'door-closed'}
+                          size={20}
+                          color={result.type === 'student' ? '#4F46E5' : '#9333EA'}
+                        />
+                      </View>
+                      <View style={styles.resultInfo}>
+                        <Text style={styles.resultTitle}>{result.title}</Text>
+                        <Text style={styles.resultSubtitle}>{result.subtitle}</Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </AnimatedGradientHeader>
+
+            {/* Side Sidebar Panel - Moved outside content wrapper */}
+
+
+            {/* Main Content */}
+            <ScrollView
+              contentContainerStyle={styles.container}
+              showsVerticalScrollIndicator={false}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+            >
+
+              {/* Add Student Action Button */}
+              {/* Add Student Text Link */}
+              {/* Quick Actions (Text Only) */}
+              <View style={{ marginBottom: 20, marginTop: -8 }}>
+                {/* First Row: Add Student, Attendance, Messages */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                   <TouchableOpacity
-                    key={c.id}
-                    style={styles.cardItem}
-                    onPress={() => router.push({ pathname: '/admin/complaints', params: { openId: c.id } })}
+                    style={{
+                      backgroundColor: colors.card,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 3,
+                      alignItems: 'center',
+                    }}
+                    activeOpacity={0.6}
+                    onPress={() => router.push({ pathname: '/admin/students', params: { action: 'allot' } })}
                   >
-                    <View style={[styles.cardIcon, { backgroundColor: c.priority === 'high' ? '#FEF2F2' : '#FFF7ED' }]}>
-                      <MaterialIcons
-                        name={c.priority === 'high' ? 'alert' : 'information'}
-                        size={24}
-                        color={c.priority === 'high' ? '#EF4444' : '#F97316'}
-                      />
-                    </View>
-                    <View style={styles.cardContent}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>{c.title}</Text>
-                      <Text style={styles.cardSubtitle}>by {c.studentName || 'Student'}</Text>
-                    </View>
-                    <View style={[styles.statusBadge, {
-                      backgroundColor: c.status === 'resolved' ? '#DCFCE7' : c.status === 'inProgress' ? '#DBEAFE' : '#F1F5F9'
-                    }]}>
-                      <Text style={[styles.statusText, {
-                        color: c.status === 'resolved' ? '#166534' : c.status === 'inProgress' ? '#1E40AF' : '#475569'
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                      Add Student
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: colors.card,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 3,
+                      alignItems: 'center',
+                    }}
+                    activeOpacity={0.6}
+                    onPress={() => router.push('/admin/attendance')}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                      Attendance
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: colors.card,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 3,
+                      alignItems: 'center',
+                    }}
+                    activeOpacity={0.6}
+                    onPress={() => router.push('/chat')}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                      Messages
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Second Row: Analytics */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: colors.card,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 3,
+                      alignItems: 'center',
+                    }}
+                    activeOpacity={0.6}
+                    onPress={() => router.push('/admin/analytics')}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                      Analytics
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Mess Headcount */}
+              <MessStatsBanner compact />
+
+              {/* Recent Complaints */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Recent Complaints</Text>
+                  <TouchableOpacity onPress={() => handleNavPress('complaints')}>
+                    <Text style={styles.seeAllLink}>See All</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {recentComplaints.length > 0 ? (
+                  recentComplaints.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={styles.cardItem}
+                      onPress={() => router.push(`/admin/complaints?openId=${c.id}`)}
+                    >
+                      <View style={[styles.cardIcon, { backgroundColor: c.priority === 'high' ? '#FEF2F2' : '#FFF7ED' }]}>
+                        <MaterialIcons
+                          name={c.priority === 'high' ? 'alert' : 'information'}
+                          size={24}
+                          color={c.priority === 'high' ? '#EF4444' : '#F97316'}
+                        />
+                      </View>
+                      <View style={styles.cardContent}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>{c.title}</Text>
+                        <Text style={styles.cardSubtitle}>by {c.studentName || 'Student'}</Text>
+                      </View>
+                      <View style={[styles.statusBadge, {
+                        backgroundColor: c.status === 'resolved' ? '#DCFCE7' : c.status === 'inProgress' ? '#DBEAFE' : '#F1F5F9'
                       }]}>
-                        {c.status.toUpperCase()}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <View style={styles.emptyStateContainer}>
-                  <Text style={styles.emptyStateText}>No recent complaints.</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Pending Leaves */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Pending Leaves</Text>
-                <TouchableOpacity onPress={() => handleNavPress('leaves')}>
-                  <Text style={styles.seeAllLink}>See All</Text>
-                </TouchableOpacity>
+                        <Text style={[styles.statusText, {
+                          color: c.status === 'resolved' ? '#166534' : c.status === 'inProgress' ? '#1E40AF' : '#475569'
+                        }]}>
+                          {c.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateText}>No recent complaints.</Text>
+                  </View>
+                )}
               </View>
 
-              {pendingLeaves.length > 0 ? (
-                pendingLeaves.map((l) => (
-                  <TouchableOpacity
-                    key={l.id}
-                    style={styles.cardItem}
-                    onPress={() => router.push({ pathname: '/admin/leaveRequests', params: { openId: l.id } })}
-                  >
-                    <View style={[styles.cardIcon, { backgroundColor: '#ECFEFF' }]}>
-                      <MaterialIcons name="calendar-clock" size={24} color="#06B6D4" />
-                    </View>
-                    <View style={styles.cardContent}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>{l.studentName || 'Student'}</Text>
-                      <Text style={styles.cardSubtitle}>{l.days} days • Room {l.studentRoom}</Text>
-                    </View>
+              {/* Pending Leaves */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Pending Leaves</Text>
+                  <TouchableOpacity onPress={() => handleNavPress('leaves')}>
+                    <Text style={styles.seeAllLink}>See All</Text>
                   </TouchableOpacity>
-                ))
-              ) : (
-                <View style={styles.emptyStateContainer}>
-                  <Text style={styles.emptyStateText}>No pending leaves.</Text>
                 </View>
-              )}
-            </View>
 
-            {/* Announcements */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Announcements</Text>
-                <TouchableOpacity onPress={() => handleNavPress('notices')}>
-                  <Text style={styles.seeAllLink}>See All</Text>
-                </TouchableOpacity>
+                {pendingLeaves.length > 0 ? (
+                  pendingLeaves.map((l) => (
+                    <TouchableOpacity
+                      key={l.id}
+                      style={styles.cardItem}
+                      onPress={() => router.push(`/admin/leaveRequests?openId=${l.id}`)}
+                    >
+                      <View style={[styles.cardIcon, { backgroundColor: '#ECFEFF' }]}>
+                        <MaterialIcons name="calendar-clock" size={24} color="#06B6D4" />
+                      </View>
+                      <View style={styles.cardContent}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>{l.studentName || 'Student'}</Text>
+                        <Text style={styles.cardSubtitle}>{l.days} days • Room {l.studentRoom}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateText}>No pending leaves.</Text>
+                  </View>
+                )}
               </View>
 
-              {recentNotices.length > 0 ? (
-                recentNotices.map((n) => (
-                  <TouchableOpacity
-                    key={n.id}
-                    style={styles.cardItem}
-                    onPress={() => router.push({ pathname: '/admin/notices', params: { openId: n.id } })}
-                  >
-                    <View style={[styles.cardIcon, { backgroundColor: '#EFF6FF' }]}>
-                      <MaterialIcons name="bullhorn" size={24} color="#3B82F6" />
-                    </View>
-                    <View style={styles.cardContent}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>{n.title}</Text>
-                      <Text style={styles.cardSubtitle}>{n.date}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <View style={styles.emptyStateContainer}>
-                  <Text style={styles.emptyStateText}>No announcements yet.</Text>
-                </View>
-              )}
-            </View>
 
-
-          </ScrollView>
-        </SafeAreaView>
-      </Animated.View>
-    </View>
+            </ScrollView>
+          </SafeAreaView>
+        </Animated.View>
+      </View>
+    </GestureDetector>
   );
 }
-
-
-

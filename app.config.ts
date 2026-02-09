@@ -2,13 +2,13 @@ import { ConfigContext, ExpoConfig } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: "smarthostel",
-  slug: "smarthostel",
+  name: "SmartStay",
+  slug: "smartstay",
   owner: "shaswat2004",
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
-  scheme: "smarthostel",
+  scheme: "smartstay",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   ios: {
@@ -23,7 +23,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
-    package: "com.anonymous.smarthostel"
+    usesCleartextTraffic: true, // Allow HTTP for local dev
+    package: "com.anonymous.smartstay"
   },
   web: {
     output: "static",
@@ -44,16 +45,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       }
     ],
     "expo-font",
-    "expo-web-browser"
+    "expo-web-browser",
+    "@react-native-google-signin/google-signin"
   ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true
-  },
-  extra: {
-    firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    firebaseAuthDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-    firebaseAppId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID
   }
 });

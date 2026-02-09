@@ -9,7 +9,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAlert } from '../../context/AlertContext';
 import { isAdmin, useUser } from '../../utils/authUtils';
 
+import { useRefresh } from '../../hooks/useRefresh';
 import { useTheme } from '../../utils/ThemeContext';
+import { deleteRoom, subscribeToRooms } from '../../utils/roomUtils';
 
 export default function RoomsPage() {
   const { colors, theme } = useTheme();
@@ -24,14 +26,14 @@ export default function RoomsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const [refreshing, setRefreshing] = useState(false);
-
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    // Simulated refresh for real-time list
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }, () => {
+    // Clear search and selection
+    setSearchQuery('');
+    setSelectedRoom(null);
+  });
 
   React.useEffect(() => {
     if (search) {
@@ -53,33 +55,14 @@ export default function RoomsPage() {
     // Wait for user to be verified as admin
     if (!isAdmin(user)) return;
 
-    let unsubscribe: () => void;
+    // Subscribe to rooms (Polling via API)
+    const unsubscribe = subscribeToRooms((data) => {
+      setRooms(data);
+      setLoading(false);
+    });
 
-    const fetchRooms = async () => {
-      try {
-        const { getDbSafe } = await import('../../utils/firebase');
-        const { collection, query, orderBy, onSnapshot } = await import('firebase/firestore');
-        const db = getDbSafe();
-        if (!db) return;
-
-        const q = query(collection(db, 'rooms'), orderBy('number', 'asc'));
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setRooms(list);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error subscribing to rooms:", error);
-          setLoading(false);
-        });
-      } catch (e) {
-        console.error(e);
-        setLoading(false);
-      }
-    };
-
-    fetchRooms();
     return () => {
-      if (unsubscribe) unsubscribe();
+      unsubscribe();
     };
   }, [user]);
 
@@ -128,10 +111,10 @@ export default function RoomsPage() {
     return 'Vacant';
   };
 
-  const handleDeleteRoom = async (roomNo: string) => {
+  const handleDeleteRoom = async (room: any) => {
     showAlert(
       'Confirm Delete',
-      `Are you sure you want to delete Room ${roomNo}?`,
+      `Are you sure you want to delete Room ${room.number}?`,
       [
         {
           text: 'Cancel',
@@ -143,15 +126,11 @@ export default function RoomsPage() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { getDbSafe } = await import('../../utils/firebase');
-              const { deleteRoom } = await import('../../utils/roomUtils');
-              const db = getDbSafe();
-              if (db) {
-                await deleteRoom(db, roomNo);
-                showAlert('Success', `Room ${roomNo} deleted.`, [], 'success');
-              }
+              await deleteRoom(room.id);
+              showAlert('Success', `Room ${room.number} deleted.`, [], 'success');
+              setSelectedRoom(null); // Deselect if deleted
             } catch (e: any) {
-              showAlert('Error', e.message, [], 'error');
+              showAlert('Error', e.message || 'Failed to delete room', [], 'error');
             }
           },
         },
@@ -198,37 +177,80 @@ export default function RoomsPage() {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    statsContainer: {
-      flexDirection: 'row',
+    statsGrid: {
       paddingHorizontal: 20,
       marginBottom: 24,
       gap: 12,
     },
-    statCard: {
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    heroCard: {
+      borderRadius: 24,
+      padding: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#7C3AED',
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+      overflow: 'hidden',
+      height: 100,
+    },
+    miniCard: {
       flex: 1,
-      backgroundColor: colors.card,
       borderRadius: 20,
       padding: 16,
-      alignItems: 'center',
-      shadowColor: colors.textSecondary,
-      shadowOpacity: 0.08,
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 16,
-      elevation: 3,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+      overflow: 'hidden',
+      height: 110,
+      justifyContent: 'space-between',
     },
-    statValue: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: colors.text,
-      marginTop: 8,
+    cardWatermark: {
+      position: 'absolute',
+      right: -10,
+      bottom: -10,
+      opacity: 0.15,
+      transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
     },
-    statLabel: {
-      fontSize: 11,
+    heroLabel: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 14,
       fontWeight: '600',
-      color: colors.textSecondary,
-      marginTop: 2,
+      marginBottom: 4,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 1,
+    },
+    heroValue: {
+      color: '#fff',
+      fontSize: 36,
+      fontWeight: '800',
+      letterSpacing: -1,
+    },
+    miniLabel: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700',
+      opacity: 0.9,
+    },
+    miniValue: {
+      color: '#fff',
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+    miniHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
     },
     searchContainer: {
       flexDirection: 'row',
@@ -394,21 +416,58 @@ export default function RoomsPage() {
 
 
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <MaterialIcons name="door-closed" size={24} color="#6366F1" />
-            <Text style={styles.statValue}>{rooms.length}</Text>
-            <Text style={styles.statLabel}>Total Rooms</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="check-circle" size={24} color="#06B6D4" />
-            <Text style={styles.statValue}>{occupiedRooms}</Text>
-            <Text style={styles.statLabel}>Occupied</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="home-outline" size={24} color="#10B981" />
-            <Text style={styles.statValue}>{vacantRooms}</Text>
-            <Text style={styles.statLabel}>Vacant</Text>
+        <View style={styles.statsGrid}>
+          {/* Hero Card: Total Rooms */}
+          <LinearGradient
+            colors={['#7C3AED', '#5B21B6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View>
+              <Text style={styles.heroLabel}>Total Rooms</Text>
+              <Text style={styles.heroValue}>{rooms.length}</Text>
+            </View>
+            <MaterialIcons name="door-closed" size={48} color="rgba(255,255,255,0.9)" />
+            <View style={styles.cardWatermark}>
+              <MaterialIcons name="door-closed" size={100} color="#fff" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.statsRow}>
+            {/* Occupied */}
+            <LinearGradient
+              colors={['#06B6D4', '#0E7490']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard} // Using same style as Vacant for consistency
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="check-circle" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Occupied</Text>
+              </View>
+              <Text style={styles.miniValue}>{occupiedRooms}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="check-circle" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
+
+            {/* Vacant */}
+            <LinearGradient
+              colors={['#10B981', '#047857']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniCard}
+            >
+              <View style={styles.miniHeader}>
+                <MaterialIcons name="home-outline" size={18} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.miniLabel}>Vacant</Text>
+              </View>
+              <Text style={styles.miniValue}>{vacantRooms}</Text>
+              <View style={styles.cardWatermark}>
+                <MaterialIcons name="home-outline" size={80} color="#fff" />
+              </View>
+            </LinearGradient>
           </View>
         </View>
 
@@ -479,7 +538,7 @@ export default function RoomsPage() {
                   {(!item.occupants || item.occupants.length === 0) && (
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.deleteBtn, { marginTop: 16 }]}
-                      onPress={() => handleDeleteRoom(item.number)}
+                      onPress={() => handleDeleteRoom(item)}
                     >
                       <MaterialIcons name="delete" size={20} color={theme === 'dark' ? '#EF4444' : '#fff'} />
                       <Text style={styles.actionBtnText}>Delete Room</Text>
@@ -491,6 +550,7 @@ export default function RoomsPage() {
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', marginTop: 20, color: colors.textSecondary }}>No rooms found. Allot students to create rooms.</Text>
