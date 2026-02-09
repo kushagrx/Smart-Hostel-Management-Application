@@ -34,7 +34,6 @@ yarn-error.*
 .env*.local
 .env
 
-
 # typescript
 *.tsbuildinfo
 
@@ -43,3 +42,27 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Logs
+*.log
+logs/
+backend/*.log
+
+# Database backups
+backend/backups/
+
+# Temporary files
+*_files.txt
+disk_files.txt
+git_files.txt
+missing_files.txt
+
+# Firebase (legacy - now using PostgreSQL)
+google-services.json
+firestore.rules
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# IDE
+.vscode/
+.idea/
