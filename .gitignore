@@ -67,3 +67,7 @@ firebase-service-account.json
 # IDE
 .vscode/
 .idea/
+
+# User uploads (contains PII)
+backend/uploads/
+uploads/
