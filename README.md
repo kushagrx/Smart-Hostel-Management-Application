@@ -45,9 +45,36 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 - 💬 **Student Communication** - Chat with students individually with read receipts
 - 📢 **Notice Board** - Create, edit, and manage hostel announcements
 - 🚌 **Bus Timings** - Manage and update bus schedules
-- 👁️ **Visitor Approval** - Review and approve/reject visitor requests
-- 🧺 **Service Management** - Handle laundry and roomservice requests
-- 📈 **Real-time Insights** - Attendance trends, complaint resolution metrics, service usage
+- 👁️ **Visitor Approval** - Review and approve/reject visitor requests with check-in logs
+- 🧺 **Service Management** - Handle laundry and roomservice requests with status tracking
+- 📈 **Real-time Insights** - Attendance trends, complaint resolution metrics, and service usage
+- 🏪 **Student-Centric Management** - Redesigned admin hub for consolidated student operations
+- 🍲 **Mess Analytics** - Daily 'Going vs Skipping' statistics for meal planning
+- 🚌 **Bus Broadcaster** - Create/Update routes with instant push notifications to all students
+- 💳 **Payment Verification** - Real-time processing via Razorpay with automated dues updating
+
+## 🌟 Recent Major Enhancements (V2)
+
+### 1. Advanced Adaptive Icon System
+*   **Optimal Display**: Fully optimized for Android 8.0+ adaptive icons using foreground/background layers to prevent stretching or cropping.
+*   **Brand Consistency**: Uses a high-resolution centered brand icon with appropriate safe-zone padding.
+
+### 2. Intelligent Notification Architecture
+*   **Auth-Driven Sync**: FCM tokens are automatically synchronized with the backend immediately upon login via a reactive `AuthContext` bridge.
+*   **Role-Aware Deep Linking**: Tapping a notification intelligently navigates to the correct screen based on user role (e.g., a "complaint" notification opens the management view for admins and the history view for students).
+*   **Contextual Messages**: Notifications now resolve student identities to show real names and room numbers directly in the push payload.
+
+### 3. Redesigned Admin Hub
+*   **Simplified Navigation**: Removed clutter from the side menu by grouping operational features (About Hostel, Room Service, Laundry) into a centralized "Student Management" dashboard.
+*   **Improved UX**: Transitioned from fragmented menus to a coherent administrative hub for better productivity.
+
+### 4. Authentication Resilience & Fallback
+*   **Admin Access Fix**: Implemented a secondary authentication path that allows users with the `admin` role to log in via Google even if they don't have a record in the `students` profile table, preventing accidental `403 Forbidden` lockouts.
+*   **Token Syncing**: Integrated a reactive token synchronization mechanism that ensures the backend always has the latest FCM token upon every successful login/session refresh.
+
+### 5. Enhanced Communication
+*   **Read Receipts**: Messaging system now tracks `is_read` status for both students and admins.
+*   **Contextual Payloads**: Push notifications for complaints and leaves now resolve student names and room numbers in the message body for immediate context.
 
 ## 🚀 Technology Stack
 
@@ -86,136 +113,77 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 
 SmartStay follows a **client-server architecture** with a clear separation between frontend and backend:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Mobile Application                       │
-│                  (React Native + Expo)                       │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  UI Layer (Screens & Components)                     │   │
-│  │  - Student Dashboard     - Admin Dashboard           │   │
-│  │  - Chat Interface        - Attendance Pages          │   │
-│  │  - Service Requests      - Analytics                 │   │
-│  └─────────────────────┬────────────────────────────────┘   │
-│                        │                                     │
-│  ┌─────────────────────▼────────────────────────────────┐   │
-│  │  Context Layer (State Management)                    │   │
-│  │  - AuthContext       - ThemeContext                  │   │
-│  └─────────────────────┬────────────────────────────────┘   │
-│                        │                                     │
-│  ┌─────────────────────▼────────────────────────────────┐   │
-│  │  Utils Layer (API Client)                            │   │
-│  │  - Axios HTTP Client  - Authentication Headers       │   │
-│  └─────────────────────┬────────────────────────────────┘   │
-└────────────────────────┼────────────────────────────────────┘
-                         │
-                         │ HTTP/REST API
-                         │ (JSON Payloads)
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Backend Server                          │
-│                  (Node.js + Express.js)                      │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  Routes Layer (API Endpoints)                        │   │
-│  │  /api/auth       /api/students    /api/attendance    │   │
-│  │  /api/chats      /api/services    /api/facilities    │   │
-│  │  /api/analytics  /api/notices     /api/visitors      │   │
-│  └─────────────────────┬────────────────────────────────┘   │
-│                        │                                     │
-│  ┌─────────────────────▼────────────────────────────────┐   │
-│  │  Middleware Layer                                    │   │
-│  │  - JWT Verification  - Role Authorization            │   │
-│  │  - Request Logging   - Error Handling                │   │
-│  └─────────────────────┬────────────────────────────────┘   │
-│                        │                                     │
-│  ┌─────────────────────▼────────────────────────────────┐   │
-│  │  Controllers Layer (Business Logic)                  │   │
-│  │  - AuthController    - StudentController             │   │
-│  │ - ChatController    - ServiceController             │   │
-│  │  - AnalyticsController - NotificationController      │   │
-│  └─────────────────────┬────────────────────────────────┘   │
-│                        │                                     │
-│  ┌─────────────────────▼────────────────────────────────┐   │
-│  │  Database Layer (PostgreSQL Client)                  │   │
-│  │  - Connection Pooling - Query Execution              │   │
-│  └─────────────────────┬────────────────────────────────┘   │
-└────────────────────────┼────────────────────────────────────┘
-                         │
-                         ▼
-            ┌────────────────────────┐
-            │   PostgreSQL Database  │
-            │  - 15+ Tables          │
-            │  - Indexes & Relations │
-            │  - ACID Transactions   │
-            └────────────────────────┘
+```mermaid
+graph TD
+    subgraph Mobile_App ["Mobile Application (Expo/RN)"]
+        UI[UI Layer: Screens & Components]
+        CTX[Context Layer: Auth/Theme/Notifications]
+        API_C[API Client: Axios Interceptors]
+    end
+
+    subgraph Backend_Server ["Backend Server (Node/Express)"]
+        RT[Routes: Domain-specific endpoints]
+        MD[Middleware: JWT/Role/Error Guards]
+        CT[Controllers: Business Logic]
+        SV[Services: Firebase Push & Auth Fallback]
+    end
+
+    DB[(PostgreSQL Database)]
+
+    UI --> CTX
+    CTX --> API_C
+    API_C -- "HTTP/REST (JWT)" --> RT
+    RT --> MD
+    MD --> CT
+    CT --> SV
+    SV --> DB
 ```
 
 ### Application Flow
 
 #### 1. **Authentication Flow**
-```
-User Opens App → Login Screen → Google Sign-In
-                                      ↓
-                           Sends ID Token to Backend
-                                      ↓
-                    Backend Verifies with Google OAuth
-                                      ↓
-                    Checks User in Database (users table)
-                                      ↓
-                       Creates/Updates User Record
-                                      ↓
-                     Generates JWT Access Token
-                                      ↓
-                  Returns Token + User Data to App
-                                      ↓
-                    App Stores Token (AsyncStorage)
-                                      ↓
-              Redirects to Dashboard (Student/Admin)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Mobile App
+    participant B as Backend Server
+    participant G as Google OAuth
+
+    U->>A: Open App / Click Login
+    A->>G: Request ID Token
+    G-->>A: Return ID Token
+    A->>B: POST /api/auth/google (Token)
+    B->>G: Verify Token Integrity
+    G-->>B: Identity Confirmed
+    B->>B: Lookup/Create User & Sync FCM Token
+    B-->>A: JWT Access Token + User Profile
+    A->>A: Save to AsyncStorage
+    A->>A: Navigate to Dashboard
 ```
 
-#### 2. **Data Flow Example: Submitting a Complaint**
-```
-Student Fills Complaint Form
-        ↓
-Uploads Photo (Optional) → Base64 Encoding
-        ↓
-POST /api/facilities/complaints
-        ↓
-Backend: JWT Middleware Verifies Token
-        ↓
-Controller Validates Input Data
-        ↓
-Saves to facilities table (PostgreSQL)
-        ↓
-Creates Notification for Admins
-        ↓
-Returns Success Response
-        ↓
-App Updates UI & Shows Success Message
-        ↓
-Admin Receives Real-time Notification
+#### 2. **Data Flow: Submitting a Facility Complaint**
+```mermaid
+graph LR
+    S[Student] -->|1. Submit Complaint| A[App]
+    A -->|2. POST /api/facilities| B[Backend]
+    B -->|3. Verify JWT & Validate| C[Controller]
+    C -->|4. Save| DB[(PostgreSQL)]
+    C -->|5. Trigger| N[Notification Service]
+    N -->|6. Push| AD[Admin Devices]
+    B -->|7. Success Response| A
+    A -->|8. Update UI| S
 ```
 
-#### 3. **Real-time Chat Flow**
-```
-Student Opens Chat with Admin
-        ↓
-GET /api/chats/:userId/messages
-        ↓
-Backend Fetches Messages from Database
-        ↓
-Returns Message History
-        ↓
-Student Types & Sends Message
-        ↓
-POST /api/chats/message
-        ↓
-Backend Saves to messages table
-        ↓
-Updates last_message_at timestamp
-        ↓
-Admin's Chat List Auto-Refreshes (Polling)
-        ↓
-Admin Sees New Message Indicator
+#### 3. **Messaging Flow (Real-time bridge)**
+```mermaid
+graph TD
+    Start[Student Sends Message] --> API[POST /api/chats/message]
+    API --> Auth[JWT & Integrity Check]
+    Auth --> Save[Store in messages table]
+    Save --> Logic[Update last_message_at]
+    Logic --> Notify[Optional Push to Admin]
+    Notify --> Poll[Admin List Refresh via Dynamic Polling]
+    Poll --> End[Admin Sees New Message]
 ```
 
 ### Database Schema
@@ -230,7 +198,7 @@ The application uses **15+ interconnected PostgreSQL tables**:
 
 **students**
 - Extended student profile information
-- Fields: `id`, `user_id` (FK), `roll_number`, `room_number`, `branch`, `year`, `contact`, `blood_group`, `parent_contact`
+- Fields: `id`, `user_id` (FK), `roll_number`, `room_number`, `branch`, `year`, `contact`, `blood_group`, `parent_contact`, `dues`, `last_notifications_cleared_at`
 - Relationships: One-to-one with `users`, one-to-many with `leave_requests`, `facilities`, `visitors`
 
 **attendance**
@@ -250,7 +218,7 @@ The application uses **15+ interconnected PostgreSQL tables**:
 **messages**
 - One-on-one chat messages
 - Fields: `id`, `sender_id`, `receiver_id`, `message`, `is_read`, `sent_at`
-- Supports: Admin-to-student and student-to-admin communication
+- Supports: Admin-to-student and student-to-admin communication with read receipts
 
 **notifications**
 - Real-time notifications for both students and admins
@@ -667,7 +635,7 @@ Then:
 #### Android Client ID (Optional, for production)
 
 1. Application type: **Android**
-2. Package name: `com.anonymous.smartstay`
+2. Package name: `com.shaswat.smartstay`
 3. Get SHA-1 certificate fingerprint:
    ```bash
    cd android
@@ -899,11 +867,11 @@ npx expo run:android
    - Is the OAuth consent screen configured?
 
 3. **Package name matches:**
-   - Should be `com.anonymous.smartstay` in `app.config.ts`
+   - Should be `com.shaswat.smartstay` in `app.config.ts`
 
 4. **Clear app data and retry:**
    ```bash
-   adb shell pm clear com.anonymous.smartstay
+   adb shell pm clear com.shaswat.smartstay
    ```
 
 #### ❌ "Something Went Wrong" on Android

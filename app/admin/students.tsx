@@ -628,10 +628,20 @@ export default function StudentsPage() {
     }
   }, [search]);
 
+  // Sync viewingStudent when students list updates (for real-time refresh after edit)
+  React.useEffect(() => {
+    if (viewingStudent && students.length > 0) {
+      const updated = students.find(s => String(s.id) === String(viewingStudent.id));
+      if (updated) {
+        setViewingStudent(updated);
+      }
+    }
+  }, [students]);
+
   // Auto-expand student if openId is provided and exists in loaded students
   React.useEffect(() => {
     if (openId && students.length > 0) {
-      const student = students.find(s => s.id === openId);
+      const student = students.find(s => String(s.id) === String(openId));
       if (student) {
         setViewingStudent(student);
         setDetailsModalVisible(true);
@@ -752,14 +762,33 @@ export default function StudentsPage() {
   const [fatherPhone, setFatherPhone] = useState(''); // New Father Phone State
   const [motherName, setMotherName] = useState(''); // New Mother Name State
   const [motherPhone, setMotherPhone] = useState(''); // New Mother Phone State
-  const [initialDues, setInitialDues] = useState(''); // New Fees Amount State
+  const [totalFee, setTotalFee] = useState(''); // Renamed from initialDues
   const [feeFrequency, setFeeFrequency] = useState<'Monthly' | 'Semester' | 'Yearly'>('Monthly');
   // Medical Info State
   const [bloodGroup, setBloodGroup] = useState('');
   const [medicalHistory, setMedicalHistory] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+
+  // Room Configuration States
+  const [sharingType, setSharingType] = useState('');
+  const [apartmentType, setApartmentType] = useState<string | null>(null);
+
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [facilities, setFacilities] = useState([
+    { name: 'WiFi', icon: 'wifi' as const, status: 'Not Included' },
+    { name: 'Laundry', icon: 'washing-machine' as const, status: 'Not Included' },
+    { name: 'Cleaning', icon: 'broom' as const, status: 'Not Included' },
+    { name: 'Meals', icon: 'food' as const, status: 'Not Included' },
+    { name: 'Electricity', icon: 'lightning-bolt' as const, status: 'Not Included' },
+    { name: 'Fridge', icon: 'fridge' as const, status: 'Not Included' },
+    { name: 'Microwave', icon: 'microwave' as const, status: 'Not Included' },
+    { name: 'AC', icon: 'air-conditioner' as const, status: 'Not Included' },
+    { name: 'TV', icon: 'television' as const, status: 'Not Included' },
+    { name: 'Induction', icon: 'stove' as const, status: 'Not Included' },
+    { name: 'Cooler', icon: 'snowflake' as const, status: 'Not Included' },
+    { name: 'Fan', icon: 'fan' as const, status: 'Not Included' },
+  ]);
 
   // Edit Modal State
   const [isEditModalVisible, setEditModalVisible] = useState(false);
@@ -773,6 +802,12 @@ export default function StudentsPage() {
   const [editName, setEditName] = useState('');
   const [editRollNo, setEditRollNo] = useState('');
   const [editRoom, setEditRoom] = useState('');
+
+  // Edit Room Configuration
+  const [editSharingType, setEditSharingType] = useState('Single Sharing');
+  const [editApartmentType, setEditApartmentType] = useState<string | null>(null);
+  const [editFacilities, setEditFacilities] = useState<any[]>([]);
+
   const [editCollege, setEditCollege] = useState('');
   const [editHostelName, setEditHostelName] = useState('');
 
@@ -791,6 +826,8 @@ export default function StudentsPage() {
   const [editFatherPhone, setEditFatherPhone] = useState(''); // Edit Father Phone
   const [editMotherName, setEditMotherName] = useState(''); // Edit Mother Name
   const [editMotherPhone, setEditMotherPhone] = useState(''); // Edit Mother Phone
+
+  const [editTotalFee, setEditTotalFee] = useState(''); // Add editTotalFee state
   const [editDues, setEditDues] = useState(''); // Edit Dues
   const [editFeeFrequency, setEditFeeFrequency] = useState<'Monthly' | 'Semester' | 'Yearly'>('Monthly');
   // Edit Medical Info State
@@ -817,12 +854,28 @@ export default function StudentsPage() {
     return dateStr;
   };
 
+  // Helper to convert YYYY-MM-DD to DD/MM/YYYY for frontend display
+  const fromISODate = (dateStr: string) => {
+    if (!dateStr) return '';
+    // Check if already in DD/MM/YYYY
+    if (dateStr.includes('/') && dateStr.split('/')[0].length === 2) return dateStr;
+
+    // Handle YYYY-MM-DD
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    }
+    return dateStr;
+  };
+
   const handleAllotmentSubmit = async () => {
     setHasSubmitted(true);
 
 
 
-    if (!fullName || !rollNo || !collegeName || !hostelName || !dob || !room || !email || !phone || !address || !fatherName || !fatherPhone || !motherName || !motherPhone || !initialDues) {
+    if (!fullName || !rollNo || !collegeName || !hostelName || !dob || !room || !email || !phone || !address || !fatherName || !fatherPhone || !motherName || !motherPhone || !totalFee) {
       showAlert('Missing details', 'Please fill all mandatory fields (marked red).', [], 'error');
       return;
     }
@@ -840,45 +893,72 @@ export default function StudentsPage() {
     try {
       /* API Migration */
       /* API Migration */
-      const formData = new FormData();
-      formData.append('fullName', fullName);
-      formData.append('rollNo', rollNo);
-      formData.append('collegeName', collegeName);
-      formData.append('hostelName', hostelName);
-      formData.append('dob', toISODate(dob) || dob);
-      formData.append('roomNo', room);
-      formData.append('email', email.toLowerCase().trim());
-      formData.append('phone', phone);
-      formData.append('googleEmail', googleEmail);
-      formData.append('collegeEmail', collegeEmail);
-      formData.append('address', address);
-      formData.append('fatherName', fatherName);
-      formData.append('fatherPhone', fatherPhone);
-      formData.append('motherName', motherName);
-      formData.append('motherPhone', motherPhone);
-      formData.append('dues', initialDues); // Backend handles parsing
-      formData.append('bloodGroup', bloodGroup);
-      formData.append('medicalHistory', medicalHistory);
-      formData.append('emergencyContactName', emergencyContactName);
-      formData.append('emergencyContactPhone', emergencyContactPhone);
-      formData.append('status', status);
-      formData.append('wifiSSID', wifiSSID);
-      formData.append('wifiPassword', wifiPassword);
-      formData.append('password', generatedPassword);
-      formData.append('feeFrequency', feeFrequency);
+      /* API Migration - JSON Payload Fix */
+      const data = {
+        fullName,
+        email: email.toLowerCase().trim(),
+        password: generatedPassword,
+        rollNo,
+        collegeName,
+        hostelName,
+        dob: toISODate(dob) || dob,
+        roomNo: room,
+        phone,
+        googleEmail,
+        collegeEmail,
+        address,
+        fatherName,
+        fatherPhone,
+        motherName,
+        motherPhone,
+        totalFee: parseFloat(totalFee) || 0,
+        dues: 0,
+        feeFrequency,
+        bloodGroup,
+        medicalHistory,
+        emergencyContactName,
+        emergencyContactPhone,
+        status,
+        wifiSSID,
+        wifiPassword,
+        roomType: apartmentType ? `${apartmentType} ${sharingType}` : sharingType,
+        facilities: facilities, // Send as array directly
+        profilePhoto: null // JSON cannot send files. Handle upload separately if needed.
+      };
 
-      if (image) {
-        // @ts-ignore
-        formData.append('profilePhoto', {
-          uri: image,
-          name: 'profile.jpg',
-          type: 'image/jpeg',
-        });
-      }
+      const response = await createStudent(data);
 
-      const success = await createStudent(formData);
+      if (response?.success) {
+        const studentId = response.studentId;
 
-      if (success) {
+        // 2. Upload Profile Photo if exists
+        if (image) {
+          try {
+            console.log("📸 Uploading profile photo for ID:", studentId);
+            const photoData = new FormData();
+            // @ts-ignore
+            photoData.append('profilePhoto', {
+              uri: image,
+              name: 'profile.jpg',
+              type: 'image/jpeg',
+            });
+
+            // Use updateStudent to upload photo
+            // updateStudent handles FormData correctly via fetch
+            await updateStudent(studentId, photoData);
+            console.log("✅ Profile photo uploaded");
+
+          } catch (uploadErr) {
+            console.error("❌ Photo upload failed:", uploadErr);
+            showAlert('Warning', 'Student created but photo upload failed. You can update it later.', [], 'warning');
+          }
+        }
+
+        // Trigger manual refresh
+        const { getAllStudents } = await import('../../utils/studentUtils');
+        const updatedData = await getAllStudents();
+        setStudents(updatedData);
+
         showAlert(
           'Success',
           `Student allotted to Room ${room}.\n\nLogin Password: ${generatedPassword}\n\nPlease share this with the student.`,
@@ -889,8 +969,10 @@ export default function StudentsPage() {
                 handleTabChange(0);
                 setFullName(''); setRollNo(''); setRoom(''); setEmail(''); setPhone(''); setDob('');
                 setAddress(''); setFatherName(''); setFatherPhone(''); setMotherName(''); setMotherPhone('');
-                setInitialDues(''); setFeeFrequency('Monthly'); setBloodGroup(''); setMedicalHistory(''); setEmergencyContactName('');
+                setTotalFee(''); setFeeFrequency('Monthly'); setBloodGroup(''); setMedicalHistory(''); setEmergencyContactName('');
                 setEmergencyContactPhone(''); setWifiSSID(''); setWifiPassword('');
+                setSharingType(''); setApartmentType(null);
+                setFacilities((prev) => prev.map((f) => ({ ...f, status: 'Not Included' })));
                 setImage(null);
                 setHasSubmitted(false);
                 setGeneratedPassword(Math.random().toString(36).slice(-8));
@@ -931,18 +1013,85 @@ export default function StudentsPage() {
   const handleEdit = (student: any) => {
     setEditingStudent(student);
     setEditName(student.name || '');
-    setEditEmail(student.email || student.id || ''); // Initialize with Email, fallback to ID
+    setEditEmail(student.email || ''); // This is LOGIN EMAIL
     setEditRollNo(student.rollNo || '');
     setEditRoom(student.room || '');
     setEditCollege(student.collegeName || '');
     setEditHostelName(student.hostelName || '');
-    setEditDob(student.dob || '');
+    setEditHostelName(student.hostelName || '');
+    setEditDob(fromISODate(student.dob) || '');
+    setEditPhone(student.phone || '');
     setEditPhone(student.phone || '');
     setEditGoogleEmail(student.googleEmail || '');
     setEditCollegeEmail(student.collegeEmail || '');
     setEditStatus(student.status || 'active');
     setEditWifiSSID(student.wifiSSID || '');
+    setEditWifiSSID(student.wifiSSID || '');
     setEditWifiPassword(student.wifiPassword || '');
+
+    // Parse Room Type for Edit
+    const rt = student.roomType || '';
+    if (rt.includes('BHK') || rt.includes('Studio')) {
+      const parts = rt.split(' '); // e.g., "1BHK Double Sharing"
+      const foundApt = parts.find((p: string) => p.includes('BHK') || p === 'Studio');
+      setEditApartmentType(foundApt || null);
+      setEditSharingType(rt.replace(foundApt || '', '').trim() || 'Single Sharing');
+    } else {
+      setEditApartmentType(null);
+      setEditSharingType(rt || 'Single Sharing');
+    }
+
+    // Initialize Facilities for Edit
+    let parsedFacilities: any[] = [];
+    try {
+      if (Array.isArray(student.facilities)) {
+        parsedFacilities = student.facilities;
+      } else if (typeof student.facilities === 'string') {
+        parsedFacilities = JSON.parse(student.facilities);
+      }
+    } catch (e) {
+      console.error('Error parsing facilities:', e);
+    }
+
+    if (parsedFacilities.length > 0) {
+      // Merge with default list to ensure all icons/names are present
+      const defaultFacilities = [
+        { name: 'WiFi', icon: 'wifi' as const, status: 'Included' },
+        { name: 'Laundry', icon: 'washing-machine' as const, status: 'Not Included' },
+        { name: 'Cleaning', icon: 'broom' as const, status: 'Included' },
+        { name: 'Meals', icon: 'food' as const, status: 'Included' },
+        { name: 'Electricity', icon: 'lightning-bolt' as const, status: 'Included' },
+        { name: 'Fridge', icon: 'fridge' as const, status: 'Not Included' },
+        { name: 'Microwave', icon: 'microwave' as const, status: 'Not Included' },
+        { name: 'AC', icon: 'air-conditioner' as const, status: 'Not Included' },
+        { name: 'TV', icon: 'television' as const, status: 'Not Included' },
+        { name: 'Induction', icon: 'stove' as const, status: 'Not Included' },
+        { name: 'Cooler', icon: 'snowflake' as const, status: 'Not Included' },
+        { name: 'Fan', icon: 'fan' as const, status: 'Included' },
+      ];
+
+      const merged = defaultFacilities.map(defItem => {
+        const existing = parsedFacilities.find((f: any) => f.name === defItem.name);
+        return existing ? { ...defItem, status: existing.status } : defItem;
+      });
+      setEditFacilities(merged);
+    } else {
+      // Default if none
+      setEditFacilities([
+        { name: 'WiFi', icon: 'wifi' as const, status: 'Included' },
+        { name: 'Laundry', icon: 'washing-machine' as const, status: 'Not Included' },
+        { name: 'Cleaning', icon: 'broom' as const, status: 'Included' },
+        { name: 'Meals', icon: 'food' as const, status: 'Included' },
+        { name: 'Electricity', icon: 'lightning-bolt' as const, status: 'Included' },
+        { name: 'Fridge', icon: 'fridge' as const, status: 'Not Included' },
+        { name: 'Microwave', icon: 'microwave' as const, status: 'Not Included' },
+        { name: 'AC', icon: 'air-conditioner' as const, status: 'Not Included' },
+        { name: 'TV', icon: 'television' as const, status: 'Not Included' },
+        { name: 'Induction', icon: 'stove' as const, status: 'Not Included' },
+        { name: 'Cooler', icon: 'snowflake' as const, status: 'Not Included' },
+        { name: 'Fan', icon: 'fan' as const, status: 'Included' },
+      ]);
+    }
 
     setEditPassword(student.password || student.tempPassword || '');
     setEditAddress(student.address || '');
@@ -950,6 +1099,9 @@ export default function StudentsPage() {
     setEditFatherPhone(student.fatherPhone || '');
     setEditMotherName(student.motherName || '');
     setEditMotherPhone(student.motherPhone || '');
+    setEditMotherName(student.motherName || '');
+    setEditMotherPhone(student.motherPhone || '');
+    setEditTotalFee(student.totalFee ? String(student.totalFee) : ''); // Initialize editTotalFee
     setEditDues(student.dues ? String(student.dues) : '');
 
     setEditFeeFrequency(student.feeFrequency || 'Monthly');
@@ -1010,14 +1162,21 @@ export default function StudentsPage() {
       formData.append('fatherPhone', editFatherPhone);
       formData.append('motherName', editMotherName);
       formData.append('motherPhone', editMotherPhone);
+
+      formData.append('totalFee', editTotalFee); // Send totalFee
       formData.append('dues', editDues);
       formData.append('feeFrequency', editFeeFrequency);
       formData.append('bloodGroup', editBloodGroup);
       formData.append('medicalHistory', editMedicalHistory);
       formData.append('emergencyContactName', editEmergencyContactName);
       formData.append('emergencyContactPhone', editEmergencyContactPhone);
-      formData.append('email', editEmail);
+      formData.append('email', editEmail); // Login Email
       formData.append('password', editPassword);
+
+      // Combine Room Type
+      const finalRoomType = editApartmentType ? `${editApartmentType} ${editSharingType}` : editSharingType;
+      formData.append('roomType', finalRoomType);
+      formData.append('facilities', JSON.stringify(editFacilities));
 
       if (editImage && editImage !== editingStudent.profilePhoto && !editImage.startsWith('http')) {
         // @ts-ignore
@@ -1030,9 +1189,13 @@ export default function StudentsPage() {
 
       await updateStudent(editingStudent.id, formData);
 
+      // Trigger immediate manual refresh
+      const { getAllStudents } = await import('../../utils/studentUtils');
+      const updatedData = await getAllStudents();
+      setStudents(updatedData);
+
       showAlert('Success', 'Student details updated successfully.', [], 'success');
       setEditModalVisible(false);
-      setEditingStudent(null);
       setEditEmail('');
     } catch (e: any) {
       console.error(e);
@@ -1177,7 +1340,7 @@ export default function StudentsPage() {
                   </View>
 
                   <View style={styles.formSection}>
-                    <Text style={styles.modalLabel}>Personal Email (Login ID)</Text>
+                    <Text style={styles.modalLabel}>Login Email (Official ID)</Text>
                     <View style={styles.modalInputWrapper}>
                       <MaterialIcons name="email-outline" size={20} color="#64748B" style={styles.inputIcon} />
                       <TextInput
@@ -1305,6 +1468,114 @@ export default function StudentsPage() {
                     </View>
                   </View>
 
+                  {/* Room Configuration Section - Edit */}
+                  <View style={styles.formSection}>
+                    <Text style={[styles.modalLabel, { color: colors.primary, marginBottom: 12 }]}>Room Configuration</Text>
+
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>Sharing Options</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                        {['Single Sharing', 'Double Sharing', 'Triple Sharing'].map((type) => (
+                          <TouchableOpacity
+                            key={type}
+                            style={{
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              borderRadius: 12,
+                              backgroundColor: editSharingType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                              borderWidth: 1,
+                              borderColor: editSharingType === type ? colors.primary : colors.border
+                            }}
+                            onPress={() => setEditSharingType(type)}
+                          >
+                            <Text style={{
+                              color: editSharingType === type ? '#fff' : colors.textSecondary,
+                              fontWeight: '600',
+                              fontSize: 12
+                            }}>{type}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>BHK / Studio Options (Optional)</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                        {['1BHK', '2BHK', '3BHK', 'Studio'].map((type) => (
+                          <TouchableOpacity
+                            key={type}
+                            style={{
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 12,
+                              backgroundColor: editApartmentType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                              borderWidth: 1,
+                              borderColor: editApartmentType === type ? colors.primary : colors.border
+                            }}
+                            onPress={() => setEditApartmentType(editApartmentType === type ? null : type)}
+                          >
+                            <Text style={{
+                              color: editApartmentType === type ? '#fff' : colors.textSecondary,
+                              fontWeight: '600',
+                              fontSize: 12
+                            }}>{type}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    <Text style={[styles.label, { marginTop: 4, marginBottom: 8 }]}>Facilities & Amenities</Text>
+                    <View style={{ marginTop: 0 }}>
+                      {editFacilities.map((fac, idx) => (
+                        <View key={fac.name} style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingVertical: 10,
+                          borderBottomWidth: idx === editFacilities.length - 1 ? 0 : 1,
+                          borderBottomColor: colors.border
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <MaterialIcons name={fac.icon} size={20} color={colors.primary} />
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{fac.name}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const f = [...editFacilities];
+                                f[idx].status = 'Included';
+                                setEditFacilities(f);
+                              }}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 8,
+                                backgroundColor: fac.status === 'Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                                borderWidth: 1,
+                                borderColor: fac.status === 'Included' ? colors.primary : colors.border
+                              }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Included' ? '#fff' : colors.textSecondary }}>Included</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const f = [...editFacilities];
+                                f[idx].status = 'Not Included';
+                                setEditFacilities(f);
+                              }}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 8,
+                                backgroundColor: fac.status === 'Not Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                                borderWidth: 1,
+                                borderColor: fac.status === 'Not Included' ? colors.primary : colors.border
+                              }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Not Included' ? '#fff' : colors.textSecondary }}>Not Included</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.modalLabel}>Date of Birth</Text>
@@ -1377,10 +1648,16 @@ export default function StudentsPage() {
                   </View>
 
                   <View style={styles.formSection}>
-                    <Text style={styles.modalLabel}>Total Fees</Text>
+                    <Text style={styles.modalLabel}>Total Fee (Record Only)</Text>
                     <View style={styles.modalInputWrapper}>
-                      <MaterialIcons name="cash" size={20} color="#64748B" style={styles.inputIcon} />
-                      <TextInput style={styles.modalInput} value={editDues} onChangeText={setEditDues} keyboardType="numeric" placeholder="Amount (e.g. 5000)" />
+                      <MaterialIcons name="cash-multiple" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editTotalFee} onChangeText={setEditTotalFee} keyboardType="numeric" placeholder="Total Fee Amount" />
+                    </View>
+
+                    <Text style={[styles.modalLabel, { marginTop: 12 }]}>Current Dues</Text>
+                    <View style={styles.modalInputWrapper}>
+                      <MaterialIcons name="cash-register" size={20} color="#64748B" style={styles.inputIcon} />
+                      <TextInput style={styles.modalInput} value={editDues} onChangeText={setEditDues} keyboardType="numeric" placeholder="Current Dues Amount" />
                     </View>
 
                     {/* Fee Frequency Selector */}
@@ -1736,6 +2013,116 @@ export default function StudentsPage() {
 
                   <View style={styles.divider} />
 
+                  {/* Room Configuration Section */}
+                  <View style={{ marginBottom: 24 }}>
+                    <Text style={styles.sectionTitle}>Room Configuration</Text>
+
+                    <View style={styles.inputContainer}>
+                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>Sharing Options</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                        {['Single Sharing', 'Double Sharing', 'Triple Sharing'].map((type) => (
+                          <TouchableOpacity
+                            key={type}
+                            style={{
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              borderRadius: 12,
+                              backgroundColor: sharingType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                              borderWidth: 1,
+                              borderColor: sharingType === type ? colors.primary : colors.border
+                            }}
+                            onPress={() => setSharingType(type)}
+                          >
+                            <Text style={{
+                              color: sharingType === type ? '#fff' : colors.textSecondary,
+                              fontWeight: '600',
+                              fontSize: 12
+                            }}>{type}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>BHK / Studio Options (Optional)</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                        {['1BHK', '2BHK', '3BHK', 'Studio'].map((type) => (
+                          <TouchableOpacity
+                            key={type}
+                            style={{
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 12,
+                              backgroundColor: apartmentType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                              borderWidth: 1,
+                              borderColor: apartmentType === type ? colors.primary : colors.border
+                            }}
+                            onPress={() => setApartmentType(apartmentType === type ? null : type)}
+                          >
+                            <Text style={{
+                              color: apartmentType === type ? '#fff' : colors.textSecondary,
+                              fontWeight: '600',
+                              fontSize: 12
+                            }}>{type}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    <Text style={[styles.label, { marginTop: 12 }]}>Facilities & Amenities</Text>
+                    <View style={{ marginTop: 8 }}>
+                      {facilities.map((fac, idx) => (
+                        <View key={fac.name} style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingVertical: 10,
+                          borderBottomWidth: idx === facilities.length - 1 ? 0 : 1,
+                          borderBottomColor: colors.border
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <MaterialIcons name={fac.icon} size={20} color={colors.primary} />
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{fac.name}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const f = [...facilities];
+                                f[idx].status = 'Included';
+                                setFacilities(f);
+                              }}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 8,
+                                backgroundColor: fac.status === 'Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                                borderWidth: 1,
+                                borderColor: fac.status === 'Included' ? colors.primary : colors.border
+                              }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Included' ? '#fff' : colors.textSecondary }}>Included</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const f = [...facilities];
+                                f[idx].status = 'Not Included';
+                                setFacilities(f);
+                              }}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 8,
+                                backgroundColor: fac.status === 'Not Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+                                borderWidth: 1,
+                                borderColor: fac.status === 'Not Included' ? colors.primary : colors.border
+                              }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Not Included' ? '#fff' : colors.textSecondary }}>Not Included</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.divider} />
+
                   <InputField
                     label="Full Name"
                     icon="account"
@@ -1767,7 +2154,7 @@ export default function StudentsPage() {
                   />
 
                   <InputField
-                    label="Personal Email (Login ID)"
+                    label="Login Email (Auth ID)"
                     icon="email-lock"
                     value={email}
                     onChangeText={setEmail}
@@ -1778,7 +2165,7 @@ export default function StudentsPage() {
                   />
 
                   <InputField
-                    label="Google Mail (For Login)"
+                    label="Google Mail (For Login Sync)"
                     icon="google"
                     value={googleEmail}
                     onChangeText={setGoogleEmail}
@@ -1861,10 +2248,10 @@ export default function StudentsPage() {
                   />
 
                   <InputField
-                    label="Fees Amount (Dues)"
-                    icon="cash"
-                    value={initialDues}
-                    onChangeText={setInitialDues}
+                    label="Total Fee (Record Only)"
+                    icon="cash-multiple"
+                    value={totalFee}
+                    onChangeText={setTotalFee}
                     placeholder="e.g. 15000"
                     keyboardType="numeric"
                     required

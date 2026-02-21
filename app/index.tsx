@@ -7,8 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
-// Import the sober logo
-const LOGO_SOURCE = require('../assets/sober_smart_hostel_logo.png');
+// Import the new brand logo
+const LOGO_SOURCE = require('../assets/brand_icon.jpg');
 
 export default function Index() {
   const router = useRouter();

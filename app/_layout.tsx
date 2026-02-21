@@ -4,8 +4,16 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 // import OfflineIndicator from "../components/OfflineIndicator";
 import { AlertProvider } from "../context/AlertContext";
+import { AuthProvider } from "../context/AuthContext";
+import { NotificationProvider } from "../context/NotificationContext";
 // import { OfflineProvider } from "../context/OfflineContext";
 import { ThemeProvider, useTheme } from "../utils/ThemeContext";
+import { usePushNotifications } from "../utils/usePushNotifications";
+
+function PushNotificationWrapper({ children }: { children: React.ReactNode }) {
+  usePushNotifications();
+  return <>{children}</>;
+}
 
 function AppNavigator() {
   const { colors } = useTheme();
@@ -47,13 +55,19 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light" backgroundColor="transparent" translucent={true} />
-      <ThemeProvider>
-        {/* <OfflineProvider> */}
-        <AlertProvider>
-          <AppNavigator />
-        </AlertProvider>
-        {/* </OfflineProvider>  */}
-      </ThemeProvider>
+      <AuthProvider>
+        <ThemeProvider>
+          {/* <OfflineProvider> */}
+          <AlertProvider>
+            <NotificationProvider>
+              <PushNotificationWrapper>
+                <AppNavigator />
+              </PushNotificationWrapper>
+            </NotificationProvider>
+          </AlertProvider>
+          {/* </OfflineProvider>  */}
+        </ThemeProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

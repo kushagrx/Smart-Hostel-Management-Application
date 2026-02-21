@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
+import { getAdminTokens, getUserToken, sendPushNotification } from '../services/pushService';
 
 // Helper to get conversation ID (Find or Create)
 const getConversationId = async (studentId: number) => {
@@ -227,6 +228,40 @@ export const sendMessage = async (req: Request, res: Response) => {
                 user: { _id: role === 'admin' ? 'admin' : 'student' }
             }
         });
+
+        // --- Push Notification ---
+        try {
+            if (role === 'admin') {
+                // Notify Student
+                const studentUserRes = await query(
+                    'SELECT u.id, u.full_name FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1',
+                    [targetStudentId]
+                );
+                if (studentUserRes.rows.length > 0) {
+                    const tokens = await getUserToken(studentUserRes.rows[0].id);
+                    sendPushNotification(
+                        tokens,
+                        '💬 New Message from Admin',
+                        text.length > 50 ? text.substring(0, 47) + '...' : text,
+                        { type: 'message', sender: 'admin' }
+                    );
+                }
+            } else {
+                // Notify Admins
+                const adminTokens = await getAdminTokens();
+                const studentRes = await query('SELECT full_name FROM users WHERE id = $1', [userId]);
+                const studentName = studentRes.rows[0]?.full_name || 'A student';
+
+                sendPushNotification(
+                    adminTokens,
+                    `💬 Message from ${studentName}`,
+                    text.length > 50 ? text.substring(0, 47) + '...' : text,
+                    { type: 'message', sender: 'student', studentId: targetStudentId.toString() }
+                );
+            }
+        } catch (pushError) {
+            console.error("[Push] Failed to send chat notification:", pushError);
+        }
 
     } catch (error) {
         console.error("Send Message Error:", error);

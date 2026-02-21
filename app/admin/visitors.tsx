@@ -49,14 +49,40 @@ export default function AdminVisitors() {
     const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
     const [rejectReason, setRejectReason] = useState('');
 
-    const { studentId, studentName } = useLocalSearchParams();
+    const { studentId, studentName, openId } = useLocalSearchParams();
 
     const flatListRef = useRef<FlatList>(null);
+    const visitorListRef = useRef<FlatList>(null);
     const { refreshing, onRefresh } = useRefresh(loadVisitors);
 
     useEffect(() => {
         loadVisitors();
     }, []);
+
+    // Handle Deep Linking (openId)
+    useEffect(() => {
+        if (openId && visitors.length > 0) {
+            const id = Number(openId);
+            const found = visitors.find(v => v.id === id);
+
+            if (found) {
+                // Switch tab based on status
+                if (found.status === 'pending') setActiveTab('pending');
+                else if (found.status === 'checked_in') setActiveTab('active');
+                else setActiveTab('all');
+
+                // Scroll to item after a delay (to allow tab switch)
+                setTimeout(() => {
+                    const listData = getFilteredVisitors(activeTab);
+                    const index = listData.findIndex(v => v.id === id);
+                    if (index !== -1 && visitorListRef.current) {
+                        visitorListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+                        // Highlight effect could be added here
+                    }
+                }, 500);
+            }
+        }
+    }, [openId, visitors]);
 
     // Sync FlatList with activeTab
     useEffect(() => {
@@ -519,6 +545,7 @@ export default function AdminVisitors() {
 
         return (
             <FlatList
+                ref={tab === activeTab ? visitorListRef : undefined}
                 data={data}
                 keyExtractor={item => item.id.toString()}
                 contentContainerStyle={styles.visitorsList}
@@ -530,8 +557,15 @@ export default function AdminVisitors() {
                         colors={[colors.primary]}
                     />
                 }
+                onScrollToIndexFailed={(info) => {
+                    console.log("Scroll failed", info);
+                    // Retry logic or just ignore
+                }}
                 renderItem={({ item: visitor }) => (
-                    <View style={styles.visitorCard}>
+                    <View style={[
+                        styles.visitorCard,
+                        Number(openId) === visitor.id && { borderColor: colors.primary, borderWidth: 2 }
+                    ]}>
                         <View style={styles.visitorHeader}>
                             <View style={styles.visitorInfo}>
                                 <Text style={styles.visitorName}>{visitor.visitor_name}</Text>

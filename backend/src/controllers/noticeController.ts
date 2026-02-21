@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
+import { getAllStudentTokens, sendPushNotification } from '../services/pushService';
 
 export const getAllNotices = async (req: Request, res: Response) => {
     try {
@@ -18,6 +19,16 @@ export const createNotice = async (req: Request, res: Response) => {
             'INSERT INTO notices (title, content, priority) VALUES ($1, $2, $3) RETURNING *',
             [title, content, priority || 'low']
         );
+
+        // Notify All Students
+        const tokens = await getAllStudentTokens();
+        sendPushNotification(
+            tokens,
+            '📢 New Notice',
+            title,
+            { type: 'notice', id: result.rows[0].id }
+        );
+
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Error creating notice:', error);

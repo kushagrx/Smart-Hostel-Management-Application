@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
+import { getAdminTokens, getUserToken, sendPushNotification } from '../services/pushService';
 
 // --- Complaints ---
 export const getMyComplaints = async (req: Request, res: Response) => {
@@ -21,16 +22,39 @@ export const getMyComplaints = async (req: Request, res: Response) => {
 export const createComplaint = async (req: Request, res: Response) => {
     try {
         const { title, description, category } = req.body;
-        const studentRes = await query('SELECT id FROM students WHERE user_id = $1', [req.currentUser?.id]);
+        const studentRes = await query(`
+            SELECT s.id, u.full_name 
+            FROM students s 
+            JOIN users u ON s.user_id = u.id 
+            WHERE u.id = $1
+        `, [req.currentUser?.id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ error: 'Student profile not found' }); return;
         }
         const sId = studentRes.rows[0].id;
+        const studentName = studentRes.rows[0].full_name || 'A student';
+
+        // Get Room Number
+        const roomRes = await query(
+            'SELECT r.room_number FROM room_allocations ra JOIN rooms r ON ra.room_id = r.id WHERE ra.student_id = $1 AND ra.is_active = true',
+            [sId]
+        );
+        const roomNo = roomRes.rows.length > 0 ? roomRes.rows[0].room_number : 'N/A';
 
         await query(
             'INSERT INTO complaints (student_id, title, description, category, status) VALUES ($1, $2, $3, $4, $5)',
-            [sId, title, description, category, 'pending']
+            [sId, title, description, category, 'open']
         );
+
+        // Notify Admins
+        const adminTokens = await getAdminTokens();
+        sendPushNotification(
+            adminTokens,
+            '📝 New Complaint',
+            `${studentName} (Room ${roomNo}) filed a complaint: ${title}`,
+            { type: 'complaint' }
+        );
+
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -67,7 +91,37 @@ export const verifyPayment = async (req: Request, res: Response) => {
             'UPDATE payments SET status = $1, paid_at = NOW(), transaction_id = $2 WHERE id = $3',
             [newStatus, transactionId, id]
         );
+
+        // Update Student Dues (Decrement)
+        // Fetch amount from payment
+        const payRes = await query('SELECT student_id, amount FROM payments WHERE id = $1', [id]);
+        if (payRes.rows.length > 0) {
+            const { student_id, amount } = payRes.rows[0];
+            await query('UPDATE students SET dues = dues - $1 WHERE id = $2', [amount, student_id]);
+        }
+
         res.json({ success: true });
+
+        // --- Push Notification ---
+        try {
+            const studentUserRes = await query(
+                'SELECT u.id, p.amount FROM users u JOIN students s ON s.user_id = u.id JOIN payments p ON p.student_id = s.id WHERE p.id = $1',
+                [id]
+            );
+            if (studentUserRes.rows.length > 0) {
+                const { id: userId, amount } = studentUserRes.rows[0];
+                const tokens = await getUserToken(userId);
+                const emoji = newStatus === 'verified' ? '✅' : '⏳';
+                sendPushNotification(
+                    tokens,
+                    `${emoji} Payment ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1).replace('_', ' ')}`,
+                    `Your payment of ₹${amount} has been ${newStatus.replace('_', ' ')}.`,
+                    { type: 'payment', id }
+                );
+            }
+        } catch (pushError) {
+            console.error("[Push] Failed to send payment verification notification:", pushError);
+        }
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Server error' });
@@ -81,6 +135,24 @@ export const createPaymentRequest = async (req: Request, res: Response) => {
             'INSERT INTO payments (student_id, amount, purpose, due_date, status) VALUES ($1, $2, $3, $4, $5)',
             [studentId, amount, type, dueDate, 'pending']
         );
+
+        // Update Student Dues (Increment)
+        await query('UPDATE students SET dues = dues + $1 WHERE id = $2', [amount, studentId]);
+
+        // Notify Student
+        const studentUserRes = await query(
+            'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [studentId]
+        );
+        if (studentUserRes.rows.length > 0) {
+            const tokens = await getUserToken(studentUserRes.rows[0].id);
+            sendPushNotification(
+                tokens,
+                '💳 New Fee Request',
+                `A new fee request for ₹${amount} has been added.`,
+                { type: 'payment', amount: String(amount) }
+            );
+        }
+
         res.json({ success: true });
     } catch (error) {
         console.error("Create Payment Request Error:", error);
@@ -95,6 +167,10 @@ export const recordPayment = async (req: Request, res: Response) => {
             'INSERT INTO payments (student_id, amount, purpose, status, paid_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING id',
             [studentId, amount, type, 'verified']
         );
+
+        // Update Student Dues (Decrement) - Assuming paying off existing dues
+        await query('UPDATE students SET dues = dues - $1 WHERE id = $2', [amount, studentId]);
+
         res.json({ id: result.rows[0].id });
     } catch (error) {
         console.error("Record Payment Error:", error);
@@ -158,16 +234,39 @@ export const getLaundryRequests = async (req: Request, res: Response) => {
 export const createLaundryRequest = async (req: Request, res: Response) => {
     try {
         const { pickupDate, itemsCount, notes } = req.body;
-        const studentRes = await query('SELECT id FROM students WHERE user_id = $1', [req.currentUser?.id]);
+        const studentRes = await query(`
+            SELECT s.id, u.full_name 
+            FROM students s 
+            JOIN users u ON s.user_id = u.id 
+            WHERE u.id = $1
+        `, [req.currentUser?.id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ error: 'Student profile not found' }); return;
         }
         const sId = studentRes.rows[0].id;
+        const studentName = studentRes.rows[0].full_name || 'A student';
+
+        // Get Room Number
+        const roomRes = await query(
+            'SELECT r.room_number FROM room_allocations ra JOIN rooms r ON ra.room_id = r.id WHERE ra.student_id = $1 AND ra.is_active = true',
+            [sId]
+        );
+        const roomNo = roomRes.rows.length > 0 ? roomRes.rows[0].room_number : 'N/A';
 
         await query(
             'INSERT INTO laundry_requests (student_id, pickup_date, items_count, notes, status) VALUES ($1, $2, $3, $4, $5)',
             [sId, pickupDate, itemsCount, notes, 'pending']
         );
+
+        // Notify Admins
+        const adminTokens = await getAdminTokens();
+        sendPushNotification(
+            adminTokens,
+            '🧺 New Laundry Request',
+            `${studentName} (Room ${roomNo}) submitted ${itemsCount} items for laundry.`,
+            { type: 'laundry' }
+        );
+
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -214,16 +313,39 @@ export const getLeaveRequests = async (req: Request, res: Response) => {
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
         const { startDate, endDate, reason } = req.body;
-        const studentRes = await query('SELECT id FROM students WHERE user_id = $1', [req.currentUser?.id]);
+        const studentRes = await query(`
+            SELECT s.id, u.full_name 
+            FROM students s 
+            JOIN users u ON s.user_id = u.id 
+            WHERE u.id = $1
+        `, [req.currentUser?.id]);
         if (studentRes.rows.length === 0) {
             res.status(404).json({ error: 'Student profile not found' }); return;
         }
         const sId = studentRes.rows[0].id;
+        const studentName = studentRes.rows[0].full_name || 'A student';
+
+        // Get Room Number
+        const roomRes = await query(
+            'SELECT r.room_number FROM room_allocations ra JOIN rooms r ON ra.room_id = r.id WHERE ra.student_id = $1 AND ra.is_active = true',
+            [sId]
+        );
+        const roomNo = roomRes.rows.length > 0 ? roomRes.rows[0].room_number : 'N/A';
 
         await query(
             'INSERT INTO leave_requests (student_id, start_date, end_date, reason, status) VALUES ($1, $2, $3, $4, $5)',
             [sId, startDate, endDate, reason, 'pending']
         );
+
+        // Notify Admins
+        const adminTokens = await getAdminTokens();
+        sendPushNotification(
+            adminTokens,
+            '🏠 New Leave Request',
+            `${studentName} (Room ${roomNo}) applied for leave from ${startDate} to ${endDate}.`,
+            { type: 'leave' }
+        );
+
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -324,14 +446,37 @@ export const updateLaundrySettings = async (req: Request, res: Response) => {
 export const createServiceRequest = async (req: Request, res: Response) => {
     try {
         const { serviceType, description } = req.body;
-        const studentRes = await query('SELECT id FROM students WHERE user_id = $1', [req.currentUser?.id]);
+        const studentRes = await query(`
+            SELECT s.id, u.full_name 
+            FROM students s 
+            JOIN users u ON s.user_id = u.id 
+            WHERE u.id = $1
+        `, [req.currentUser?.id]);
         if (studentRes.rows.length === 0) return res.status(404).json({ error: 'Student not found' });
         const sId = studentRes.rows[0].id;
+        const studentName = studentRes.rows[0].full_name || 'A student';
+
+        // Get Room Number
+        const roomRes = await query(
+            'SELECT r.room_number FROM room_allocations ra JOIN rooms r ON ra.room_id = r.id WHERE ra.student_id = $1 AND ra.is_active = true',
+            [sId]
+        );
+        const roomNo = roomRes.rows.length > 0 ? roomRes.rows[0].room_number : 'N/A';
 
         await query(
             'INSERT INTO service_requests (student_id, service_type, description) VALUES ($1, $2, $3)',
             [sId, serviceType, description]
         );
+
+        // Notify Admins
+        const adminTokens = await getAdminTokens();
+        sendPushNotification(
+            adminTokens,
+            '🔧 Room Service Request',
+            `${studentName} (Room ${roomNo}) requested ${serviceType}.`,
+            { type: 'service' }
+        );
+
         res.json({ success: true });
     } catch (error) {
         console.error("Create Service Error:", error);
@@ -436,10 +581,28 @@ export const updateServiceRequestStatus = async (req: Request, res: Response) =>
     try {
         const { id } = req.params;
         const { status, estimatedTime, adminNote } = req.body;
-        await query(
-            'UPDATE service_requests SET status = $1, estimated_time = $2, admin_note = $3, updated_at = NOW() WHERE id = $4',
+        const result = await query(
+            'UPDATE service_requests SET status = $1, estimated_time = $2, admin_note = $3, updated_at = NOW() WHERE id = $4 RETURNING student_id, service_name',
             [status, estimatedTime, adminNote, id]
         );
+
+        if (result.rows.length > 0) {
+            const { student_id, service_name } = result.rows[0];
+            const studentUserRes = await query(
+                'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
+            );
+            if (studentUserRes.rows.length > 0) {
+                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const emoji = status === 'completed' ? '✅' : status === 'in-progress' ? '🔧' : '❌';
+                sendPushNotification(
+                    tokens,
+                    `${emoji} Service Update`,
+                    `Your request for ${service_name} is now ${status}.`,
+                    { type: 'service', id }
+                );
+            }
+        }
+
         res.json({ success: true });
     } catch (error) {
         console.error("Update Service Status Error:", error);
@@ -492,7 +655,26 @@ export const updateLeaveStatus = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        await query('UPDATE leave_requests SET status = $1 WHERE id = $2', [status, id]);
+        const result = await query(
+            'UPDATE leave_requests SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING student_id, start_date',
+            [status, id]
+        );
+        if (result.rows.length > 0) {
+            const { student_id } = result.rows[0];
+            const studentUserRes = await query(
+                'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
+            );
+            if (studentUserRes.rows.length > 0) {
+                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const emoji = status === 'approved' ? '✅' : '❌';
+                sendPushNotification(
+                    tokens,
+                    `${emoji} Leave Request ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+                    `Your leave request has been ${status}.`,
+                    { type: 'leave', id }
+                );
+            }
+        }
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -515,7 +697,7 @@ export const getAllComplaints = async (req: Request, res: Response) => {
             title: row.title,
             description: row.description,
             priority: row.priority,
-            status: row.status,
+            status: row.status === 'pending' ? 'open' : row.status,
             category: row.category,
             studentName: row.full_name,
             studentEmail: row.email,
@@ -528,14 +710,67 @@ export const getAllComplaints = async (req: Request, res: Response) => {
     }
 };
 
+
 export const updateComplaintStatus = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        await query('UPDATE complaints SET status = $1 WHERE id = $2', [status, id]);
+        const result = await query(
+            'UPDATE complaints SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING student_id, title',
+            [status, id]
+        );
+        if (result.rows.length > 0) {
+            const { student_id, title } = result.rows[0];
+            const studentUserRes = await query(
+                'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
+            );
+            if (studentUserRes.rows.length > 0) {
+                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const emoji = status === 'resolved' ? '✅' : status === 'in-progress' ? '🔧' : '📋';
+                sendPushNotification(
+                    tokens,
+                    `${emoji} Complaint Update`,
+                    `"${title}" is now ${status}.`,
+                    { type: 'complaint', id }
+                );
+            }
+        }
         res.json({ success: true });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Server error' });
     }
 };
+
+// --- Laundry - Admin ---
+export const updateLaundryRequestStatus = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body; // 'approved', 'completed', 'rejected'
+        const result = await query(
+            'UPDATE laundry_requests SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING student_id',
+            [status, id]
+        );
+        if (result.rows.length > 0) {
+            const { student_id } = result.rows[0];
+            const studentUserRes = await query(
+                'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
+            );
+            if (studentUserRes.rows.length > 0) {
+                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const emoji = status === 'completed' ? '✅' : status === 'approved' ? '🧺' : '❌';
+                sendPushNotification(
+                    tokens,
+                    `${emoji} Laundry Update`,
+                    `Your laundry request is now ${status}.`,
+                    { type: 'laundry', id }
+                );
+            }
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update Laundry Status Error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+

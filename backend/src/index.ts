@@ -17,6 +17,7 @@ import hostelRoutes from './routes/hostelRoutes';
 import messAttendanceRoutes from './routes/messAttendanceRoutes';
 import noticeRoutes from './routes/noticeRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 import roomRoutes from './routes/roomRoutes';
 import searchRoutes from './routes/searchRoutes';
 import serviceRoutes from './routes/serviceRoutes';
@@ -56,6 +57,7 @@ app.use('/api/visitors', visitorRoutes);
 app.use('/api/facilities', facilityRoutes);
 app.use('/api/hostel-info', hostelRoutes);
 app.use('/api/mess', messAttendanceRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 // Basic Route
@@ -86,7 +88,8 @@ const startServer = async () => {
             ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
             
             ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ DEFAULT NOW();
+            ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ DEFAULT NOW(),
+            ADD COLUMN IF NOT EXISTS push_token VARCHAR(255);
             
             CREATE TABLE IF NOT EXISTS visitors (
                 id SERIAL PRIMARY KEY,
@@ -117,6 +120,10 @@ const startServer = async () => {
             CREATE INDEX IF NOT EXISTS idx_visitors_status ON visitors(status);
             CREATE INDEX IF NOT EXISTS idx_visitors_date ON visitors(expected_date);
             CREATE INDEX IF NOT EXISTS idx_visitors_room ON visitors(room_number);
+
+            ALTER TABLE rooms 
+            ADD COLUMN IF NOT EXISTS room_type VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS facilities JSONB DEFAULT '[]'::jsonb;
         `);
         console.log('✅ Database schema verified');
 
@@ -127,5 +134,12 @@ const startServer = async () => {
         console.error('Failed to start server:', err);
     }
 };
+
+
+// Global Error Handler
+app.use((err: any, req: Request, res: Response, next: any) => {
+    console.error('Unhandled Error:', err);
+    res.status(500).json({ error: err.message || 'Internal Server Error' });
+});
 
 startServer();

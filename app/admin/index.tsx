@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolate,
@@ -163,11 +164,12 @@ export default function AdminDashboard() {
     },
 
     container: {
-      padding: 24,
+      paddingHorizontal: 24,
+      paddingTop: 12,
       paddingBottom: 60,
     },
     section: {
-      marginBottom: 32,
+      marginBottom: 24,
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -345,6 +347,8 @@ export default function AdminDashboard() {
   const [recentComplaints, setRecentComplaints] = useState<Complaint[]>([]);
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isQuickSettingsOpen, setIsQuickSettingsOpen] = useState(false);
+  const toggleQuickSettings = () => setIsQuickSettingsOpen(!isQuickSettingsOpen);
 
   // Drawer Animation (Shared Value)
   const drawerProgress = useSharedValue(0);
@@ -672,97 +676,210 @@ export default function AdminDashboard() {
 
               {/* Add Student Action Button */}
               {/* Add Student Text Link */}
-              {/* Quick Actions (Text Only) */}
-              <View style={{ marginBottom: 20, marginTop: -8 }}>
-                {/* First Row: Add Student, Attendance, Messages */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: colors.card,
-                      paddingVertical: 10,
-                      paddingHorizontal: 16,
-                      borderRadius: 12,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 3,
-                      alignItems: 'center',
-                    }}
-                    activeOpacity={0.6}
-                    onPress={() => router.push({ pathname: '/admin/students', params: { action: 'allot' } })}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                      Add Student
-                    </Text>
-                  </TouchableOpacity>
+              {/* Hero Actions Row (Prominent) */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, marginHorizontal: -16 }}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => router.push({ pathname: '/admin/students', params: { action: 'allot' } })}
+                >
+                  {({ pressed }) => (
+                    <LinearGradient
+                      colors={[colors.card, colors.background]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{
+                        flex: 1,
+                        borderRadius: 14,
+                        padding: 10,
+                        height: 60,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 2,
+                        borderWidth: 1,
+                        borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
+                        overflow: 'hidden',
+                        shadowColor: '#000',
+                        shadowOpacity: pressed ? 0.4 : 0.2,
+                        shadowRadius: 4,
+                        shadowOffset: { width: 0, height: 2 },
+                        elevation: pressed ? 4 : 2,
+                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <MaterialIcons name="account-plus" size={16} color={colors.primary} />
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>Student</Text>
+                      </View>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.5 }}>Add New</Text>
 
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: colors.card,
-                      paddingVertical: 10,
-                      paddingHorizontal: 16,
-                      borderRadius: 12,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 3,
-                      alignItems: 'center',
-                    }}
-                    activeOpacity={0.6}
-                    onPress={() => router.push('/admin/attendance')}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                      Attendance
-                    </Text>
-                  </TouchableOpacity>
+                      {/* Watermark - Subtle */}
+                      <View style={{ position: 'absolute', right: -6, bottom: -6, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+                        <MaterialIcons name="account-plus" size={45} color={colors.text} />
+                      </View>
+                    </LinearGradient>
+                  )}
+                </Pressable>
 
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: colors.card,
-                      paddingVertical: 10,
-                      paddingHorizontal: 16,
-                      borderRadius: 12,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 3,
-                      alignItems: 'center',
-                    }}
-                    activeOpacity={0.6}
-                    onPress={() => router.push('/chat')}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                      Messages
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => router.push('/admin/attendance')}
+                >
+                  {({ pressed }) => (
+                    <LinearGradient
+                      colors={[colors.card, colors.background]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{
+                        flex: 1,
+                        borderRadius: 14,
+                        padding: 10,
+                        height: 60,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 2,
+                        borderWidth: 1,
+                        borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
+                        overflow: 'hidden',
+                        shadowColor: '#000',
+                        shadowOpacity: pressed ? 0.4 : 0.2,
+                        shadowRadius: 4,
+                        shadowOffset: { width: 0, height: 2 },
+                        elevation: pressed ? 4 : 2,
+                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <MaterialIcons name="calendar-check" size={16} color={colors.primary} />
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>Daily</Text>
+                      </View>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.5 }}>Attendance</Text>
 
-                {/* Second Row: Analytics */}
-                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: colors.card,
-                      paddingVertical: 10,
-                      paddingHorizontal: 16,
-                      borderRadius: 12,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 3,
-                      alignItems: 'center',
-                    }}
-                    activeOpacity={0.6}
-                    onPress={() => router.push('/admin/analytics')}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                      Analytics
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                      {/* Watermark - Subtle */}
+                      <View style={{ position: 'absolute', right: -6, bottom: -6, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+                        <MaterialIcons name="calendar-check" size={45} color={colors.text} />
+                      </View>
+                    </LinearGradient>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => router.push('/chat')}
+                >
+                  {({ pressed }) => (
+                    <LinearGradient
+                      colors={[colors.card, colors.background]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{
+                        flex: 1,
+                        borderRadius: 14,
+                        padding: 10,
+                        height: 60,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 2,
+                        borderWidth: 1,
+                        borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
+                        overflow: 'hidden',
+                        shadowColor: '#000',
+                        shadowOpacity: pressed ? 0.4 : 0.2,
+                        shadowRadius: 4,
+                        shadowOffset: { width: 0, height: 2 },
+                        elevation: pressed ? 4 : 2,
+                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <MaterialIcons name="message-text" size={16} color={colors.primary} />
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>Chats</Text>
+                      </View>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.5 }}>Messages</Text>
+
+                      {/* Watermark - Subtle */}
+                      <View style={{ position: 'absolute', right: -6, bottom: -6, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+                        <MaterialIcons name="message-text" size={45} color={colors.text} />
+                      </View>
+                    </LinearGradient>
+                  )}
+                </Pressable>
+              </View>
+
+              {/* Quick Settings Section */}
+              <View style={[styles.section, { marginBottom: 4, marginTop: 0 }]}>
+                {/* Quick Settings Grid */}
+                {isQuickSettingsOpen && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 10, marginBottom: 12 }}>
+                    {[
+                      { label: 'Analytics', icon: 'google-analytics', route: '/admin/analytics' },
+                      { label: 'Notice', icon: 'bullhorn-outline', route: '/admin/notices' },
+                      { label: 'Menu', icon: 'silverware-fork-knife', route: '/admin/messMenu' },
+                      { label: 'Bus Timing', icon: 'bus', route: '/admin/busTimings' },
+                      { label: 'Request Fees', icon: 'cash-multiple', route: '/admin/finance' },
+                      { label: 'Laundry', icon: 'tshirt-crew', route: '/admin/laundry' },
+                      { label: 'Emergency', icon: 'alert-circle-outline', route: '/admin/emergency' },
+                    ].map((item, index) => (
+                      <Pressable
+                        key={index}
+                        style={{ flexGrow: 1, minWidth: '30%' }}
+                        onPress={() => router.push(item.route)}
+                      >
+                        {({ pressed }) => (
+                          <LinearGradient
+                            colors={[colors.card, colors.background]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={{
+                              height: 60,
+                              paddingHorizontal: 10,
+                              borderRadius: 16,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 4,
+                              borderWidth: 1,
+                              borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
+                              elevation: pressed ? 4 : 2,
+                              shadowColor: '#000',
+                              shadowOpacity: pressed ? 0.4 : 0.2,
+                              shadowRadius: 4,
+                              shadowOffset: { width: 0, height: 2 },
+                              overflow: 'hidden',
+                              position: 'relative',
+                              transform: [{ scale: pressed ? 0.98 : 1 }],
+                            }}
+                          >
+                            <MaterialIcons name={item.icon} size={22} color={colors.primary} />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'uppercase', textAlign: 'center', maxWidth: 80 }} numberOfLines={1}>
+                              {item.label}
+                            </Text>
+
+                            {/* Watermark Icon - Subtle */}
+                            <View style={{ position: 'absolute', right: -8, bottom: -8, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+                              <MaterialIcons name={item.icon} size={40} color={colors.text} />
+                            </View>
+                          </LinearGradient>
+                        )}
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+
+                {/* Toggle Arrow (Drawer Handle) - Moved Below */}
+                <TouchableOpacity
+                  style={{
+                    alignSelf: 'center',
+                    padding: 4,
+                  }}
+                  onPress={toggleQuickSettings}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons
+                    name={isQuickSettingsOpen ? "chevron-up" : "chevron-down"}
+                    size={28}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+
               </View>
 
               {/* Mess Headcount */}
@@ -850,6 +967,6 @@ export default function AdminDashboard() {
           </SafeAreaView>
         </Animated.View>
       </View>
-    </GestureDetector>
+    </GestureDetector >
   );
 }

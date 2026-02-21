@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
+import { getAllStudentTokens, sendPushNotification } from '../services/pushService';
 
 export const getAllBusTimings = async (req: Request, res: Response) => {
     try {
@@ -18,6 +19,16 @@ export const createBusTiming = async (req: Request, res: Response) => {
             'INSERT INTO bus_timings (route_name, departure_time, destination, message) VALUES ($1, $2, $3, $4) RETURNING *',
             [route_name, departure_time, destination, message]
         );
+
+        // Notify All Students
+        const tokens = await getAllStudentTokens();
+        sendPushNotification(
+            tokens,
+            '🚌 New Bus Route',
+            `${route_name} to ${destination} added. Depart: ${departure_time}`,
+            { type: 'bus', id: result.rows[0].id }
+        );
+
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Error creating bus timing:', error);
@@ -36,6 +47,16 @@ export const updateBusTiming = async (req: Request, res: Response) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Bus timing not found' });
         }
+
+        // Notify All Students
+        const tokens = await getAllStudentTokens();
+        sendPushNotification(
+            tokens,
+            '🚌 Bus Schedule Updated',
+            `Bus for ${route_name} to ${destination} has been updated.`,
+            { type: 'bus', id }
+        );
+
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Error updating bus timing:', error);

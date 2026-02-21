@@ -10,7 +10,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface StudentNotification {
     id: string;
-    type: 'bus' | 'emergency' | 'message' | 'leave' | 'complaint' | 'service' | 'notice';
+    type: 'bus' | 'emergency' | 'message' | 'leave' | 'complaint' | 'service' | 'notice' | 'mess' | 'payment' | 'laundry' | 'visitor';
     title: string;
     subtitle: string;
     time: string;
@@ -119,6 +119,17 @@ export default function StudentNotificationOverlay({ visible, onClose }: Student
                 case 'notice':
                     router.push('/alerts');
                     break;
+                case 'mess':
+                    // Pass day and meal if available
+                    // @ts-ignore
+                    const params = new URLSearchParams({ tab: 'menu' });
+                    // @ts-ignore
+                    if (item.data?.day) params.append('day', item.data.day);
+                    // @ts-ignore
+                    if (item.data?.meal) params.append('target', item.data.meal);
+
+                    router.push(`/mess?${params.toString()}`);
+                    break;
                 default:
                     break;
             }
@@ -134,6 +145,7 @@ export default function StudentNotificationOverlay({ visible, onClose }: Student
             case 'complaint': return 'alert-circle-outline';
             case 'service': return 'tools';
             case 'notice': return 'bullhorn-outline';
+            case 'mess': return 'silverware-fork-knife';
             default: return 'bell-outline';
         }
     };
@@ -147,6 +159,7 @@ export default function StudentNotificationOverlay({ visible, onClose }: Student
             case 'complaint': return '#F97316';
             case 'service': return '#8B5CF6';
             case 'notice': return '#EC4899';
+            case 'mess': return '#F59E0B';
             default: return colors.primary;
         }
     };

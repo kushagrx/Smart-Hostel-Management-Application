@@ -1,14 +1,16 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
+import { getAdminTokens, getUserToken, sendPushNotification } from '../services/pushService';
+
 
 // Student: Register a new visitor
 export const registerVisitor = async (req: Request, res: Response) => {
     const userId = req.currentUser?.id;
 
     try {
-        // Get student ID from user ID
+        // Get student ID and Name from user ID
         const studentResult = await query(
-            'SELECT id, roll_no FROM students WHERE user_id = $1',
+            'SELECT s.id, s.roll_no, u.full_name FROM students s JOIN users u ON s.user_id = u.id WHERE s.user_id = $1',
             [userId]
         );
 
@@ -64,10 +66,18 @@ export const registerVisitor = async (req: Request, res: Response) => {
             ]
         );
 
-        res.status(201).json({
-            message: 'Visitor registered successfully. Waiting for admin approval.',
-            visitor: result.rows[0]
-        });
+        const newVisitorId = result.rows[0].id;
+        const adminTokens = await getAdminTokens();
+        // Send async (don't await to avoid blocking response)
+        const studentName = studentResult.rows[0].full_name || 'A student';
+        sendPushNotification(
+            adminTokens,
+            'New Visitor Request',
+            `${studentName} added a visitor request (Room ${roomNumber})`,
+            { type: 'visitor', id: newVisitorId }
+        );
+
+        res.status(201).json({ message: 'Visitor registered successfully', visitorId: newVisitorId });
     } catch (error: any) {
         console.error('Error registering visitor:', error);
         res.status(500).json({ error: 'Failed to register visitor' });
@@ -326,7 +336,20 @@ export const approveVisitor = async (req: Request, res: Response) => {
             return;
         }
 
-        // TODO: Send notification to student
+        // Notify student
+        const visitor = result.rows[0];
+        const studentUserRes = await query(
+            'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
+        );
+        if (studentUserRes.rows.length > 0) {
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            sendPushNotification(
+                studentTokens,
+                '✅ Visitor Approved',
+                `Your visitor ${visitor.visitor_name} has been approved. QR code is ready.`,
+                { type: 'visitor', id: visitor.id }
+            );
+        }
 
         res.json({
             message: 'Visitor approved successfully',
@@ -367,7 +390,20 @@ export const rejectVisitor = async (req: Request, res: Response) => {
             return;
         }
 
-        // TODO: Send notification to student
+        // Notify student
+        const visitor = result.rows[0];
+        const studentUserRes = await query(
+            'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
+        );
+        if (studentUserRes.rows.length > 0) {
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            sendPushNotification(
+                studentTokens,
+                '❌ Visitor Rejected',
+                `Your visitor ${visitor.visitor_name}'s request has been rejected. Reason: ${remarks}`,
+                { type: 'visitor', id: visitor.id }
+            );
+        }
 
         res.json({
             message: 'Visitor rejected',
@@ -394,12 +430,20 @@ export const checkInVisitor = async (req: Request, res: Response) => {
             [id]
         );
 
-        if (result.rows.length === 0) {
-            res.status(404).json({ error: 'Visitor not found or not approved' });
-            return;
+        // Notify student
+        const visitor = result.rows[0];
+        const studentUserRes = await query(
+            'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
+        );
+        if (studentUserRes.rows.length > 0) {
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            sendPushNotification(
+                studentTokens,
+                '👥 Visitor Checked In',
+                `Your visitor ${visitor.visitor_name} has checked in.`,
+                { type: 'visitor', id: visitor.id }
+            );
         }
-
-        // TODO: Send notification to student
 
         res.json({
             message: 'Visitor checked in successfully',
@@ -426,12 +470,20 @@ export const checkOutVisitor = async (req: Request, res: Response) => {
             [id]
         );
 
-        if (result.rows.length === 0) {
-            res.status(404).json({ error: 'Visitor not found or not checked in' });
-            return;
+        // Notify student
+        const visitor = result.rows[0];
+        const studentUserRes = await query(
+            'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
+        );
+        if (studentUserRes.rows.length > 0) {
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            sendPushNotification(
+                studentTokens,
+                '👥 Visitor Checked Out',
+                `Your visitor ${visitor.visitor_name} has checked out.`,
+                { type: 'visitor', id: visitor.id }
+            );
         }
-
-        // TODO: Send notification to student
 
         res.json({
             message: 'Visitor checked out successfully',

@@ -74,6 +74,12 @@ export default function AdminNotifications() {
             case 'service':
                 router.push({ pathname: '/admin/services', params: { openId: item.data.id } });
                 break;
+            case 'visitor':
+                router.push({ pathname: '/admin/visitors', params: { openId: item.data.id } });
+                break;
+            case 'payment':
+                router.push('/admin/finance');
+                break;
             default:
                 break;
         }
@@ -86,6 +92,8 @@ export default function AdminNotifications() {
             case 'leave': return 'clock-outline';
             case 'laundry': return 'washing-machine';
             case 'service': return 'tools';
+            case 'visitor': return 'account-group-outline';
+            case 'payment': return 'currency-inr';
             default: return 'bell-outline';
         }
     };
@@ -97,6 +105,8 @@ export default function AdminNotifications() {
             case 'leave': return '#F59E0B';
             case 'laundry': return '#10B981';
             case 'service': return '#8B5CF6';
+            case 'visitor': return '#6366F1';
+            case 'payment': return '#10B981';
             default: return '#64748B';
         }
     };

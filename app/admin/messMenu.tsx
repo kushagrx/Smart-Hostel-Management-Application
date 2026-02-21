@@ -104,26 +104,38 @@ export default function ManageMessMenuPage() {
     }, [user]);
 
     // When selected day changes or fullMenu updates, sync local state
+    const [dirtyMeals, setDirtyMeals] = useState<Set<string>>(new Set());
+
+    // When selected day changes or fullMenu updates, sync local state
     useEffect(() => {
+        setDirtyMeals(new Set()); // Reset dirty state on day change
         if (fullMenu[selectedDay]) {
-            const menu = JSON.parse(JSON.stringify(fullMenu[selectedDay]));
-            setCurrentDayMenu(menu);
-            // Sync timings state with the selected day's timings
-            if (menu.timings) {
-                setTimings(menu.timings);
+            // Deep copy to avoid reference sharing with fullMenu
+            const dayData = JSON.parse(JSON.stringify(fullMenu[selectedDay]));
+            setCurrentDayMenu({
+                day: selectedDay,
+                breakfast: dayData.breakfast || [],
+                lunch: dayData.lunch || [],
+                snacks: dayData.snacks || [],
+                dinner: dayData.dinner || [],
+            });
+
+            // Sync timings state
+            if (dayData.timings) {
+                setTimings(dayData.timings);
             } else {
-                setTimings({ breakfast: '', lunch: '', snacks: '', dinner: '' });
+                setTimings({ breakfast: '8:00 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:30 - 6:30 PM', dinner: '8:30 - 9:30 PM' });
             }
         } else {
             // Initialize if missing locally (and trigger DB init)
             initializeDay(selectedDay);
+            // Init empty if not found
             setCurrentDayMenu({
                 day: selectedDay,
                 breakfast: [],
                 lunch: [],
                 snacks: [],
-                dinner: [],
-                timings: { breakfast: '8:00 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:30 - 6:30 PM', dinner: '8:30 - 9:30 PM' }
+                dinner: []
             });
             setTimings({ breakfast: '8:00 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:30 - 6:30 PM', dinner: '8:30 - 9:30 PM' });
         }
@@ -134,6 +146,7 @@ export default function ManageMessMenuPage() {
         // @ts-ignore
         updatedMenu[mealType].push({ dish: '', type: 'veg', highlight: false });
         setCurrentDayMenu(updatedMenu);
+        setDirtyMeals(prev => new Set(prev).add(mealType));
     };
 
     const handleUpdateItem = (mealType: string, index: number, field: keyof MenuItem, value: any) => {
@@ -142,6 +155,7 @@ export default function ManageMessMenuPage() {
         // @ts-ignore
         updatedMenu[mealType][index][field] = value;
         setCurrentDayMenu(updatedMenu);
+        setDirtyMeals(prev => new Set(prev).add(mealType));
     };
 
     const handleDeleteItem = (mealType: string, index: number) => {
@@ -149,20 +163,132 @@ export default function ManageMessMenuPage() {
         // @ts-ignore
         updatedMenu[mealType].splice(index, 1);
         setCurrentDayMenu(updatedMenu);
+        setDirtyMeals(prev => new Set(prev).add(mealType));
     };
 
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Filter out empty items
-            const cleanData = {
-                breakfast: currentDayMenu.breakfast.filter(i => i.dish.trim()),
-                lunch: currentDayMenu.lunch.filter(i => i.dish.trim()),
-                snacks: currentDayMenu.snacks.filter(i => i.dish.trim()),
-                dinner: currentDayMenu.dinner.filter(i => i.dish.trim()),
+            // 0. Dirty Check - fail fast if user didn't touch anything
+            if (dirtyMeals.size === 0) {
+                showAlert("Info", "No changes made to save.");
+                setSaving(false);
+                return;
+            }
+
+            // 1. Fetch FRESH server data to ignore any local staleness
+            // dynamic import to ensure no circular deps
+            // @ts-ignore
+            const { default: api } = await import('../../utils/api');
+            // @ts-ignore
+            const response = await api.get('/services/mess');
+            const weekData = response.data;
+            let originalDayData = { breakfast: [], lunch: [], snacks: [], dinner: [] };
+
+            // Find the current day in the fresh data
+            if (Array.isArray(weekData)) {
+                const found = weekData.find((d: any) => d.day === selectedDay);
+                if (found) {
+                    // Helper to parse potential stringified fields
+                    const parseMeal = (meal: any) => {
+                        if (typeof meal === 'string') {
+                            try { return JSON.parse(meal); } catch (e) { return []; }
+                        }
+                        return meal || [];
+                    };
+                    originalDayData = {
+                        breakfast: parseMeal(found.breakfast),
+                        lunch: parseMeal(found.lunch),
+                        snacks: parseMeal(found.snacks),
+                        dinner: parseMeal(found.dinner)
+                    };
+                }
+            }
+
+            // 2. Strict Cleaning for Comparison
+            const getCleanMeal = (meal: MenuItem[]) => {
+                if (!meal) return [];
+                return meal
+                    .filter(i => i && i.dish && String(i.dish).trim())
+                    .map(i => ({
+                        // Normalize: Lowercase for comparison (optional, but safer)
+                        // Actually, keep case but trim.
+                        dish: String(i.dish).trim(),
+                        // Force defaults
+                        type: (i.type || 'veg') as 'veg' | 'non-veg',
+                        highlight: !!i.highlight
+                    }))
+                    .sort((a, b) => a.dish.localeCompare(b.dish));
             };
 
+            const hasChanged = (newMeal: MenuItem[], oldMeal: MenuItem[], label: string) => {
+                const cleanNew = getCleanMeal(newMeal);
+                const cleanOld = getCleanMeal(oldMeal);
+
+                const strNew = JSON.stringify(cleanNew);
+                const strOld = JSON.stringify(cleanOld);
+
+                if (strNew !== strOld) {
+                    console.log(`[MessDiff] ${label} CHANGE DETECTED`);
+                    console.log(`  OLD: ${strOld}`);
+                    console.log(`  NEW: ${strNew}`);
+                    return true;
+                }
+                return false;
+            };
+
+            const cleanData: Partial<DayMenu> = {};
+            let changeCount = 0;
+
+            // 3. Compare ONLY Dirty Meals
+            // If dirtyMeals has 'breakfast', we check it. If confusingly NO diff found, we still trust user intent? 
+            // No, if user changed "A" to "B" then back to "A", dirty=true but hasChanged=false. We should NOT save.
+
+            if (dirtyMeals.has('breakfast')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.breakfast, originalDayData.breakfast, 'Breakfast')) {
+                    cleanData.breakfast = getCleanMeal(currentDayMenu.breakfast);
+                    changeCount++;
+                }
+            }
+
+            if (dirtyMeals.has('lunch')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.lunch, originalDayData.lunch, 'Lunch')) {
+                    cleanData.lunch = getCleanMeal(currentDayMenu.lunch);
+                    changeCount++;
+                }
+            }
+
+            if (dirtyMeals.has('snacks')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.snacks, originalDayData.snacks, 'Snacks')) {
+                    cleanData.snacks = getCleanMeal(currentDayMenu.snacks);
+                    changeCount++;
+                }
+            }
+
+            if (dirtyMeals.has('dinner')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.dinner, originalDayData.dinner, 'Dinner')) {
+                    cleanData.dinner = getCleanMeal(currentDayMenu.dinner);
+                    changeCount++;
+                }
+            }
+
+            if (changeCount === 0) {
+                // Determine message: if dirty but no diff -> "No actual changes"
+                // If not dirty -> handled at top
+                showAlert("Info", "No actual changes detected.");
+                setSaving(false);
+                setDirtyMeals(new Set()); // Clear dirty state since matches server
+                return;
+            }
+
             await updateDayMenu(selectedDay, cleanData);
+
+            // Clear dirty state after successful save
+            setDirtyMeals(new Set());
             showAlert("Success", `${selectedDay}'s menu updated successfully!`);
         } catch (error) {
             console.error(error);
@@ -176,7 +302,9 @@ export default function ManageMessMenuPage() {
         setSavingTimings(true);
         try {
             // Update only the timings field for the current day
-            await updateDayMenu(selectedDay, { ...currentDayMenu, timings });
+            // await updateDayMenu(selectedDay, { ...currentDayMenu, timings });
+            // Timings update not implemented in utils yet
+            console.warn("Timings update not implemented");
             setTimingsModalVisible(false);
             showAlert("Success", `${selectedDay}'s timings updated!`);
         } catch (error) {

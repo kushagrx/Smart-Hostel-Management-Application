@@ -1,432 +1,258 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import RazorpayCheckout from 'react-native-razorpay';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
-import { useUser } from '../../utils/authUtils';
+import { useRefresh } from '../../hooks/useRefresh';
+import api from '../../utils/api';
+import { fetchUserData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
 export default function PaymentsPage() {
-    interface PaymentRequest {
-        id: string;
-        amount: number;
-        type: string; // 'purpose' in DB
-        status: 'pending' | 'verified' | 'paid_unverified' | 'overdue';
-        dueDate?: string;
-        description?: string;
-        receiptNumber?: string;
-    }
-
-    const router = useRouter();
-    const user = useUser();
-    const { showAlert } = useAlert();
     const { colors, isDark } = useTheme();
+    const { showAlert } = useAlert();
+    const [dues, setDues] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [history, setHistory] = useState<any[]>([]);
 
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [requests, setRequests] = useState<PaymentRequest[]>([]);
-    const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
-
-    useEffect(() => {
-        if (user) {
-            loadData();
-        }
-    }, [user]);
-
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            const { default: api } = await import('../../utils/api');
-            const response = await api.get('/services/payments');
-
-            // Map DB response to UI model
-            // DB: { id, amount, purpose, status, due_date, ... }
-            const mapped = response.data.map((p: any) => ({
-                id: p.id,
-                amount: Number(p.amount),
-                type: p.purpose,
-                status: p.status,
-                dueDate: p.due_date,
-                description: p.description,
-                receiptNumber: p.transaction_id
-            }));
-
-            setRequests(mapped);
-        } catch (error) {
-            console.error("Error loading payments:", error);
-            showAlert('Error', 'Failed to load payment info', [], 'error');
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    };
-
-    const handlePayNow = async (req: PaymentRequest) => {
-        Alert.alert(
-            "Confirm Payment",
-            "Do you want to pay ₹" + req.amount + " now?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Pay Now",
-                    onPress: async () => {
-                        try {
-                            const { default: api } = await import('../../utils/api');
-                            const dummyId = "SIM-" + Date.now();
-                            await api.post(`/services/payments/${req.id}/pay`, { transactionId: dummyId });
-
-                            loadData(); // Refresh list
-                            showAlert('Success', 'Payment Successful! Waiting for admin verification.', [], 'success');
-                        } catch (error) {
-                            console.error("Payment Simulation Error:", error);
-                            showAlert('Error', 'Failed to process payment', [], 'error');
-                        }
-                    }
-                }
-            ]
-        );
-    };
-
-    const filteredRequests = requests.filter(r => {
-        if (activeTab === 'pending') return r.status === 'pending' || r.status === 'overdue';
-        return r.status === 'paid_unverified' || r.status === 'verified';
+    const { refreshing, onRefresh } = useRefresh(async () => {
+        await loadData();
     });
 
-    const renderItem = ({ item }: { item: PaymentRequest }) => {
-        const isHistory = activeTab === 'history';
+    useEffect(() => {
+        loadData();
+    }, []);
 
-        return (
-            <View style={[styles.card, isHistory && styles.cardHistory, {
-                backgroundColor: colors.card,
-                borderColor: colors.border
-            }]}>
-                <View style={styles.cardHeader}>
-                    <View style={[
-                        styles.iconBox,
-                        { backgroundColor: item.type === 'Hostel Fee' ? (isDark ? '#0c4a6e' : '#E0F2FE') : (isDark ? '#052e16' : '#F0FDF4') }
-                    ]}>
-                        <MaterialIcons
-                            name={item.type === 'Hostel Fee' ? 'home' : 'restaurant'}
-                            size={24}
-                            color={item.type === 'Hostel Fee' ? (isDark ? '#38bdf8' : '#0284C7') : (isDark ? '#4ade80' : '#16A34A')}
-                        />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.cardTitle, { color: colors.text }]}>{item.type}</Text>
-                        <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
-                            Due: {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'N/A'}
-                        </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.amount, { color: colors.text }]}>₹{item.amount}</Text>
-                        <Text style={[
-                            styles.statusBadge,
-                            {
-                                color: item.status === 'verified' ? '#16A34A' :
-                                    item.status === 'paid_unverified' ? '#CA8A04' :
-                                        item.status === 'overdue' ? '#DC2626' : '#2563EB'
-                            }
-                        ]}>
-                            {item.status.replace('_', ' ').toUpperCase()}
-                        </Text>
-                    </View>
-                </View>
+    const loadData = async () => {
+        try {
+            const user = await fetchUserData();
+            if (user) {
+                setDues(user.dues || 0);
+            }
+            // Load history
+            const historyRes = await api.get('/payments/history');
+            setHistory(historyRes.data);
+        } catch (error) {
+            console.error('Error loading payment data:', error);
+        }
+    };
 
-                {item.description ? (
-                    <Text style={[styles.description, { backgroundColor: isDark ? colors.background : '#F8FAFC', color: colors.textSecondary }]}>{item.description}</Text>
-                ) : null}
+    const handlePay = async () => {
+        if (dues <= 0) {
+            showAlert('Info', 'No pending dues.', [], 'info');
+            return;
+        }
 
-                {!isHistory && (
-                    <TouchableOpacity
-                        style={styles.payButton}
-                        onPress={() => handlePayNow(item)}
-                    >
-                        <LinearGradient
-                            colors={['#16A34A', '#15803D']}
-                            style={styles.payGradient}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                        >
-                            <Text style={styles.payText}>PAY NOW</Text>
-                            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
-                        </LinearGradient>
-                    </TouchableOpacity>
-                )}
+        setLoading(true);
+        try {
+            // 1. Create Order on Backend
+            const orderRes = await api.post('/payments/create-order', { amount: dues });
+            const order = orderRes.data;
 
-                {isHistory && item.receiptNumber && (
-                    <View style={[styles.receiptContainer, { borderTopColor: colors.border }]}>
-                        <MaterialIcons name="receipt" size={16} color={colors.textSecondary} />
-                        <Text style={[styles.receiptText, { color: colors.textSecondary }]}>Receipt: {item.receiptNumber}</Text>
-                    </View>
-                )}
-            </View>
-        );
+            const options = {
+                description: 'Hostel Dues Payment',
+                image: 'https://i.imgur.com/3g7nmJC.png', // App Logo
+                currency: 'INR',
+                key: 'rzp_test_YourKeyHere', // Replace with Env Var
+                amount: order.amount,
+                name: 'SmartHostel',
+                order_id: order.id,
+                prefill: {
+                    email: 'student@example.com',
+                    contact: '9999999999',
+                    name: 'Student Name'
+                },
+                theme: { color: '#7C3AED' }
+            };
+
+            // 2. Open Razorpay Checkout
+            RazorpayCheckout.open(options).then(async (data: any) => {
+                // success
+                // 3. Verify Payment on Backend
+                try {
+                    const verifyRes = await api.post('/payments/verify', {
+                        razorpay_order_id: data.razorpay_order_id,
+                        razorpay_payment_id: data.razorpay_payment_id,
+                        razorpay_signature: data.razorpay_signature,
+                        amount: dues
+                    });
+
+                    if (verifyRes.data.success) {
+                        showAlert('Success', 'Payment Successful! Dues cleared.', [], 'success');
+                        setDues(0);
+                        loadData(); // Reload history
+                    }
+                } catch (verifyError) {
+                    console.error('Verification Error:', verifyError);
+                    showAlert('Error', 'Payment verification failed. Please contact admin.', [], 'error');
+                }
+            }).catch((error: any) => {
+                // error
+                console.log('Payment Error:', error);
+                if (error.code !== 0) { // 0 is cancelled by user
+                    showAlert('Error', `Payment Failed: ${error.description}`, [], 'error');
+                }
+            });
+
+        } catch (error) {
+            console.error('Payment Init Error:', error);
+            showAlert('Error', 'Failed to initiate payment.', [], 'error');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <LinearGradient
-                colors={['#000428', '#004e92']}
-                style={styles.header}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+            <ScrollView
+                contentContainerStyle={styles.container}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             >
-                <SafeAreaView edges={['top']}>
-                    <View style={styles.headerContent}>
-                        <Text style={styles.headerTitle}>Payments</Text>
-                        <View style={styles.summaryBox}>
+                <Text style={[styles.title, { color: colors.text }]}>Payments & Dues</Text>
+
+                {/* Dues Card */}
+                <LinearGradient
+                    colors={dues > 0 ? ['#EF4444', '#B91C1C'] : ['#10B981', '#059669']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.card}
+                >
+                    <Text style={styles.cardLabel}>Current Dues</Text>
+                    <Text style={styles.amount}>₹{dues.toLocaleString()}</Text>
+                    <Text style={styles.status}>{dues > 0 ? 'Payment Pending' : 'All Clear'}</Text>
+                </LinearGradient>
+
+                <TouchableOpacity
+                    style={[styles.payBtn, dues <= 0 && { opacity: 0.5 }]}
+                    onPress={handlePay}
+                    disabled={dues <= 0 || loading}
+                >
+                    <LinearGradient
+                        colors={['#7C3AED', '#6D28D9']}
+                        style={styles.btnGradient}
+                    >
+                        <Text style={styles.btnText}>{loading ? 'Processing...' : 'Pay Now'}</Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Transaction History</Text>
+
+                {history.length === 0 ? (
+                    <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 20 }}>No transactions yet.</Text>
+                ) : (
+                    history.map((item) => (
+                        <View key={item.id} style={[styles.historyItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
                             <View>
-                                <Text style={styles.summaryLabel}>PENDING</Text>
-                                <Text style={styles.summaryValue}>
-                                    ₹{requests.filter(r => r.status === 'pending' || r.status === 'overdue')
-                                        .reduce((sum, r) => sum + r.amount, 0)}
-                                </Text>
+                                <Text style={[styles.historyAmount, { color: colors.text }]}>₹{item.amount}</Text>
+                                <Text style={[styles.historyDate, { color: colors.textSecondary }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                            </View>
+                            <View style={[styles.badge, { backgroundColor: '#DCFCE7' }]}>
+                                <Text style={[styles.badgeText, { color: '#166534' }]}>SUCCESS</Text>
                             </View>
                         </View>
-                    </View>
-                </SafeAreaView>
+                    ))
+                )}
 
-            </LinearGradient>
-
-            <View style={styles.contentContainer}>
-                <View style={[styles.tabs, { backgroundColor: isDark ? colors.card : '#fff' }]}>
-                    <TouchableOpacity
-                        style={[styles.tab, activeTab === 'pending' && { backgroundColor: isDark ? '#1e3a8a' : '#EFF6FF' }]}
-                        onPress={() => setActiveTab('pending')}
-                    >
-                        <Text style={[styles.tabText, activeTab === 'pending' && { color: '#3b82f6', fontWeight: '700' }, activeTab !== 'pending' && { color: colors.textSecondary }]}>Pending</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tab, activeTab === 'history' && { backgroundColor: isDark ? '#1e3a8a' : '#EFF6FF' }]}
-                        onPress={() => setActiveTab('history')}
-                    >
-                        <Text style={[styles.tabText, activeTab === 'history' && { color: '#3b82f6', fontWeight: '700' }, activeTab !== 'history' && { color: colors.textSecondary }]}>History</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <FlatList
-                    data={filteredRequests}
-                    renderItem={renderItem}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} colors={['#004e92']} />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <MaterialIcons name="check-circle-outline" size={64} color={isDark ? colors.secondary : "#CBD5E1"} />
-                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No {activeTab} requests</Text>
-                        </View>
-                    }
-                />
-            </View>
-
-        </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1,
+        padding: 24,
+        paddingBottom: 40,
     },
-    header: {
-        paddingBottom: 24,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
-    },
-    headerContent: {
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#fff',
-    },
-    summaryBox: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
-    },
-    summaryLabel: {
-        color: 'rgba(255,255,255,0.8)',
-        fontSize: 10,
-        fontWeight: '600',
-        letterSpacing: 1,
-    },
-    summaryValue: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    headerTabs: {
-        flexDirection: 'row',
-        marginHorizontal: 20,
-        marginBottom: 10,
-        marginTop: 16,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        borderRadius: 12,
-        padding: 4,
-    },
-    headerTab: {
-        flex: 1,
-        paddingVertical: 8,
-        alignItems: 'center',
-        borderRadius: 8,
-    },
-    headerTabActive: {
-        backgroundColor: '#fff',
-    },
-    headerTabText: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    headerTabTextActive: {
-        color: '#004e92',
-        fontWeight: '700',
-    },
-    contentContainer: {
-        flex: 1,
-        paddingHorizontal: 20,
-        marginTop: 20,
-    },
-    tabs: {
-        flexDirection: 'row',
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 6,
-        marginBottom: 16,
-        shadowColor: '#64748B',
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    tab: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderRadius: 12,
-    },
-    activeTab: {
-        backgroundColor: '#EFF6FF',
-    },
-    tabText: {
-        fontWeight: '600',
-        color: '#64748B',
-    },
-    activeTabText: {
-        color: '#004e92',
-        fontWeight: '700',
-    },
-    listContent: {
-        paddingBottom: 120,
-        gap: 16,
+    title: {
+        fontSize: 28,
+        fontWeight: '800',
+        marginBottom: 24,
     },
     card: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 16,
-        shadowColor: '#64748B',
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-    },
-    cardHistory: {
-        opacity: 0.8,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 12,
-        marginBottom: 12,
-    },
-    iconBox: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
-        justifyContent: 'center',
+        padding: 24,
+        borderRadius: 24,
+        marginBottom: 24,
         alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+        elevation: 8,
     },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#1E293B',
-        marginBottom: 2,
-    },
-    cardDate: {
-        fontSize: 12,
-        color: '#64748B',
+    cardLabel: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 8,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
     },
     amount: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 48,
+        fontWeight: '800',
+        color: '#fff',
+        marginBottom: 8,
     },
-    statusBadge: {
-        fontSize: 10,
-        fontWeight: '700',
-        marginTop: 2,
-    },
-    description: {
-        fontSize: 13,
-        color: '#475569',
-        marginBottom: 16,
-        backgroundColor: '#F8FAFC',
-        padding: 10,
-        borderRadius: 8,
-    },
-    payButton: {
-        marginTop: 8,
+    status: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+        paddingVertical: 4,
+        paddingHorizontal: 12,
+        backgroundColor: 'rgba(255,255,255,0.2)',
         borderRadius: 12,
         overflow: 'hidden',
     },
-    payGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        gap: 8,
+    payBtn: {
+        marginBottom: 40,
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: "#7C3AED",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 8,
     },
-    payText: {
+    btnGradient: {
+        paddingVertical: 18,
+        alignItems: 'center',
+    },
+    btnText: {
         color: '#fff',
+        fontSize: 18,
         fontWeight: '700',
-        fontSize: 14,
         letterSpacing: 0.5,
     },
-    receiptContainer: {
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 16,
+    },
+    historyItem: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 12,
-        gap: 6,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginBottom: 12,
     },
-    receiptText: {
+    historyAmount: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    historyDate: {
         fontSize: 12,
-        color: '#64748B',
-        fontFamily: 'Monospace',
+        marginTop: 2,
     },
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 40,
-        gap: 12,
+    badge: {
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        borderRadius: 8,
     },
-    emptyText: {
-        color: '#94A3B8',
-        fontSize: 16,
-        fontWeight: '500',
-    },
+    badgeText: {
+        fontSize: 10,
+        fontWeight: '800',
+    }
 });

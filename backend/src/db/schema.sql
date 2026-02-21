@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS students (
     hostel_name VARCHAR(255),
     dob DATE,
     phone VARCHAR(20),
-    personal_email VARCHAR(255),
     address TEXT,
     father_name VARCHAR(255),
     father_phone VARCHAR(20),
@@ -30,6 +29,12 @@ CREATE TABLE IF NOT EXISTS students (
     emergency_contact_phone VARCHAR(20),
     status VARCHAR(20) DEFAULT 'active',
     dues DECIMAL(10, 2) DEFAULT 0,
+    hostel_fee DECIMAL(10, 2) DEFAULT 0,
+    mess_fee DECIMAL(10, 2) DEFAULT 0,
+    password VARCHAR(255),
+    profile_photo VARCHAR(255),
+    fee_frequency VARCHAR(50) DEFAULT 'Monthly',
+    last_notifications_cleared_at VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -42,6 +47,8 @@ CREATE TABLE IF NOT EXISTS rooms (
     status VARCHAR(20) DEFAULT 'vacant', -- 'vacant', 'occupied', 'full'
     wifi_ssid VARCHAR(100),
     wifi_password VARCHAR(100),
+    room_type VARCHAR(100),
+    facilities TEXT DEFAULT '[]',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

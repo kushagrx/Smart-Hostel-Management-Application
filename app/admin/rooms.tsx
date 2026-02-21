@@ -393,6 +393,44 @@ export default function RoomsPage() {
       fontSize: 14,
       fontWeight: '700',
     },
+    facilitiesList: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 8,
+    },
+    facilityItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff',
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 6,
+    },
+    facilityItemText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    miniStatusBadge: {
+      paddingVertical: 2,
+      paddingHorizontal: 6,
+      borderRadius: 4,
+    },
+    miniStatusText: {
+      fontSize: 9,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 12,
+      opacity: 0.5,
+    },
   }), [colors, theme]);
 
   if (!isAdmin(user))
@@ -413,8 +451,6 @@ export default function RoomsPage() {
             <Text style={styles.headerTitle}>Manage Rooms</Text>
           </View>
         </LinearGradient>
-
-
 
         <View style={styles.statsGrid}>
           {/* Hero Card: Total Rooms */}
@@ -440,7 +476,7 @@ export default function RoomsPage() {
               colors={['#06B6D4', '#0E7490']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.miniCard} // Using same style as Vacant for consistency
+              style={styles.miniCard}
             >
               <View style={styles.miniHeader}>
                 <MaterialIcons name="check-circle" size={18} color="rgba(255,255,255,0.9)" />
@@ -471,11 +507,6 @@ export default function RoomsPage() {
           </View>
         </View>
 
-        {/* Action Button Styles (Defining here for convenience as they were removed/missing in styles object) */}
-        {/* We will add them to the StyleSheet at the bottom instead in a separate edit if needed, or use inline/existing styles if compatible. */}
-        {/* Let's double check styles. actionBtn and deleteBtn seem missing from Step 357 view. */}
-        {/* I'll add the function first. */}
-
         <View style={styles.searchContainer}>
           <MaterialIcons name="magnify" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput
@@ -493,11 +524,8 @@ export default function RoomsPage() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={[
-                styles.roomCard,
-                selectedRoom === item.id && styles.roomCardActive,
-              ]}
-              onPress={() => setSelectedRoom(selectedRoom === item.id ? null : item.id)}
+              style={styles.roomCard}
+              onPress={() => setSelectedRoom(item.id)} // Set ID directly to open modal
             >
               <View style={styles.roomHeader}>
                 <View style={styles.roomNumber}>
@@ -516,41 +544,10 @@ export default function RoomsPage() {
                   <Text style={styles.statusText}>{item.status}</Text>
                 </View>
               </View>
-
-              {selectedRoom === item.id && (
-                <View style={styles.expandedContent}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Room Number:</Text>
-                    <Text style={styles.detailValue}>{item.number}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Occupants:</Text>
-                    <Text style={styles.detailValue}>
-                      {getOccupantNames(item)}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Availability:</Text>
-                    <Text style={styles.detailValue}>
-                      {(item.capacity || 2) - (item.occupants?.length || 0)} spots left
-                    </Text>
-                  </View>
-                  {(!item.occupants || item.occupants.length === 0) && (
-                    <TouchableOpacity
-                      style={[styles.actionBtn, styles.deleteBtn, { marginTop: 16 }]}
-                      onPress={() => handleDeleteRoom(item)}
-                    >
-                      <MaterialIcons name="delete" size={20} color={theme === 'dark' ? '#EF4444' : '#fff'} />
-                      <Text style={styles.actionBtnText}>Delete Room</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
             </TouchableOpacity>
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', marginTop: 20, color: colors.textSecondary }}>No rooms found. Allot students to create rooms.</Text>
@@ -558,6 +555,104 @@ export default function RoomsPage() {
         />
       </ScrollView>
 
+      {/* Room Details Modal */}
+      {selectedRoom && (
+        <View style={StyleSheet.absoluteFillObject}>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+            activeOpacity={1}
+            onPress={() => setSelectedRoom(null)}
+          />
+          <View style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: theme === 'dark' ? '#1E293B' : '#fff',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            padding: 24,
+            paddingBottom: insets.bottom + 24,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 12,
+            elevation: 20
+          }}>
+            {rooms.find(r => r.id === selectedRoom) ? (
+              (() => {
+                const room = rooms.find(r => r.id === selectedRoom);
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.roomNumber, { width: 44, height: 44, backgroundColor: colors.primary + '20' }]}>
+                          <Text style={[styles.roomNumberText, { color: colors.primary }]}>{room.number}</Text>
+                        </View>
+                        <View>
+                          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Room Details</Text>
+                          <Text style={{ fontSize: 13, color: colors.textSecondary }}>#{room.number}</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity onPress={() => setSelectedRoom(null)} style={{ padding: 4 }}>
+                        <MaterialIcons name="close" size={24} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Occupants:</Text>
+                      <Text style={styles.detailValue}>{getOccupantNames(room)}</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Availability:</Text>
+                      <Text style={styles.detailValue}>
+                        {(room.capacity || 2) - (room.occupants?.length || 0)} spots left
+                      </Text>
+                    </View>
+
+                    {room.roomType && (
+                      <>
+                        <View style={styles.divider} />
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Room Type:</Text>
+                          <Text style={[styles.detailValue, { color: '#004e92' }]}>{room.roomType}</Text>
+                        </View>
+
+                        {room.facilities && Array.isArray(JSON.parse(typeof room.facilities === 'string' ? room.facilities : JSON.stringify(room.facilities))) && (
+                          <View style={styles.facilitiesList}>
+                            {JSON.parse(typeof room.facilities === 'string' ? room.facilities : JSON.stringify(room.facilities)).map((f: any) => (
+                              <View key={f.name} style={styles.facilityItem}>
+                                <MaterialIcons name={f.icon} size={14} color="#64748B" />
+                                <Text style={styles.facilityItemText}>{f.name}</Text>
+                                <View style={[styles.miniStatusBadge, { backgroundColor: f.status === 'Included' ? '#DCFCE7' : '#FEE2E2' }]}>
+                                  <Text style={[styles.miniStatusText, { color: f.status === 'Included' ? '#166534' : '#991B1B' }]}>{f.status}</Text>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </>
+                    )}
+
+                    {(!room.occupants || room.occupants.length === 0) && (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.deleteBtn, { marginTop: 24 }]}
+                        onPress={() => handleDeleteRoom(room)}
+                      >
+                        <MaterialIcons name="delete" size={20} color={theme === 'dark' ? '#EF4444' : '#fff'} />
+                        <Text style={styles.actionBtnText}>Delete Room</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                );
+              })()
+            ) : (
+              <Text style={{ color: colors.textSecondary }}>Room not found.</Text>
+            )}
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

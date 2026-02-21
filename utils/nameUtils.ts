@@ -8,7 +8,6 @@ export interface StudentData {
   hostelName: string;
   dob: string;
   phone: string;
-  personalEmail: string;
   googleEmail?: string;
   collegeEmail?: string;
   status: 'active' | 'inactive';

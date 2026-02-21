@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
+import { getAllStudentTokens, sendPushNotification } from '../services/pushService';
 
 export const getNotices = async (req: Request, res: Response) => {
     try {
@@ -92,6 +93,16 @@ export const createEmergencyContact = async (req: Request, res: Response) => {
             'INSERT INTO emergency_contacts (name, designation, phone, icon, category) VALUES ($1, $2, $3, $4, $5)',
             [name, title, number, icon || 'phone', category || 'General']
         );
+
+        // Notify All Students
+        const tokens = await getAllStudentTokens();
+        sendPushNotification(
+            tokens,
+            '☎️ Emergency Contact Added',
+            `New contact: ${name} (${category})`,
+            { type: 'emergency' }
+        );
+
         res.json({ success: true });
     } catch (error) {
         console.error('Create Contact Error:', error);
@@ -109,6 +120,16 @@ export const updateEmergencyContact = async (req: Request, res: Response) => {
             'UPDATE emergency_contacts SET name = $1, designation = $2, phone = $3, icon = $4, category = $5, updated_at = NOW() WHERE id = $6',
             [name, title, number, icon, category, id]
         );
+
+        // Notify All Students
+        const tokens = await getAllStudentTokens();
+        sendPushNotification(
+            tokens,
+            '☎️ Emergency Contact Updated',
+            `Contact for ${name} has been updated.`,
+            { type: 'emergency' }
+        );
+
         res.json({ success: true });
     } catch (error) {
         console.error('Update Contact Error:', error);
@@ -130,6 +151,9 @@ export const deleteEmergencyContact = async (req: Request, res: Response) => {
 export const updateMessMenu = async (req: Request, res: Response) => {
     const { dayOfWeek, mealType, menu } = req.body;
     try {
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayName = days[dayOfWeek] || 'the week';
+
         // Upsert logic: Update if exists, Insert if not
         // Check if exists
         const check = await query(
@@ -148,6 +172,16 @@ export const updateMessMenu = async (req: Request, res: Response) => {
                 [dayOfWeek, mealType, menu]
             );
         }
+
+        // Notify All Students
+        const tokens = await getAllStudentTokens();
+        sendPushNotification(
+            tokens,
+            '🍱 Mess Menu Update',
+            `The ${mealType} menu for ${dayName} has been updated.`,
+            { type: 'mess' }
+        );
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error updating mess menu:', error);

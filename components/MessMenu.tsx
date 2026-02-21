@@ -22,15 +22,47 @@ interface WeekMenu {
   }
 }
 
-export default function MessMenu() {
+interface MessMenuProps {
+  initialDay?: string;
+  highlightTarget?: string;
+}
+
+export default function MessMenu({ initialDay, highlightTarget }: MessMenuProps) {
   const { colors, theme } = useTheme();
 
   const [fullMenu, setFullMenu] = useState<WeekMenu>({});
-  const [selectedDay, setSelectedDay] = useState(new Date().toLocaleString('en-US', { weekday: 'long' }));
+  const [selectedDay, setSelectedDay] = useState(initialDay || new Date().toLocaleString('en-US', { weekday: 'long' }));
   const [loading, setLoading] = useState(true);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const dayScrollRef = React.useRef<ScrollView>(null);
+  const mainScrollRef = React.useRef<ScrollView>(null);
+  const [mealLayouts, setMealLayouts] = useState<{ [key: string]: number }>({});
+
+  // Update selected day if prop changes (deep link)
+  useEffect(() => {
+    if (initialDay && days.includes(initialDay)) {
+      setSelectedDay(initialDay);
+    }
+  }, [initialDay]);
+
+  // Scroll to target meal when layouts are ready and day matches
+  useEffect(() => {
+    if (highlightTarget && mealLayouts[highlightTarget] && !loading) {
+      // Small delay to ensure render
+      setTimeout(() => {
+        mainScrollRef.current?.scrollTo({
+          y: mealLayouts[highlightTarget],
+          animated: true
+        });
+      }, 500);
+    }
+  }, [highlightTarget, mealLayouts, loading, selectedDay]);
+
+  const onMealLayout = (meal: string, event: any) => {
+    const y = event.nativeEvent.layout.y;
+    setMealLayouts(prev => ({ ...prev, [meal]: y }));
+  };
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -252,7 +284,12 @@ export default function MessMenu() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView
+      ref={mainScrollRef}
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 40 }}
+    >
       {/* Day Selector */}
       <View style={styles.daySelectorWrapper}>
         <ScrollView
@@ -291,7 +328,11 @@ export default function MessMenu() {
           ) : (
             <>
               {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => (
-                <View key={mealType} style={[styles.mealSection, styles.shadowProp]}>
+                <View
+                  key={mealType}
+                  style={[styles.mealSection, styles.shadowProp]}
+                  onLayout={(event) => onMealLayout(mealType, event)}
+                >
                   <View style={styles.mealHeader}>
                     <View style={styles.mealTitleContainer}>
                       <View style={[styles.iconBox, { backgroundColor: getMealColorBg(mealType, theme) }]}>

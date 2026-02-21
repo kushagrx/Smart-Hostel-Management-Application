@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,8 +12,19 @@ import { useTheme } from '../utils/ThemeContext';
 
 export default function Mess() {
   const { colors, theme } = useTheme();
+  const params = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState(0);
   const pagerRef = useRef<PagerView>(null);
+
+  useEffect(() => {
+    if (params.tab === 'menu') {
+      setActiveTab(1);
+      // Small delay to ensure PagerView is ready
+      setTimeout(() => {
+        pagerRef.current?.setPage(1);
+      }, 500);
+    }
+  }, [params.tab]);
 
   const handleTabChange = (index: number) => {
     setActiveTab(index);
@@ -189,7 +200,12 @@ export default function Mess() {
 
         {/* Tab 2: Menu */}
         <View key="2" style={styles.pageContent}>
-          <MessMenu />
+          <MessMenu
+            // @ts-ignore
+            initialDay={params.day}
+            // @ts-ignore
+            highlightTarget={params.target}
+          />
         </View>
       </PagerView>
     </View>

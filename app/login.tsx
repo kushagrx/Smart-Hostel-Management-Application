@@ -3,20 +3,23 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
 import { setStoredUser } from '../utils/authUtils';
 
 
 
 export default function Login() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    console.log('📡 Google Sign-In Config:', process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ? 'Loaded' : 'MISSING');
     GoogleSignin.configure({
       webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
       offlineAccess: true,
@@ -50,6 +53,8 @@ export default function Login() {
           role: user.role
         });
 
+        await refreshUser();
+
         // Navigate based on role
         if (user.role === 'admin') {
           router.replace('/admin');
@@ -57,7 +62,7 @@ export default function Login() {
           router.replace('/(tabs)');
         }
       } else {
-        throw new Error('No ID token obtained');
+        Alert.alert('Google Sign-In', 'No account selected');
       }
     } catch (e: any) {
       if (e.code === statusCodes.SIGN_IN_CANCELLED) {
@@ -111,6 +116,8 @@ export default function Login() {
         role: user.role
       });
 
+      await refreshUser();
+
       // Navigate
       if (user.role === 'admin') {
         router.replace('/admin');
@@ -147,7 +154,11 @@ export default function Login() {
               <View style={styles.container}>
                 <View style={styles.header}>
                   <View style={styles.iconContainer}>
-                    <MaterialCommunityIcons name="home-city" size={40} color="#004e92" />
+                    <Image
+                      source={require('../assets/brand_icon.jpg')}
+                      style={{ width: 60, height: 60 }}
+                      resizeMode="contain"
+                    />
                   </View>
                   <Text style={styles.title}>SmartStay</Text>
                   <Text style={styles.subtitle}>Welcome Back</Text>

@@ -62,6 +62,7 @@ google-services.json
 firestore.rules
 serviceAccountKey.json
 firebase-adminsdk*.json
+firebase-service-account.json
 
 # IDE
 .vscode/

@@ -34,7 +34,9 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
 };
 
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-    if (!(req as any).currentUser || (req as any).currentUser.role !== 'admin') {
+    const user = (req as any).currentUser;
+    if (!user || user.role !== 'admin') {
+        console.log(`Auth Middleware: Access denied for user ${user?.email || 'unknown'} with role ${user?.role || 'none'}`);
         res.status(403).json({ error: 'Forbidden: Admins only' });
         return;
     }

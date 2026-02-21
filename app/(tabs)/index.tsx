@@ -263,7 +263,6 @@ export default function Index() {
                     </View>
                   </Pressable>
                   <View>
-                    {/* Stacked Greeting + Name */}
                     <View>
                       <Text style={styles.greetingText}>{getGreeting()},</Text>
                       <Text style={styles.userNameText} numberOfLines={1}>
@@ -482,7 +481,7 @@ export default function Index() {
         </View>
 
 
-      </ScrollView>
+      </ScrollView >
 
 
 
@@ -490,7 +489,7 @@ export default function Index() {
         visible={notificationVisible}
         onClose={() => setNotificationVisible(false)}
       />
-    </View>
+    </View >
   );
 }
 

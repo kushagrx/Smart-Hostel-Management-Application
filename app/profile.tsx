@@ -335,6 +335,32 @@ export default function ProfilePage() {
                     </View>
                 </View>
 
+                {/* Room Configuration Section */}
+                {(student as any)?.roomType && (
+                    <View style={styles.detailsSection}>
+                        <Text style={[styles.sectionHeader, { color: colors.text, marginTop: 12 }]}>Room Configuration</Text>
+                        <View style={[styles.infoBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <InfoRow icon="door-closed" label="Room Type" value={(student as any).roomType} colors={colors} isLast={!(student as any).facilities} />
+
+                            {(student as any).facilities && (
+                                <View style={styles.facilitiesContainer}>
+                                    {JSON.parse(typeof (student as any).facilities === 'string' ? (student as any).facilities : JSON.stringify((student as any).facilities)).map((f: any, index: number, arr: any[]) => (
+                                        <View key={f.name} style={[styles.facilityItem, index === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                                            <View style={styles.facilityInfo}>
+                                                <MaterialCommunityIcons name={f.icon} size={20} color={colors.textSecondary} />
+                                                <Text style={[styles.facilityName, { color: colors.text }]}>{f.name}</Text>
+                                            </View>
+                                            <View style={[styles.miniStatusBadge, { backgroundColor: f.status === 'Included' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                                                <Text style={[styles.miniStatusText, { color: f.status === 'Included' ? '#10B981' : '#EF4444' }]}>{f.status}</Text>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                )}
+
                 {/* Financial Section */}
                 <View style={styles.detailsSection}>
                     <Text style={[styles.sectionHeader, { color: colors.text, marginTop: 12 }]}>Financial Information</Text>
@@ -637,5 +663,35 @@ const styles = StyleSheet.create({
     },
     versionText: {
         fontSize: 12,
+    },
+    facilitiesContainer: {
+        paddingHorizontal: 16,
+    },
+    facilityItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
+    },
+    facilityInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    facilityName: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    miniStatusBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    miniStatusText: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
     },
 });
