@@ -5,6 +5,7 @@ import {
     createStudent,
     deleteStudent,
     getAllStudents,
+    getDashboardCounts,
     getStudentById,
     getStudentProfile,
     searchStudents,
@@ -18,6 +19,8 @@ const router = Router();
 
 // Student Self-View
 router.get('/profile', requireAuth, getStudentProfile);
+// Student Dashboard Counts
+router.get('/dashboard/counts', requireAuth, getDashboardCounts);
 // Student Update Photo
 router.post('/profile/photo', requireAuth, logUpload, upload.single('profilePhoto'), updateStudentProfilePhoto);
 // Student Clear Notifications

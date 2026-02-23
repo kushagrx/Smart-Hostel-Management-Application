@@ -34,9 +34,12 @@ export const getMessMenu = async (req: Request, res: Response) => {
         result.rows.forEach(row => {
             const dayName = days[row.day_of_week];
             if (!menuMap[dayName]) {
-                menuMap[dayName] = { day: dayName };
+                menuMap[dayName] = { day: dayName, timings: {} };
             }
             menuMap[dayName][row.meal_type] = row.menu;
+            if (row.timings) {
+                menuMap[dayName].timings[row.meal_type] = row.timings;
+            }
         });
 
         // Convert to array
@@ -50,15 +53,17 @@ export const getMessMenu = async (req: Request, res: Response) => {
 
 export const getBusTimings = async (req: Request, res: Response) => {
     try {
-        const result = await query('SELECT * FROM bus_timings WHERE is_active = true ORDER BY departure_time ASC');
-        const timings = result.rows.map(row => ({
-            id: row.id,
-            route: row.route_name,
-            time: row.departure_time, // Postgres might return HH:MM:SS
-            destination: row.destination,
-            message: row.message
-        }));
-        res.json(timings);
+        const result = await query(`
+            SELECT id, route_name as route, departure_time as time, destination, message, schedule_type, valid_date 
+            FROM bus_timings 
+            WHERE is_active = true 
+            AND (
+                schedule_type = 'everyday' 
+                OR (schedule_type = 'once' AND valid_date >= CURRENT_DATE)
+            )
+            ORDER BY valid_date ASC NULLS FIRST, departure_time ASC
+        `);
+        res.json(result.rows);
     } catch (error) {
         console.error('Get Bus Error:', error);
         res.status(500).json({ error: 'Server error' });
@@ -149,7 +154,7 @@ export const deleteEmergencyContact = async (req: Request, res: Response) => {
 };
 
 export const updateMessMenu = async (req: Request, res: Response) => {
-    const { dayOfWeek, mealType, menu } = req.body;
+    const { dayOfWeek, mealType, menu, timings } = req.body;
     try {
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const dayName = days[dayOfWeek] || 'the week';
@@ -162,14 +167,20 @@ export const updateMessMenu = async (req: Request, res: Response) => {
         );
 
         if (check.rows.length > 0) {
-            await query(
-                'UPDATE mess_schedule SET menu = $1, updated_at = NOW() WHERE id = $2',
-                [menu, check.rows[0].id]
-            );
+            // Include timings if provided, else keep existing or set NULL
+            const updateQuery = timings !== undefined
+                ? 'UPDATE mess_schedule SET menu = $1, timings = $2, updated_at = NOW() WHERE id = $3'
+                : 'UPDATE mess_schedule SET menu = $1, updated_at = NOW() WHERE id = $2';
+
+            const updateParams = timings !== undefined
+                ? [menu, timings, check.rows[0].id]
+                : [menu, check.rows[0].id];
+
+            await query(updateQuery, updateParams);
         } else {
             await query(
-                'INSERT INTO mess_schedule (day_of_week, meal_type, menu) VALUES ($1, $2, $3)',
-                [dayOfWeek, mealType, menu]
+                'INSERT INTO mess_schedule (day_of_week, meal_type, menu, timings) VALUES ($1, $2, $3, $4)',
+                [dayOfWeek, mealType, menu, timings || null]
             );
         }
 

@@ -45,6 +45,7 @@ export default function ManageBusTimingsPage() {
     const [message, setMessage] = useState('');
 
     const [newTimes, setNewTimes] = useState<{ time: string, period: 'AM' | 'PM' }[]>([{ time: '', period: 'AM' }]);
+    const [scheduleType, setScheduleType] = useState('everyday');
 
     useEffect(() => {
         if (!isAdmin(user)) return;
@@ -109,12 +110,14 @@ export default function ManageBusTimingsPage() {
         setStops([]);
         setMessage('');
         setNewTimes([{ time: '', period: 'AM' }]);
+        setScheduleType('everyday');
         setModalVisible(true);
     };
 
     const openEditModal = (item: BusRoute) => {
         setEditingId(item.id);
         setMessage(item.message || '');
+        setScheduleType(item.schedule_type || 'everyday');
 
         // Parse Route String: "A -> B -> C"
         const parts = item.route.split(' -> ').map(s => s.trim());
@@ -170,18 +173,18 @@ export default function ManageBusTimingsPage() {
         try {
             if (editingId) {
                 // Update Logic
-                await updateBusRoute(editingId, finalRouteName, validTimes[0], message);
+                await updateBusRoute(editingId, finalRouteName, validTimes[0], message, scheduleType);
 
                 // 2. If there are EXTRA time slots added in the modal (index > 0), create them as NEW routes
                 if (validTimes.length > 1) {
                     const extraTimes = validTimes.slice(1);
-                    await addBusRoute(finalRouteName, extraTimes, message);
+                    await addBusRoute(finalRouteName, extraTimes, message, scheduleType);
                 }
 
                 showAlert("Success", "Route updated successfully");
             } else {
                 // Create Logic
-                await addBusRoute(finalRouteName, validTimes, message);
+                await addBusRoute(finalRouteName, validTimes, message, scheduleType);
                 showAlert("Success", "Bus route added successfully");
             }
             setModalVisible(false);
@@ -190,6 +193,7 @@ export default function ManageBusTimingsPage() {
             setStops([]);
             setMessage('');
             setNewTimes([{ time: '', period: 'AM' }]);
+            setScheduleType('everyday');
         } catch (error) {
             console.error(error);
             showAlert("Error", `Failed to ${editingId ? 'update' : 'add'} route`);
@@ -428,6 +432,17 @@ export default function ManageBusTimingsPage() {
             fontSize: 14,
             fontWeight: '700',
         },
+        modernBadge: {
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 6,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        modernBadgeText: {
+            fontSize: 10,
+            fontWeight: '800',
+        },
     }), [colors, theme]);
 
     if (!isAdmin(user)) return null;
@@ -463,7 +478,29 @@ export default function ManageBusTimingsPage() {
                                 <MaterialCommunityIcons name="bus" size={24} color={colors.primary} />
                             </View>
                             <View style={styles.cardContent}>
-                                <Text style={styles.routeTitle}>{item.route}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                                    <Text style={styles.routeTitle}>{item.route}</Text>
+                                    <View style={[styles.modernBadge, {
+                                        backgroundColor: item.schedule_type === 'everyday' ? (theme === 'dark' ? 'rgba(59,130,246,0.15)' : '#EFF6FF') :
+                                            item.schedule_type === 'once' ? (theme === 'dark' ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2') :
+                                                (theme === 'dark' ? 'rgba(34,197,94,0.15)' : '#F0FDF4'),
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 3,
+                                        borderRadius: 6
+                                    }]}>
+                                        <Text style={{
+                                            fontSize: 9,
+                                            fontWeight: '800',
+                                            color: item.schedule_type === 'everyday' ? '#2563EB' :
+                                                item.schedule_type === 'once' ? '#EF4444' :
+                                                    '#16A34A'
+                                        }}>
+                                            {item.schedule_type === 'everyday' ? 'EVERYDAY' :
+                                                item.schedule_type === 'once' ? (item.valid_date ? `ONCE: ${new Date(item.valid_date).toLocaleDateString()}` : 'ONCE') :
+                                                    item.schedule_type?.toUpperCase() || 'BUS'}
+                                        </Text>
+                                    </View>
+                                </View>
                                 <View style={styles.timesContainer}>
                                     {item.times.map((time, idx) => (
                                         <View key={idx} style={styles.timeBadge}>
@@ -603,6 +640,30 @@ export default function ManageBusTimingsPage() {
                                 onChangeText={setMessage}
                             />
                             <View style={{ height: 12 }} />
+
+                            <View style={{ backgroundColor: theme === 'dark' ? 'rgba(59,130,246,0.05)' : '#F8FAFC', padding: 16, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
+                                <Text style={[styles.label, { marginBottom: 12, marginTop: 0 }]}>Schedule Frequency</Text>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity
+                                        style={[styles.periodOption, { flex: 1, height: 44, backgroundColor: scheduleType === 'everyday' ? colors.primary : colors.background, borderWidth: 1, borderColor: scheduleType === 'everyday' ? colors.primary : colors.border }]}
+                                        onPress={() => setScheduleType('everyday')}
+                                    >
+                                        <Text style={{ color: scheduleType === 'everyday' ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>Everyday</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.periodOption, { flex: 1, height: 44, backgroundColor: scheduleType === 'today' ? colors.primary : colors.background, borderWidth: 1, borderColor: scheduleType === 'today' ? colors.primary : colors.border }]}
+                                        onPress={() => setScheduleType('today')}
+                                    >
+                                        <Text style={{ color: scheduleType === 'today' ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>Today</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.periodOption, { flex: 1, height: 44, backgroundColor: scheduleType === 'tomorrow' ? colors.primary : colors.background, borderWidth: 1, borderColor: scheduleType === 'tomorrow' ? colors.primary : colors.border }]}
+                                        onPress={() => setScheduleType('tomorrow')}
+                                    >
+                                        <Text style={{ color: scheduleType === 'tomorrow' ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>Tomorrow</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
 
                             <Text style={styles.label}>Timings</Text>
                             {newTimes.map((item, index) => (

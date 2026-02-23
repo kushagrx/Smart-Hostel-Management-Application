@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS mess_schedule (
     day_of_week INTEGER, -- 0=Sunday, 6=Saturday
     meal_type VARCHAR(20), -- 'breakfast', 'lunch', 'dinner'
     menu TEXT,
+    timings VARCHAR(100), -- '08:00 AM - 09:30 AM'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

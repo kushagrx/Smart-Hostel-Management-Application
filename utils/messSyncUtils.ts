@@ -13,6 +13,7 @@ export interface DayMenu {
     lunch: MenuItem[];
     snacks: MenuItem[];
     dinner: MenuItem[];
+    timings?: MessTimings;
     lastUpdated?: any;
 }
 
@@ -51,6 +52,7 @@ export const fetchMenu = async (): Promise<WeekMenu> => {
                     lunch: parseMeal(dayData.lunch),
                     snacks: parseMeal(dayData.snacks),
                     dinner: parseMeal(dayData.dinner),
+                    timings: dayData.timings,
                     lastUpdated: dayData.updated_at
                 };
             });
@@ -86,13 +88,18 @@ export const updateDayMenu = async (day: string, menuData: Partial<DayMenu>) => 
 
         for (const meal of meals) {
             // @ts-ignore
-            if (menuData[meal]) {
+            if (menuData[meal] || menuData.timings) {
+                // @ts-ignore
+                const mealMenu = menuData[meal] ? JSON.stringify(menuData[meal]) : '[]';
+                // @ts-ignore
+                const mealTiming = menuData.timings ? menuData.timings[meal] : undefined;
+
                 promises.push(
                     api.post('/services/mess/update', {
                         dayOfWeek: dayInt,
                         mealType: meal,
-                        // @ts-ignore
-                        menu: JSON.stringify(menuData[meal])
+                        menu: mealMenu,
+                        timings: mealTiming
                     })
                 );
             }

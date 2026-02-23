@@ -582,12 +582,12 @@ export const updateServiceRequestStatus = async (req: Request, res: Response) =>
         const { id } = req.params;
         const { status, estimatedTime, adminNote } = req.body;
         const result = await query(
-            'UPDATE service_requests SET status = $1, estimated_time = $2, admin_note = $3, updated_at = NOW() WHERE id = $4 RETURNING student_id, service_name',
+            'UPDATE service_requests SET status = $1, estimated_time = $2, admin_note = $3, updated_at = NOW() WHERE id = $4 RETURNING student_id, service_type',
             [status, estimatedTime, adminNote, id]
         );
 
         if (result.rows.length > 0) {
-            const { student_id, service_name } = result.rows[0];
+            const { student_id, service_type } = result.rows[0];
             const studentUserRes = await query(
                 'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
             );
@@ -597,7 +597,7 @@ export const updateServiceRequestStatus = async (req: Request, res: Response) =>
                 sendPushNotification(
                     tokens,
                     `${emoji} Service Update`,
-                    `Your request for ${service_name} is now ${status}.`,
+                    `Your request for ${service_type} is now ${status}.`,
                     { type: 'service', id }
                 );
             }

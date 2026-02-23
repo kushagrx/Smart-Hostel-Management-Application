@@ -13,7 +13,8 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
   - [API Structure](#api-structure)
 - [Getting Started](#-getting-started)
   - [Prerequisites](#prerequisites)
-  - [Database Setup](#database-setup)
+  - [Recommended: Supabase Cloud Database](#recommended-supabase-cloud-database)
+  - [Alternative: Local Database Setup](#alternative-local-database-setup)
   - [Backend Setup](#backend-setup)
   - [Frontend Setup](#frontend-setup)
   - [Running the Application](#running-the-application)
@@ -53,9 +54,24 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 - 🚌 **Bus Broadcaster** - Create/Update routes with instant push notifications to all students
 - 💳 **Payment Verification** - Real-time processing via Razorpay with automated dues updating
 
-## 🌟 Recent Major Enhancements (V2)
+## 🌟 Recent Major Enhancements (V3) - Cloud & UX Overhaul
 
-### 1. Advanced Adaptive Icon System
+### 1. Instant Cloud Sync (Supabase)
+*   **Zero-Friction Connections**: Backend now supports `DATABASE_URL` connection strings, enabling the whole team to sync with a live Supabase database instantly without local PostgreSQL setup.
+*   **Production-Ready Scaling**: Moved from local sandboxes to a professional cloud environment for 24/7 data availability.
+
+### 2. Campus Services Bento Grid
+*   **Bento UI Redesign**: Transformed the student dashboard service grid into a premium bento-style layout with material-glass aesthetics.
+*   **Visual Hierarchy**: Optimized card heights and spacing (Bento-Grid) for a sleek, compact, and scannable interface.
+
+### 3. Streamlined Team Setup Kit
+*   **One-Minute Onboarding**: Created a consolidated `Team_Setup_Kit` with plain-text documentation and pre-filled environment templates.
+*   **Automated Configuration**: Zero guesswork for new developers—just copy, paste, and run.
+
+### 4. Codebase Optimization
+*   **Legacy Purge**: Removed 20+ redundant files, individual SQL migrations, and duplicate secrets to improve build speed and maintainability.
+
+## 🌟 Legacy Enhancements (V2)
 *   **Optimal Display**: Fully optimized for Android 8.0+ adaptive icons using foreground/background layers to prevent stretching or cropping.
 *   **Brand Consistency**: Uses a high-resolution centered brand icon with appropriate safe-zone padding.
 
@@ -95,6 +111,7 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 - **Express.js** (4.18.2) - Web application framework
 - **TypeScript** (4.9.5) - Type-safe server code
 - **PostgreSQL** (14+) - Relational database with ACID compliance
+- **Supabase** - Cloud database hosting and connection pooling
 - **JWT** (9.0.0) - Stateless authentication tokens
 - **Bcrypt** (5.1.0) - Password hashing and encryption
 - **Multer** (2.0.2) - File upload handling for photos
@@ -406,49 +423,33 @@ Before setting up the application, ensure you have:
 - **Postman** - API testing
 - **VS Code** - Recommended code editor with TypeScript support
 
-### Database Setup
+### Recommended: Supabase Cloud Database
+
+For team collaboration and zero-friction setup, we recommend using **Supabase (PostgreSQL Cloud)**.
+
+1. **Create a Project**: Go to [Supabase](https://supabase.com/) and create a new project.
+2. **Get Connection String**: 
+   - Go to **Project Settings** -> **Database**.
+   - Copy the **URI** connection string.
+   - It looks like: `postgresql://postgres:[PASSWORD]@db.xxxx.supabase.co:5432/postgres`
+3. **Initialize Schema**: 
+   - Open the **SQL Editor** in Supabase.
+   - Copy the contents of `backend/src/db/schema.sql`.
+   - Paste and **Run**.
+
+### Alternative: Local Database Setup
 
 #### Step 1: Install PostgreSQL
-
-**Windows:**
-1. Download PostgreSQL installer from [official website](https://www.postgresql.org/download/windows/)
-2. Run the installer and follow the setup wizard
-3. Remember the password you set for the `postgres` user
-4. Default port is `5432` (recommended to keep this)
-5. Add PostgreSQL to system PATH
-
-**macOS:**
-```bash
-brew install postgresql@14
-brew services start postgresql@14
-```
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-```
+**Windows:** Download installer from [official website](https://www.postgresql.org/download/windows/).
 
 #### Step 2: Create Database
-
-Open PostgreSQL command line (psql) or pgAdmin:
-
 ```sql
 CREATE DATABASE smarthostel;
 ```
 
-Verify:
-```sql
-\l  -- List all databases
-```
-
-#### Step 3: Verify Connection
-
-Test your PostgreSQL installation:
+#### Step 3: Run Schema
 ```bash
-psql -U postgres -d smarthostel
+psql -U postgres -d smarthostel -f backend/src/db/schema.sql
 ```
 
 ### Backend Setup
@@ -474,7 +475,10 @@ This installs:
 Create a `.env` file in the `backend` directory:
 
 ```env
-# Database Configuration
+# Database Configuration (Option A: Cloud Link)
+DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
+
+# Database Configuration (Option B: Local)
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=smarthostel

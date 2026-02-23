@@ -10,6 +10,7 @@ import PagerView from 'react-native-pager-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AlphabetJumpBar from '../../components/AlphabetJumpBar';
+import ExportModal from '../../components/ExportModal';
 import InputField from '../../components/InputField';
 import StudentDetailsModal from '../../components/StudentDetailsModal';
 import { useAlert } from '../../context/AlertContext';
@@ -58,7 +59,6 @@ export default function StudentsPage() {
       color: '#fff',
       letterSpacing: 0.5,
       textAlign: 'center',
-      marginRight: 40,
     },
     navBar: {
       flexDirection: 'row',
@@ -611,6 +611,7 @@ export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
 
   const { refreshing, onRefresh } = useRefresh(async () => {
     // Simulated refresh for real-time list
@@ -1793,9 +1794,12 @@ export default function StudentsPage() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <MaterialIcons name="chevron-left" size={32} color="#fff" />
             </TouchableOpacity>
-            <View style={styles.headerContent}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={styles.headerTitle}>{activeTab === 0 ? 'Manage Students' : 'Student Allotment'}</Text>
             </View>
+            <TouchableOpacity onPress={() => setExportModalVisible(true)} style={styles.backButton}>
+              <MaterialIcons name="download" size={22} color="#fff" />
+            </TouchableOpacity>
           </LinearGradient>
 
 
@@ -2444,6 +2448,13 @@ export default function StudentsPage() {
 
       </KeyboardAvoidingView >
 
+      {/* Export Modal */}
+      <ExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+        exportType="students"
+        title="Export Student Data"
+      />
     </SafeAreaView >
   );
 }

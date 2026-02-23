@@ -12,6 +12,7 @@ import attendanceRoutes from './routes/attendanceRoutes';
 import authRoutes from './routes/authRoutes';
 import busRoutes from './routes/busRoutes';
 import chatRoutes from './routes/chatRoutes';
+import exportRoutes from './routes/exportRoutes';
 import facilityRoutes from './routes/facilityRoutes';
 import hostelRoutes from './routes/hostelRoutes';
 import messAttendanceRoutes from './routes/messAttendanceRoutes';
@@ -59,6 +60,7 @@ app.use('/api/hostel-info', hostelRoutes);
 app.use('/api/mess', messAttendanceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/export', exportRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {

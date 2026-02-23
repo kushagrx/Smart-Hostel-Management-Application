@@ -103,6 +103,39 @@ export const getStudentProfile = async (req: Request, res: Response) => {
     }
 };
 
+// --- Student: Dashboard Counts ---
+export const getDashboardCounts = async (req: Request, res: Response) => {
+    const userId = req.currentUser?.id;
+
+    try {
+        const studentRes = await query('SELECT id FROM students WHERE user_id = $1', [userId]);
+        if (studentRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Student profile not found' });
+        }
+        const studentId = studentRes.rows[0].id;
+
+        // Perform parallel queries to get counts for different services
+        const [complaints, visitors, roomServices, leaves, facilities] = await Promise.all([
+            query(`SELECT COUNT(*) FROM complaints WHERE student_id = $1 AND status IN ('pending', 'open', 'inProgress')`, [studentId]),
+            query(`SELECT COUNT(*) FROM visitors WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM service_requests WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM leave_requests WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM facilities`)
+        ]);
+
+        res.json({
+            complaints: parseInt(complaints.rows[0].count, 10),
+            visitors: parseInt(visitors.rows[0].count, 10),
+            roomServices: parseInt(roomServices.rows[0].count, 10),
+            leaves: parseInt(leaves.rows[0].count, 10),
+            facilities: parseInt(facilities.rows[0].count, 10)
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard counts:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
 // --- Student: Update Profile Photo ---
 export const updateStudentProfilePhoto = async (req: Request, res: Response) => {
     const userId = req.currentUser?.id;
