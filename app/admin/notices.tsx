@@ -377,33 +377,79 @@ export default function NoticesPage() {
             </TouchableOpacity>
           </>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.noticeCard, selectedId === item.id && styles.noticeCardSelected]}
-            onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
-          >
-            <View style={styles.noticeHeader}>
-              <View style={styles.noticeTitle}>
-                <MaterialIcons name="bullhorn" size={20} color="#004e92" />
-                <Text style={styles.noticeTitleText}>{item.title}</Text>
+        renderItem={({ item }) => {
+          const isDark = theme === 'dark';
+          const priorityColor = getPriorityColor(item.priority || 'medium');
+
+          return (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[
+                styles.noticeCard,
+                selectedId === item.id && styles.noticeCardSelected,
+                { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', marginHorizontal: 20 }
+              ]}
+              onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
+            >
+              <LinearGradient
+                colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              />
+
+              <View style={styles.noticeHeader}>
+                <View style={styles.noticeTitle}>
+                  <LinearGradient
+                    colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#C7D2FE']}
+                    style={{ width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' }}
+                  >
+                    <MaterialIcons name="bullhorn-outline" size={20} color={isDark ? '#C7D2FE' : '#4F46E5'} />
+                  </LinearGradient>
+                  <Text style={[styles.noticeTitleText, { color: colors.text }]}>{item.title}</Text>
+                </View>
+                <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '15' }]}>
+                  <Text style={[styles.priorityText, { color: priorityColor }]}>
+                    {item.priority}
+                  </Text>
+                </View>
               </View>
-              <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority || 'medium') + '20' }]}>
-                <Text style={[styles.priorityText, { color: getPriorityColor(item.priority || 'medium') }]}>
-                  {item.priority}
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <MaterialIcons name="calendar-range" size={14} color={colors.textSecondary} />
+                <Text style={[styles.noticeDate, { color: colors.textSecondary, marginBottom: 0 }]}>
+                  {item.date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                 </Text>
               </View>
-            </View>
-            <Text style={styles.noticeDate}>{item.date.toLocaleDateString()}</Text>
-            {selectedId === item.id && (
-              <View>
-                <Text style={styles.noticeBody}>{item.body}</Text>
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
-                  <Text style={styles.deleteBtnText}>Delete Notice</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
+
+              {selectedId === item.id && (
+                <View style={{ marginTop: 12 }}>
+                  <View style={[styles.noticeBody, { borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' }]}>
+                    <Text style={{ color: colors.text, lineHeight: 22 }}>{item.body}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
+                    <MaterialIcons name="delete-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
+                    <Text style={styles.deleteBtnText}>Delete Notice</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Subtle Watermark */}
+              <MaterialIcons
+                name="bullhorn"
+                size={64}
+                color={isDark ? '#FFF' : colors.primary}
+                style={{
+                  position: 'absolute',
+                  right: -10,
+                  bottom: -10,
+                  opacity: isDark ? 0.03 : 0.02,
+                  transform: [{ rotate: '-15deg' }]
+                }}
+              />
+            </TouchableOpacity>
+          );
+        }}
         ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#666' }}>No notices found.</Text>}
       />
 

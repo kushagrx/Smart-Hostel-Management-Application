@@ -8,3 +8,5 @@ start cmd /k "cd backend && npm run dev"
 echo.
 echo Development environment is starting in separate windows.
 pause
+
+

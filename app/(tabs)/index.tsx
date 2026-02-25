@@ -16,13 +16,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRefresh } from '../../hooks/useRefresh';
 import api, { API_BASE_URL } from '../../utils/api';
-import { fetchLaundrySettings, LaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
-import { fetchMenu, subscribeToMenu, WeekMenu } from '../../utils/messSyncUtils';
+import { fetchLaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
+import { fetchMenu, subscribeToMenu } from '../../utils/messSyncUtils';
 
 import PagerView from 'react-native-pager-view';
 import StudentNotificationOverlay from '../../components/StudentNotificationOverlay';
-import { BusRoute, subscribeToBusTimings } from '../../utils/busTimingsSyncUtils';
-import { fetchUserData, StudentData } from '../../utils/nameUtils';
+import { useDashboardStore } from '../../store/useDashboardStore';
+import { subscribeToBusTimings } from '../../utils/busTimingsSyncUtils';
+import { fetchUserData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
 const toggleStyles = StyleSheet.create({
@@ -40,7 +41,6 @@ const toggleStyles = StyleSheet.create({
 });
 
 const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleTheme: () => void }) => {
-  // 0 = Light, 1 = Dark
   const progress = useDerivedValue(() => {
     return isDark ? withSpring(1) : withSpring(0);
   }, [isDark]);
@@ -51,7 +51,7 @@ const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleT
 
     return {
       transform: [
-        { rotate: `${rotate} deg` },
+        { rotate: `${rotate}deg` },
         { scale: scale }
       ]
     };
@@ -83,48 +83,64 @@ const SPACING = 20;
 export default function Index() {
   const router = useRouter();
   const { colors, isDark, toggleTheme } = useTheme();
-  const [student, setStudent] = useState<StudentData | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // Dashboard Store
+  const {
+    studentData: student,
+    messMenu: fullMenu,
+    laundrySettings: laundry,
+    busRoutes,
+    dashboardCounts,
+    setStudentData,
+    setMessMenu,
+    setLaundrySettings,
+    setBusRoutes,
+    setDashboardCounts,
+    setLastSynced
+  } = useDashboardStore();
+
+  const {
+    complaints: pendingComplaints,
+    visitors: pendingVisitors,
+    roomServices: pendingRoomServices,
+    leaves: pendingLeaves,
+    facilities: totalFacilities
+  } = dashboardCounts;
+
+  const [loading, setLoading] = useState(!student); // Only show loader if we have NO cached data
   const pagerRef = useRef<PagerView>(null);
-  // const [refreshing, setRefreshing] = useState(false); // Managed by useRefresh
-  const [laundry, setLaundry] = useState<LaundrySettings | null>(null);
-  const [fullMenu, setFullMenu] = useState<WeekMenu>({});
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationVisible, setNotificationVisible] = useState(false);
-  const [busRoutes, setBusRoutes] = useState<BusRoute[]>([]);
   const [activeBusPage, setActiveBusPage] = useState(0);
-
-  const [pendingComplaints, setPendingComplaints] = useState(0);
-  const [pendingVisitors, setPendingVisitors] = useState(0);
-  const [pendingRoomServices, setPendingRoomServices] = useState(0);
-  const [pendingLeaves, setPendingLeaves] = useState(0);
-  const [totalFacilities, setTotalFacilities] = useState(0);
 
   const fetchDashboardCounts = useCallback(async () => {
     try {
       const res = await api.get('/students/dashboard/counts');
       const data = res.data;
-      setPendingComplaints(data.complaints || 0);
-      setPendingVisitors(data.visitors || 0);
-      setPendingRoomServices(data.roomServices || 0);
-      setPendingLeaves(data.leaves || 0);
-      setTotalFacilities(data.facilities || 0);
+      setDashboardCounts({
+        complaints: data.complaints || 0,
+        visitors: data.visitors || 0,
+        roomServices: data.roomServices || 0,
+        leaves: data.leaves || 0,
+        facilities: data.facilities || 0,
+      });
     } catch (e) {
       console.error("Failed to fetch dashboard counts:", e);
     }
-  }, []);
+  }, [setDashboardCounts]);
 
   const loadUserData = useCallback(async () => {
     try {
       const data = await fetchUserData();
-      setStudent(data);
+      setStudentData(data);
+      setLastSynced(Date.now());
       fetchDashboardCounts();
     } catch (error) {
       console.error('Failed to load user data:', error);
     } finally {
       setLoading(false);
     }
-  }, [fetchDashboardCounts]);
+  }, [setStudentData, setLastSynced, fetchDashboardCounts]);
 
   const fetchUnreadCount = useCallback(async () => {
     try {
@@ -139,8 +155,9 @@ export default function Index() {
     useCallback(() => {
       loadUserData();
       fetchUnreadCount();
-      const unsubscribeLaundry = subscribeToLaundry(setLaundry);
-      const unsubscribeMenu = subscribeToMenu(setFullMenu);
+
+      const unsubscribeLaundry = subscribeToLaundry(setLaundrySettings);
+      const unsubscribeMenu = subscribeToMenu(setMessMenu);
       const unsubscribeBus = subscribeToBusTimings(setBusRoutes);
 
       const updateListener = DeviceEventEmitter.addListener('profileUpdated', () => {
@@ -153,15 +170,14 @@ export default function Index() {
         unsubscribeBus();
         updateListener.remove();
       };
-    }, [loadUserData, fetchUnreadCount])
+    }, [loadUserData, fetchUnreadCount, setLaundrySettings, setMessMenu, setBusRoutes])
   );
 
   const { refreshing, onRefresh } = useRefresh(async () => {
-    // Reload all data
     await Promise.all([
       loadUserData(),
-      fetchLaundrySettings().then(setLaundry),
-      fetchMenu().then(setFullMenu),
+      fetchLaundrySettings().then(setLaundrySettings),
+      fetchMenu().then(setMessMenu),
       fetchUnreadCount(),
       fetchDashboardCounts()
     ]);
@@ -171,7 +187,7 @@ export default function Index() {
     try {
       const res = await api.post('/students/profile/notifications/clear');
       if (res.data.success) {
-        setStudent(prev => prev ? ({ ...prev, lastNotificationsClearedAt: res.data.timestamp }) : null);
+        setStudentData(student ? ({ ...student, lastNotificationsClearedAt: res.data.timestamp }) : null);
       }
     } catch (e) {
       console.error("Failed to clear notifications", e);
@@ -195,7 +211,6 @@ export default function Index() {
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // Default timings if not provided by backend
     const defaultTimings: Record<string, string> = {
       breakfast: '8:00 AM - 9:30 AM',
       lunch: '12:30 PM - 2:30 PM',
@@ -227,7 +242,6 @@ export default function Index() {
       const endMinutes = parseToMinutes(endStr);
       const startMinutes = parseToMinutes(startStr);
 
-      // If we haven't reached the end of this meal yet, it's the current/upcoming one
       if (currentMinutes < endMinutes) {
         return {
           type: meal.type,
@@ -238,7 +252,6 @@ export default function Index() {
       }
     }
 
-    // Default to Breakfast if all meals today are over
     return {
       type: 'Breakfast',
       foodItems: dayMenu.breakfast || [],
@@ -266,7 +279,7 @@ export default function Index() {
 
   const getInitial = (name?: string) => name ? name.charAt(0).toUpperCase() : 'S';
 
-  if (loading) {
+  if (loading && !student) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -275,8 +288,7 @@ export default function Index() {
     );
   }
 
-  // Network Error State
-  if (!student) {
+  if (!student && !loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <MaterialCommunityIcons name="wifi-off" size={48} color={isDark ? '#94a3b8' : '#64748b'} />
@@ -302,13 +314,13 @@ export default function Index() {
   }
 
   const QuickAction = ({ icon, label, route, desc, bg, iconColor, borderColor, count, countLabel = "PENDING", isDiamond = false, style }: any) => {
-    const cardBgColor = isDark ? colors.card : '#FFFFFF';
-    const gradientColors: [string, string] = isDark
-      ? [iconColor + '15', 'transparent']
-      : [iconColor + '12', 'transparent'];
+    const cardBgColor = isDiamond ? iconColor : (isDark ? colors.card : '#FFFFFF');
+    const gradientColors: [string, string] = isDiamond
+      ? [iconColor, iconColor] // Will be overlaid with a subtle shimmer/gradient
+      : (isDark ? [iconColor + '15', 'transparent'] : [iconColor + '12', 'transparent']);
 
-    // Bolder Diamond size for maximum impact
-    const diamondSize = (width - 40) / 3.4;
+    // Hyper-tactile extra-large size for massive impact
+    const diamondSize = (width - 40) / 2.8;
     const size = isDiamond ? diamondSize : (width - 66) / 3;
 
     // Helper to merge transforms correctly
@@ -327,15 +339,15 @@ export default function Index() {
             width: size,
             aspectRatio: 1,
             backgroundColor: cardBgColor,
-            borderRadius: isDiamond ? 28 : 24,
-            borderWidth: 1,
+            borderRadius: isDiamond ? 32 : 24,
+            borderWidth: isDiamond ? 0 : 1,
             borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0',
             overflow: 'hidden',
-            elevation: 8,
+            elevation: isDiamond ? 24 : 8,
             shadowColor: iconColor,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: isDark ? 0.25 : 0.12,
-            shadowRadius: 15,
+            shadowOffset: { width: 0, height: 16 },
+            shadowOpacity: isDiamond ? (isDark ? 0.6 : 0.45) : (isDark ? 0.25 : 0.12),
+            shadowRadius: isDiamond ? 32 : 15,
             ...(isDiamond && { transform: getTransforms(externalTransforms) })
           },
           style,
@@ -351,7 +363,7 @@ export default function Index() {
         onPress={() => router.push(route)}
       >
         <LinearGradient
-          colors={gradientColors}
+          colors={isDiamond ? ['rgba(255,255,255,0.25)', 'transparent'] : gradientColors}
           style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -359,13 +371,13 @@ export default function Index() {
 
         <MaterialCommunityIcons
           name={icon}
-          size={isDiamond ? 82 : 84}
-          color={iconColor}
+          size={isDiamond ? 92 : 84}
+          color={isDiamond ? '#FFF' : iconColor}
           style={{
             position: 'absolute',
-            opacity: isDark ? 0.08 : 0.05,
-            right: isDiamond ? -10 : -15,
-            bottom: isDiamond ? -10 : -15
+            opacity: isDiamond ? 0.12 : (isDark ? 0.08 : 0.05), // Slightly reduced opacity for text clarity
+            right: isDiamond ? -15 : -15,
+            bottom: isDiamond ? -15 : -15
           }}
         />
 
@@ -377,50 +389,53 @@ export default function Index() {
             alignItems: isDiamond ? 'center' : 'flex-start'
           }}>
             <View style={{
-              width: isDiamond ? 38 : 32,
-              height: isDiamond ? 38 : 32,
-              borderRadius: 12,
-              backgroundColor: iconColor + '15',
+              width: isDiamond ? 42 : 32,
+              height: isDiamond ? 42 : 32,
+              borderRadius: isDiamond ? 14 : 12,
+              backgroundColor: isDiamond ? 'rgba(255,255,255,0.2)' : iconColor + '15',
               justifyContent: 'center',
               alignItems: 'center',
               borderWidth: 1,
-              borderColor: iconColor + '25',
-              marginBottom: isDiamond ? 8 : 0,
-              elevation: 4,
-              shadowColor: iconColor,
-              shadowRadius: 6,
-              shadowOpacity: 0.15
+              borderColor: isDiamond ? 'rgba(255,255,255,0.3)' : iconColor + '25',
+              marginBottom: isDiamond ? 10 : 0,
+              elevation: isDiamond ? 0 : 4,
             }}>
-              <MaterialCommunityIcons name={icon} size={isDiamond ? 20 : 18} color={iconColor} />
+              <MaterialCommunityIcons name={icon} size={isDiamond ? 22 : 18} color={isDiamond ? '#FFF' : iconColor} />
             </View>
 
             <View style={{ gap: isDiamond ? 2 : 4, alignItems: isDiamond ? 'center' : 'flex-start' }}>
               <Text style={{
-                color: isDark ? '#F8FAFC' : '#0F172A',
-                fontSize: isDiamond ? 11 : 12,
-                fontWeight: '800',
-                lineHeight: isDiamond ? 13 : 14,
-                letterSpacing: -0.2,
-                textAlign: isDiamond ? 'center' : 'left'
+                color: isDiamond ? '#FFF' : (isDark ? '#F8FAFC' : '#0F172A'),
+                fontSize: isDiamond ? 14 : 12, // Increased size
+                fontWeight: '900',
+                lineHeight: isDiamond ? 16 : 14,
+                letterSpacing: isDiamond ? 0.2 : -0.2, // Increased spacing for scannability
+                textAlign: isDiamond ? 'center' : 'left',
+                textShadowColor: isDiamond ? 'rgba(0,0,0,0.3)' : 'transparent', // Stronger shadow
+                textShadowOffset: { width: 0, height: 1.5 },
+                textShadowRadius: 3,
               }} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
 
               {count !== undefined ? (
                 <View style={{
-                  backgroundColor: count > 0 ? iconColor + '20' : (isDark ? '#1E293B' : '#F8FAFC'),
+                  backgroundColor: isDiamond ? 'rgba(255,255,255,0.25)' : (count > 0 ? iconColor + '20' : (isDark ? '#1E293B' : '#F8FAFC')),
                   paddingHorizontal: 8,
                   paddingVertical: 3,
                   borderRadius: 8,
                   alignSelf: isDiamond ? 'center' : 'flex-start',
                   borderWidth: 1,
-                  borderColor: count > 0 ? iconColor + '35' : (isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0')
+                  borderColor: isDiamond ? 'rgba(255,255,255,0.15)' : (count > 0 ? iconColor + '35' : (isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0'))
                 }}>
                   <Text style={{
-                    color: count > 0 ? iconColor : (isDark ? '#94A3B8' : '#64748B'),
-                    fontSize: 9,
+                    color: isDiamond ? '#FFF' : (count > 0 ? iconColor : (isDark ? '#94A3B8' : '#64748B')),
+                    fontSize: 11, // Increased size
                     fontWeight: '900',
-                    letterSpacing: 0.3
+                    letterSpacing: 0.5,
+                    textShadowColor: isDiamond ? 'rgba(0,0,0,0.2)' : 'transparent', // Stronger shadow
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 2,
                   }} adjustsFontSizeToFit numberOfLines={1}>
-                    {count > 0 ? `${count} ${countLabel}` : `${countLabel}`}
+                    {count > 0 ? `${count} ${countLabel}` : "NONE"}
                   </Text>
                 </View>
               ) : (
@@ -451,104 +466,93 @@ export default function Index() {
       <StatusBar style="light" />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 60 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
       >
         {/* TOP HERO SECTION */}
         {/* TOP HERO SECTION */}
         <View style={[styles.heroWrapper, { backgroundColor: isDark ? '#451A03' : '#FBBF24', paddingBottom: 0 }]}>
           <LinearGradient
-            colors={['#000428', '#004e92']}
-            style={[styles.heroGradient, { paddingBottom: 24, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }]}
+            colors={isDark ? ['#020617', '#0F172A', '#1E1B4B'] : ['#000B18', '#003366', '#004e92']}
+            style={[styles.heroGradient, { paddingBottom: 12, borderBottomLeftRadius: 36, borderBottomRightRadius: 36 }]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
+            {/* Subtle Top-Down Shimmer Overlay */}
+            <LinearGradient
+              colors={['rgba(255,255,255,0.05)', 'transparent']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 0.5 }}
+            />
             <SafeAreaView edges={['top']} style={styles.safeArea}>
-              <View style={styles.headerTop}>
-                <View style={styles.topRow}>
-                  <View style={styles.headerLeft}>
-                    <Pressable onPress={() => router.push('/profile')} style={styles.profileFrame}>
-                      <View style={styles.avatar}>
-                        {student?.profilePhoto ? (
-                          <Image
-                            source={{ uri: `${API_BASE_URL}${student.profilePhoto}` }}
-                            style={{ width: '100%', height: '100%', borderRadius: 24 }}
-                            contentFit="cover"
-                            cachePolicy="none"
-                          />
-                        ) : (
-                          <Text style={styles.avatarText}>{getInitial(student?.fullName)}</Text>
-                        )}
-                      </View>
-                    </Pressable>
-                    <View>
-                      <Text style={styles.greetingText}>{getGreeting()},</Text>
-                      <Text style={[styles.userNameText, { marginBottom: 0 }]} numberOfLines={1}>
-                        {student?.fullName?.split(' ')[0]}
-                      </Text>
+              <View style={[styles.headerTop, { width: '100%' }]}>
+                <View style={[styles.topRow, { width: '100%', alignItems: 'center' }]}>
+                  <Pressable onPress={() => router.push('/profile')} style={styles.premiumProfileFrame}>
+                    <View style={styles.avatar}>
+                      {student?.profilePhoto ? (
+                        <Image
+                          source={{ uri: `${API_BASE_URL}${student.profilePhoto}` }}
+                          style={{ width: '100%', height: '100%', borderRadius: 28 }}
+                          contentFit="cover"
+                          cachePolicy="none"
+                        />
+                      ) : (
+                        <Text style={styles.avatarText}>{getInitial(student?.fullName)}</Text>
+                      )}
                     </View>
+                  </Pressable>
+
+                  <View style={{ flex: 1, marginLeft: 12, gap: 0 }}>
+                    <Text style={styles.greetingText}>{getGreeting()},</Text>
+                    <Text style={[styles.userNameText, { fontSize: 24, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
+                      {student?.fullName?.split(' ')[0]}
+                    </Text>
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
-
-                    {/* Notification Bell */}
-                    <Pressable style={styles.notificationBtn} onPress={() => setNotificationVisible(true)}>
-                      <Ionicons name="notifications-outline" size={24} color="#fff" />
+                    <Pressable style={styles.glassHeaderBtn} onPress={() => setNotificationVisible(true)}>
+                      <Ionicons name="notifications" size={20} color="#fff" />
                       {unreadCount > 0 && (
-                        <View style={{
-                          position: 'absolute',
-                          top: 10,
-                          right: 10,
-                          width: 10,
-                          height: 10,
-                          borderRadius: 5,
-                          backgroundColor: '#EF4444',
-                          borderWidth: 1.5,
-                          borderColor: '#004e92'
-                        }} />
+                        <View style={styles.premiumNotificationBadge} />
                       )}
                     </Pressable>
                   </View>
                 </View>
 
-                {/* Bottom Details Section */}
-                <View style={styles.headerBottomDetails}>
-                  {/* Room & Status Row with Hostel Name */}
-                  <View style={styles.statusRow}>
-                    {/* Hostel Name */}
-                    {student?.hostelName && (
-                      <View style={styles.roomTag}>
-                        <MaterialCommunityIcons name="office-building-marker" size={14} color="#E0F2FE" />
-                        <Text style={styles.roomTagText} numberOfLines={1}>
-                          {student.hostelName}
-                        </Text>
-                      </View>
-                    )}
-
-                    {student?.hostelName && <View style={styles.verticalLine} />}
-
-                    {/* Room Number */}
-                    <View style={styles.roomTag}>
-                      <MaterialCommunityIcons name="door-sliding" size={14} color="#E0F2FE" />
-                      <Text style={styles.roomTagText}>Room {student?.roomNo || '--'}</Text>
+                {/* Identity Block Indented under Name */}
+                <View style={{ marginLeft: 72, marginTop: -2 }}>
+                  {student?.hostelName && (
+                    <View style={styles.inlineHostelRow}>
+                      <MaterialCommunityIcons name="office-building" size={14} color="#BAE6FD" />
+                      <Text style={styles.inlineHostelName} numberOfLines={1} adjustsFontSizeToFit>
+                        {student.hostelName}
+                      </Text>
                     </View>
+                  )}
 
-                    <View style={styles.verticalLine} />
-
-                    {/* Status */}
-                    <View style={styles.statusTag}>
-                      <View style={[styles.statusDot, { backgroundColor: student?.status === 'active' ? '#4ADE80' : '#EF4444' }]} />
-                      <Text style={[styles.statusText, { color: student?.status === 'active' ? '#86EFAC' : '#FCA5A5' }]}>
-                        {student?.status === 'active' ? 'Active' : 'Inactive'}
+                  <View style={styles.leftStatusRow}>
+                    <View style={styles.leftStatusItem}>
+                      <MaterialCommunityIcons name="door-closed" size={14} color="#BAE6FD" />
+                      <Text style={styles.leftStatusText}>Room {student?.roomNo || '--'}</Text>
+                    </View>
+                    <View style={styles.leftStatusDivider} />
+                    <View style={styles.leftStatusItem}>
+                      <MaterialCommunityIcons
+                        name="check-decagram"
+                        size={14}
+                        color={student?.status === 'active' ? '#4ADE80' : '#EF4444'}
+                      />
+                      <Text style={[styles.leftStatusText, {
+                        color: student?.status === 'active' ? '#86EFAC' : '#FCA5A5',
+                      }]}>
+                        {student?.status === 'active' ? 'ACTIVE' : 'INACTIVE'}
                       </Text>
                     </View>
                   </View>
                 </View>
               </View>
-
-              {/* Cards moved to profile.tsx */}
             </SafeAreaView>
           </LinearGradient>
         </View>
@@ -595,7 +599,7 @@ export default function Index() {
                       }
                     }}
                   >
-                    {loopedRoutes.map((route, index) => {
+                    {loopedRoutes.map((route: any, index: number) => {
                       const todayStr = new Date().toLocaleDateString('en-CA');
                       const tomorrow = new Date();
                       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -682,7 +686,7 @@ export default function Index() {
                   {busRoutes.length > 1 && (
                     <>
                       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 4, marginBottom: 12 }}>
-                        {busRoutes.map((_, i) => (
+                        {busRoutes.map((_: any, i: number) => (
                           <View
                             key={i}
                             style={{
@@ -832,18 +836,18 @@ export default function Index() {
         <View style={styles.servicesSectionWrapper}>
           <View style={styles.sectionHeaderContainer}>
             <Text style={[styles.sectionHeader, {
-              backgroundColor: isDark ? '#172554' : '#EFF6FF',
-              color: isDark ? '#60A5FA' : '#1E40AF'
+              backgroundColor: isDark ? '#0F172A' : '#1E40AF',
+              color: isDark ? '#60A5FA' : '#FFFFFF'
             }]}>Campus Services</Text>
           </View>
 
-          <View style={{ alignItems: 'center', justifyContent: 'center', height: 440, marginTop: -60, marginBottom: 10 }}>
+          <View style={{ alignItems: 'center', justifyContent: 'center', height: 420, marginTop: -40, marginBottom: 0 }}>
             {/* The Bolder Polished "Star" Side-to-Side Cross Container */}
             <View style={{ width: width, height: 400, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
 
               {(() => {
-                const s = (width - 40) / 3.4;
-                const gap = 5;
+                const s = (width - 40) / 2.8;
+                const gap = 15;
                 const D = s + gap;
 
                 return (
@@ -968,21 +972,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   heroWrapper: {
-    paddingBottom: 40,
+    paddingBottom: 20,
     backgroundColor: '#F8FAFC',
   },
   heroGradient: {
-    paddingBottom: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    paddingBottom: 12,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    overflow: 'hidden', // Ensure corners clip shimmer and content
   },
   safeArea: {
     paddingHorizontal: 24,
     paddingTop: 10,
   },
   headerTop: {
-    marginBottom: 12,
-    gap: 8,
+    marginBottom: 4,
+    gap: 4,
   },
   topRow: {
     flexDirection: 'row',
@@ -998,23 +1003,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
-  profileFrame: {
-    borderRadius: 50,
-    padding: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  premiumProfileFrame: {
+    borderRadius: 32,
+    padding: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    elevation: 4,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     color: '#004e92',
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
   },
   greetingText: {
     fontSize: 14,
@@ -1027,40 +1035,68 @@ const styles = StyleSheet.create({
   userNameText: {
     color: '#fff',
     fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+    fontWeight: '800',
+    letterSpacing: -0.8,
     marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   hostelNameText: {
     color: '#F8FAFC',
     fontSize: 14,
     fontWeight: '600',
   },
-  statusRow: {
+  inlineHostelName: {
+    color: '#BAE6FD',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  inlineHostelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
     marginTop: 2,
   },
-  roomTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  roomTagText: {
+  prominentHostelName: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    textShadowColor: 'rgba(0,0,0,0.15)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  verticalLine: {
-    width: 1,
-    height: 14,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  statusTag: {
+  standaloneHostelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 2,
+    width: '100%',
+  },
+  leftStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 0,
+  },
+  leftStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  leftStatusText: {
+    color: '#F0F9FF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  leftStatusDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   statusDot: {
     width: 6,
@@ -1068,17 +1104,38 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusText: {
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0.3,
+    fontSize: 14, // Increased from 13
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  glassHeaderBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  premiumNotificationBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F43F5E',
+    borderWidth: 2,
+    borderColor: '#004e92',
+    elevation: 4,
+  },
+  glassStatusHub: {
+    paddingVertical: 8,
+    marginTop: 4,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   glassCard: {
     width: '100%',
@@ -1165,7 +1222,7 @@ const styles = StyleSheet.create({
   servicesSectionWrapper: {
     paddingHorizontal: 20,
     marginTop: 24, // Clear separation from Essentials
-    paddingBottom: 40, // Bottom padding for scroll
+    paddingBottom: 0, // No bottom padding
   },
   sectionHeaderContainer: {
     alignItems: 'center',
@@ -1174,11 +1231,11 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#1E40AF', // Royal Blue Text
+    fontWeight: '900',
+    color: '#1E40AF',
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    backgroundColor: '#EFF6FF', // Soft Blue Background
+    letterSpacing: 1.5,
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 100, // Pill shape

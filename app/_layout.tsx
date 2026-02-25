@@ -1,26 +1,64 @@
 import { Stack } from "expo-router";
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-// import OfflineIndicator from "../components/OfflineIndicator";
-import { AlertProvider } from "../context/AlertContext";
-import { AuthProvider } from "../context/AuthContext";
-import { NotificationProvider } from "../context/NotificationContext";
-// import { OfflineProvider } from "../context/OfflineContext";
-import { ThemeProvider, useTheme } from "../utils/ThemeContext";
+import CustomAlert from "../components/CustomAlert";
+import { useAlertStore } from "../store/useAlertStore";
+import { useAuthStore } from "../store/useAuthStore";
+import { useNotificationStore } from "../store/useNotificationStore";
+import { useOfflineStore } from "../store/useOfflineStore";
+import { useThemeStore } from "../store/useThemeStore";
+import { useNetworkStatus } from "../utils/useNetworkStatus";
 import { usePushNotifications } from "../utils/usePushNotifications";
 
-function PushNotificationWrapper({ children }: { children: React.ReactNode }) {
+function GlobalStateInitializer({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((state) => state.user);
+  const startPolling = useNotificationStore((state) => state.startPolling);
+  const stopPolling = useNotificationStore((state) => state.stopPolling);
+  const { isOnline } = useNetworkStatus();
+  const setOnline = useOfflineStore((state) => state.setOnline);
+
+  // Sync Network Status
+  useEffect(() => {
+    setOnline(isOnline);
+  }, [isOnline]);
+
+  // Handle Notifications Polling
+  useEffect(() => {
+    if (user) {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+    return () => stopPolling();
+  }, [user]);
+
+  // Push Notifications
   usePushNotifications();
+
   return <>{children}</>;
 }
 
+function GlobalAlert() {
+  const { visible, title, message, buttons, type, hideAlert } = useAlertStore();
+  return (
+    <CustomAlert
+      visible={visible}
+      title={title}
+      message={message}
+      buttons={buttons}
+      type={type}
+      onClose={hideAlert}
+    />
+  );
+}
+
 function AppNavigator() {
-  const { colors } = useTheme();
+  const colors = useThemeStore((state) => state.colors);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* <OfflineIndicator /> */}
       <Stack
         screenOptions={{
           headerShown: false,
@@ -36,7 +74,6 @@ function AppNavigator() {
         <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="alerts" options={{ animation: 'slide_from_right' }} />
 
-        {/* Student Feature Pages - Smooth Transitions */}
         <Stack.Screen name="mess" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="laundry-request" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="roomservice" options={{ animation: 'slide_from_right' }} />
@@ -52,22 +89,17 @@ function AppNavigator() {
 }
 
 export default function RootLayout() {
+  const isLoaded = useThemeStore((state) => state.isLoaded);
+
+  if (!isLoaded) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light" backgroundColor="transparent" translucent={true} />
-      <AuthProvider>
-        <ThemeProvider>
-          {/* <OfflineProvider> */}
-          <AlertProvider>
-            <NotificationProvider>
-              <PushNotificationWrapper>
-                <AppNavigator />
-              </PushNotificationWrapper>
-            </NotificationProvider>
-          </AlertProvider>
-          {/* </OfflineProvider>  */}
-        </ThemeProvider>
-      </AuthProvider>
+      <GlobalStateInitializer>
+        <AppNavigator />
+        <GlobalAlert />
+      </GlobalStateInitializer>
     </GestureHandlerRootView>
   );
 }

@@ -522,30 +522,63 @@ export default function RoomsPage() {
           data={filteredRooms}
           scrollEnabled={false}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.roomCard}
-              onPress={() => setSelectedRoom(item.id)} // Set ID directly to open modal
-            >
-              <View style={styles.roomHeader}>
-                <View style={styles.roomNumber}>
-                  <Text style={styles.roomNumberText}>#{item.number}</Text>
+          renderItem={({ item }) => {
+            const isDark = theme === 'dark';
+            const statusColor = getStatusColor(item.status);
+
+            return (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  styles.roomCard,
+                  selectedRoom === item.id && styles.roomCardActive,
+                  { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }
+                ]}
+                onPress={() => setSelectedRoom(item.id)}
+              >
+                <LinearGradient
+                  colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+
+                <View style={styles.roomHeader}>
+                  <View style={[styles.roomNumber, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9' }]}>
+                    <Text style={[styles.roomNumberText, { color: isDark ? '#FFF' : '#1E293B' }]}>#{item.number}</Text>
+                  </View>
+                  <View style={styles.roomInfo}>
+                    <Text style={[styles.roomTitle, { color: colors.text }]} numberOfLines={1}>
+                      {getOccupantNames(item)}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name={"account-group-outline" as any} size={14} color={colors.textSecondary} />
+                      <Text style={[styles.roomCapacity, { color: colors.textSecondary }]}>
+                        {item.occupants?.length || 0}/{item.capacity || 2}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                    <MaterialIcons name={getStatusIcon(item.status) as any} size={18} color={statusColor} />
+                  </View>
                 </View>
-                <View style={styles.roomInfo}>
-                  <Text style={styles.roomTitle}>
-                    {getOccupantNames(item)}
-                  </Text>
-                  <Text style={styles.roomCapacity}>
-                    Occupancy: {item.occupants?.length || 0}/{item.capacity || 2}
-                  </Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                  <MaterialIcons name={getStatusIcon(item.status)} size={16} color="#fff" />
-                  <Text style={styles.statusText}>{item.status}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
+
+                {/* Subtle Watermark */}
+                <MaterialIcons
+                  name="door-open"
+                  size={64}
+                  color={isDark ? '#FFF' : colors.primary}
+                  style={{
+                    position: 'absolute',
+                    right: -10,
+                    bottom: -10,
+                    opacity: isDark ? 0.03 : 0.02,
+                    transform: [{ rotate: '-15deg' }]
+                  }}
+                />
+              </TouchableOpacity>
+            );
+          }}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}

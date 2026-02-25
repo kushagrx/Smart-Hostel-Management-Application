@@ -45,6 +45,7 @@
     "expo-print": "~15.0.8",
     "expo-router": "~6.0.22",
     "expo-sharing": "~14.0.8",
+    "expo-shimmer-placeholder": "^3.0.0",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-symbols": "~1.0.8",
@@ -66,7 +67,8 @@
     "react-native-tab-view": "^4.2.2",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
-    "victory-native": "^41.20.2"
+    "victory-native": "^41.20.2",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

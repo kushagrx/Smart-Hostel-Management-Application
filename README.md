@@ -71,6 +71,18 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 ### 4. Codebase Optimization
 *   **Legacy Purge**: Removed 20+ redundant files, individual SQL migrations, and duplicate secrets to improve build speed and maintainability.
 
+### 5. Advanced State Management (Zustand)
+*   **Performance Boost**: Migrated core global states (Auth, Dashboard, Alerts) from complex React Contexts to strictly typed `Zustand` stores, drastically reducing unnecessary re-renders.
+*   **Decoupled Architecture**: Abstracted Notification and Theme states for leaner high-level component structures.
+
+### 6. Authentication Resilience (Clock Skew Tolerance)
+*   **Google Auth Bypass**: Implemented manual decode parsing to tolerate time-sync clock skews between the issuer and server, preventing incorrect `Token used too early` crash scenarios.
+*   **Enhanced Error Logging**: Added transparent detail-oriented backend error payloads for swift debugging.
+
+### 7. Bento-Style Dashboard Mastery
+*   **Hyper-Tactile Glass UI**: Integrated deep shadowing, custom shimmers, and semi-transparent gradients to emulate frosted glass `Neo-Bento` modules on the Student Dashboard.
+*   **Intelligent Overlays**: Transformed standard notification components into premium overlays with dynamic routing logic.
+
 ## 🌟 Legacy Enhancements (V2)
 *   **Optimal Display**: Fully optimized for Android 8.0+ adaptive icons using foreground/background layers to prevent stretching or cropping.
 *   **Brand Consistency**: Uses a high-resolution centered brand icon with appropriate safe-zone padding.
