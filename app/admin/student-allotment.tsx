@@ -3,6 +3,7 @@ import { Picker } from '@react-native-picker/picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
+
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
@@ -60,13 +61,27 @@ export default function StudentAllotmentPage() {
   const [age, setAge] = useState('');
   const [room, setRoom] = useState('');
   const [email, setEmail] = useState('');
-  const [personalEmail, setPersonalEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
-  const [hostelFee, setHostelFee] = useState('');
-  const [messFee, setMessFee] = useState('');
+  const [totalFee, setTotalFee] = useState('');
   const [feeFrequency, setFeeFrequency] = useState<'Monthly' | 'Quarterly' | 'Yearly'>('Monthly');
   const [generatedPassword, setGeneratedPassword] = useState('');
+  const [sharingType, setSharingType] = useState('Single Sharing');
+  const [apartmentType, setApartmentType] = useState<string | null>(null);
+  const [facilities, setFacilities] = useState<any[]>([
+    { name: 'WiFi', icon: 'wifi', status: 'Included' },
+    { name: 'Laundry', icon: 'washing-machine', status: 'Not Included' },
+    { name: 'Electricity', icon: 'lightning-bolt', status: 'Included' },
+    { name: 'Fridge', icon: 'fridge', status: 'Not Included' },
+    { name: 'Microwave', icon: 'microwave', status: 'Not Included' },
+    { name: 'AC', icon: 'air-conditioner', status: 'Not Included' },
+    { name: 'TV', icon: 'television', status: 'Not Included' },
+    { name: 'Induction', icon: 'stove', status: 'Not Included' },
+    { name: 'Cooler', icon: 'snowflake', status: 'Not Included' },
+    { name: 'Fan', icon: 'fan', status: 'Included' },
+    { name: 'Cleaning', icon: 'broom', status: 'Included' },
+    { name: 'Bed', icon: 'bed', status: 'Included' },
+  ]);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   React.useEffect(() => {
@@ -91,35 +106,40 @@ export default function StudentAllotmentPage() {
     try {
       const { default: api } = await import('../../utils/api');
 
-      const totalDues = (parseFloat(hostelFee) || 0) + (parseFloat(messFee) || 0);
 
-      const payload = {
+      const data = {
         fullName,
         email: email.trim(),
         password: generatedPassword,
         rollNo,
         collegeName,
         hostelName,
-        dob: null, // Frontend only asks for Age
+        dob: age ? new Date(new Date().setFullYear(new Date().getFullYear() - parseInt(age))).toISOString() : undefined,
         roomNo: room,
         phone,
-        personalEmail: personalEmail ? personalEmail.trim() : null,
-        address: '', // Optional
-        fatherName: '', // Optional
-        fatherPhone: '', // Optional
-        motherName: '', // Optional
-        motherPhone: '', // Optional
-        dues: totalDues,
-        bloodGroup: '', // Optional
-        medicalHistory: '', // Optional
-        emergencyContactName: '', // Optional
-        emergencyContactPhone: '', // Optional
         status,
-        wifiSSID: 'Hostel_WiFi', // Default
-        wifiPassword: '' // Default
+        wifiSSID: 'Hostel_WiFi',
+        feeFrequency,
+        roomType: apartmentType ? `${apartmentType} ${sharingType}` : sharingType,
+        facilities, // Send as array/object directly
+        totalFee: parseFloat(totalFee) || 0,
+        dues: 0,
+        hostelFee: 0,
+        messFee: 0,
+        address: '',
+        fatherName: '',
+        fatherPhone: '',
+        motherName: '',
+        motherPhone: '',
+        bloodGroup: '',
+        medicalHistory: '',
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+        wifiPassword: '',
+        profilePhoto: null
       };
 
-      await api.post('/students/allot', payload);
+      await api.post('/students/allot', data);
 
       showAlert(
         'Success',
@@ -249,16 +269,6 @@ export default function StudentAllotmentPage() {
             />
 
             <InputField
-              label="Personal Email"
-              icon="google"
-              value={personalEmail}
-              onChangeText={setPersonalEmail}
-              placeholder="personal@gmail.com (Optional)"
-              keyboardType="email-address"
-              hasSubmitted={hasSubmitted}
-            />
-
-            <InputField
               label="Phone Number"
               icon="phone"
               value={phone}
@@ -299,10 +309,100 @@ export default function StudentAllotmentPage() {
                 </View>
               </View>
             </View>
+          </View>
 
-            <View style={styles.divider} />
+          {/* Room Configuration Card */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Room Configuration</Text>
 
-            <Text style={styles.sectionTitle}>College Info</Text>
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>Sharing Options</Text>
+              <View style={[styles.typeContainer, { marginBottom: 12 }]}>
+                {['Single Sharing', 'Double Sharing', 'Triple Sharing'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.typeChip, sharingType === type && styles.typeChipActive]}
+                    onPress={() => setSharingType(type)}
+                  >
+                    <Text style={[styles.typeChipText, sharingType === type && styles.typeChipTextActive, { fontSize: 12 }]}>{type}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>BHK / Studio Options (Optional)</Text>
+              <View style={styles.typeContainer}>
+                {['1BHK', '2BHK', '3BHK', 'Studio'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.typeChip, apartmentType === type && styles.typeChipActive]}
+                    onPress={() => setApartmentType(apartmentType === type ? null : type)}
+                  >
+                    <Text style={[styles.typeChipText, apartmentType === type && styles.typeChipTextActive, { fontSize: 12 }]}>{type}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 8 }]}>Facilities & Amenities</Text>
+            <View style={{ marginTop: 8 }}>
+              {facilities.map((facility, index) => (
+                <View key={facility.name} style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 8,
+                  borderBottomWidth: index === facilities.length - 1 ? 0 : 1,
+                  borderBottomColor: '#F1F5F9'
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <MaterialIcons name={facility.icon} size={20} color="#004e92" />
+                    <Text style={{ fontSize: 15, fontWeight: '500', color: '#1E293B' }}>{facility.name}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <TouchableOpacity
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 12,
+                        backgroundColor: facility.status === 'Included' ? '#004e92' : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: facility.status === 'Included' ? '#004e92' : '#E2E8F0'
+                      }}
+                      onPress={() => {
+                        const newFac = [...facilities];
+                        newFac[index].status = 'Included';
+                        setFacilities(newFac);
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: facility.status === 'Included' ? '#fff' : '#64748B' }}>Included</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 12,
+                        backgroundColor: facility.status === 'Not Included' ? '#004e92' : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: facility.status === 'Not Included' ? '#004e92' : '#E2E8F0'
+                      }}
+                      onPress={() => {
+                        const newFac = [...facilities];
+                        newFac[index].status = 'Not Included';
+                        setFacilities(newFac);
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: facility.status === 'Not Included' ? '#fff' : '#64748B' }}>Not Included</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+
+
+          {/* Details & Fees Card */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>College & Fees</Text>
 
             <InputField
               label="College Name"
@@ -329,23 +429,12 @@ export default function StudentAllotmentPage() {
             <Text style={styles.sectionTitle}>Fee Structure</Text>
 
             <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={{ flex: 1 }}>
                 <InputField
-                  label="Hostel Fee"
-                  icon="bed"
-                  value={hostelFee}
-                  onChangeText={setHostelFee}
-                  placeholder="0.00"
-                  keyboardType="numeric"
-                  hasSubmitted={hasSubmitted}
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <InputField
-                  label="Mess Fee"
-                  icon="food"
-                  value={messFee}
-                  onChangeText={setMessFee}
+                  label="Total Annual Fee"
+                  icon="cash-multiple"
+                  value={totalFee}
+                  onChangeText={setTotalFee}
                   placeholder="0.00"
                   keyboardType="numeric"
                   hasSubmitted={hasSubmitted}
@@ -360,7 +449,7 @@ export default function StudentAllotmentPage() {
                 <Picker
                   selectedValue={feeFrequency}
                   style={{ flex: 1, color: '#1E293B', marginLeft: -8 }}
-                  onValueChange={(v) => setFeeFrequency(v)}
+                  onValueChange={(v) => setFeeFrequency(v as any)}
                 >
                   <Picker.Item label="Monthly" value="Monthly" />
                   <Picker.Item label="Quarterly" value="Quarterly" />
@@ -368,26 +457,27 @@ export default function StudentAllotmentPage() {
                 </Picker>
               </View>
             </View>
-
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-              <LinearGradient
-                colors={['#004e92', '#000428']}
-                style={styles.gradientButton}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.submitButtonText}>Confirm Allotment</Text>
-                <MaterialIcons name="check-circle-outline" size={20} color="#fff" />
-              </LinearGradient>
-            </TouchableOpacity>
-
           </View>
+
+          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <LinearGradient
+              colors={['#004e92', '#000428']}
+              style={styles.gradientButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.submitButtonText}>Confirm Allotment</Text>
+              <MaterialIcons name="check-circle-outline" size={20} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+
           <View style={{ height: 40 }} />
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+        </ScrollView >
+      </SafeAreaView >
+    </View >
   );
 }
+
 
 const styles = StyleSheet.create({
   mainContainer: {
@@ -594,6 +684,86 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  typeContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  typeChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  typeChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#004e92',
+  },
+  typeChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  typeChipTextActive: {
+    color: '#004e92',
+    fontWeight: '700',
+  },
+  facilitiesGrid: {
+    marginTop: 8,
+    gap: 12,
+  },
+  facilityCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  facilityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  facilityName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  facilityStatusContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 3,
+    gap: 2,
+  },
+  statusChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  statusChipActive: {
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  statusChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  statusChipTextActive: {
+    color: '#004e92',
     fontWeight: '700',
     letterSpacing: 0.5,
   },

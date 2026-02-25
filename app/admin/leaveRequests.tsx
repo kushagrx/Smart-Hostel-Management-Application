@@ -264,12 +264,16 @@ export default function LeaveRequestsPage() {
 
 
   function renderLeaveItem(item: LeaveRequest) {
+    const isDark = theme === 'dark';
+    const statusColor = getStatusColor(item.status);
+
     return (
       <View style={{ marginHorizontal: 20 }}>
         <TouchableOpacity
           style={[
             styles.requestCard,
             selectedId === item.id && styles.requestCardActive,
+            { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }
           ]}
           activeOpacity={0.9}
           onPress={() => {
@@ -277,13 +281,18 @@ export default function LeaveRequestsPage() {
             setSelectedId(selectedId === item.id ? null : item.id);
           }}
         >
+          <LinearGradient
+            colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+
           <View style={styles.cardHeader}>
             <View style={styles.studentInfo}>
-              <View
-                style={[
-                  styles.studentAvatar,
-                  { backgroundColor: getStatusColor(item.status), overflow: 'hidden' },
-                ]}
+              <LinearGradient
+                colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#C7D2FE']}
+                style={[styles.studentAvatar, { overflow: 'hidden' }]}
               >
                 {item.studentProfilePhoto ? (
                   <Image
@@ -291,26 +300,25 @@ export default function LeaveRequestsPage() {
                     style={{ width: '100%', height: '100%' }}
                   />
                 ) : (
-                  <Text style={styles.studentInitial}>
+                  <Text style={[styles.studentInitial, { color: isDark ? '#C7D2FE' : '#4F46E5' }]}>
                     {item.studentName.charAt(0).toUpperCase()}
                   </Text>
                 )}
-              </View>
+              </LinearGradient>
               <View style={styles.textInfo}>
-                <Text style={styles.studentName}>{item.studentName}</Text>
-                <Text style={styles.dateRange}>
+                <Text style={[styles.studentName, { color: colors.text }]}>{item.studentName}</Text>
+                <Text style={[styles.dateRange, { color: colors.textSecondary }]}>
                   {new Date(item.startDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} - {new Date(item.endDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                 </Text>
               </View>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-              <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
-              <Text style={styles.statusText}>{item.status}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+              <MaterialIcons name={getStatusIcon(item.status) as any} size={16} color={statusColor} />
             </View>
           </View>
 
           {selectedId === item.id && (
-            <View style={styles.expandedContent}>
+            <View style={[styles.expandedContent, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC' }]}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Room No:</Text>
                 <Text style={styles.detailValue}>{item.studentRoom}</Text>
@@ -325,7 +333,7 @@ export default function LeaveRequestsPage() {
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Current Status:</Text>
-                <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
+                <Text style={[styles.detailValue, { color: statusColor, fontWeight: '800' }]}>
                   {item.status.toUpperCase()}
                 </Text>
               </View>
@@ -359,11 +367,23 @@ export default function LeaveRequestsPage() {
               )}
             </View>
           )}
-        </TouchableOpacity>
 
+          {/* Subtle Watermark */}
+          <MaterialIcons
+            name="calendar-clock"
+            size={64}
+            color={isDark ? '#FFF' : colors.primary}
+            style={{
+              position: 'absolute',
+              right: -10,
+              bottom: -10,
+              opacity: isDark ? 0.03 : 0.02,
+              transform: [{ rotate: '-15deg' }]
+            }}
+          />
+        </TouchableOpacity>
       </View >
     );
-
   }
 
   function EmptyLeaves() {

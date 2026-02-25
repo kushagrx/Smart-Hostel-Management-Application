@@ -5,6 +5,7 @@ export interface Facility {
     title: string;
     description: string;
     image_url?: string;
+    images?: string[];
     icon?: string;
     created_at?: string;
 }

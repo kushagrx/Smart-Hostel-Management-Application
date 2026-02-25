@@ -3,39 +3,42 @@ import { ConfigContext, ExpoConfig } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "SmartStay",
-  slug: "smartstay",
+  slug: "smartstay-app-v2",
   owner: "shaswat2004",
   version: "1.0.0",
   orientation: "portrait",
-  icon: "./assets/images/icon.png",
+  icon: "./assets/brand_icon.jpg",
   scheme: "smartstay",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
+  extra: {
+    eas: {
+      projectId: "f1006218-c5cf-44a9-8903-6a11f940d10f"
+    }
+  },
   ios: {
     supportsTablet: true
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
-      foregroundImage: "./assets/images/android-icon-foreground.png",
-      backgroundImage: "./assets/images/android-icon-background.png",
-      monochromeImage: "./assets/images/android-icon-monochrome.png"
+      backgroundColor: "#FFFFFF",
+      foregroundImage: "./assets/home_screen_icon.jpg",
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
-    usesCleartextTraffic: true, // Allow HTTP for local dev
-    package: "com.anonymous.smartstay"
+    package: "com.shaswat.smartstay",
+    googleServicesFile: "./google-services.json"
   },
   web: {
     output: "static",
-    favicon: "./assets/images/favicon.png"
+    favicon: "./assets/brand_icon.jpg"
   },
   plugins: [
     "expo-router",
     [
       "expo-splash-screen",
       {
-        "image": "./assets/images/splash-icon.png",
+        "image": "./assets/brand_icon.jpg",
         "imageWidth": 200,
         "resizeMode": "contain",
         "backgroundColor": "#ffffff",
@@ -45,6 +48,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       }
     ],
     "expo-font",
+    "expo-notifications",
     "expo-web-browser",
     "@react-native-google-signin/google-signin"
   ],

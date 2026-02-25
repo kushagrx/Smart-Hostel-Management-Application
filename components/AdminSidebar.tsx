@@ -2,7 +2,7 @@ import { MaterialCommunityIcons as MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   SharedValue,
   interpolate,
@@ -32,7 +32,6 @@ type NavItem = {
 export const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Home', icon: 'home', color: '#3B82F6', path: '/admin' },
   { id: 'studentManagement', label: 'Student Management', icon: 'account-school', color: '#6366F1', path: '/admin/student-management' },
-  { id: 'facilities', label: 'Hostel Management', icon: 'office-building', color: '#10B981', path: '/admin/facilities' },
 ];
 
 interface AdminSidebarProps {
@@ -168,7 +167,14 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
       />
       <Animated.View style={[styles.sidebarPanel, { backgroundColor: colors.card, shadowColor: '#000' }, panelStyle]}>
         <LinearGradient colors={['#000428', '#004e92']} style={[styles.sidebarHeader, { paddingTop: insets.top + 24 }]}>
-          <Text style={styles.sidebarTitle}>SmartStay</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Image
+              source={require('../assets/brand_icon.jpg')}
+              style={{ width: 40, height: 40, borderRadius: 10 }}
+              resizeMode="contain"
+            />
+            <Text style={styles.sidebarTitle}>SmartStay</Text>
+          </View>
           <TouchableOpacity onPress={onClose}>
             <MaterialIcons name="close" size={24} color="#fff" />
           </TouchableOpacity>

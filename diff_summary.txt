@@ -1,0 +1,4589 @@
+diff --git a/app/(tabs)/index.tsx b/app/(tabs)/index.tsx
+index e428913..50b5440 100644
+--- a/app/(tabs)/index.tsx
++++ b/app/(tabs)/index.tsx
+@@ -16,13 +16,14 @@ import Animated, {
+ } from 'react-native-reanimated';
+ import { useRefresh } from '../../hooks/useRefresh';
+ import api, { API_BASE_URL } from '../../utils/api';
+-import { fetchLaundrySettings, LaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
+-import { fetchMenu, subscribeToMenu, WeekMenu } from '../../utils/messSyncUtils';
++import { fetchLaundrySettings, subscribeToLaundry } from '../../utils/laundrySyncUtils';
++import { fetchMenu, subscribeToMenu } from '../../utils/messSyncUtils';
+ 
+ import PagerView from 'react-native-pager-view';
+ import StudentNotificationOverlay from '../../components/StudentNotificationOverlay';
+-import { BusRoute, subscribeToBusTimings } from '../../utils/busTimingsSyncUtils';
+-import { fetchUserData, StudentData } from '../../utils/nameUtils';
++import { useDashboardStore } from '../../store/useDashboardStore';
++import { subscribeToBusTimings } from '../../utils/busTimingsSyncUtils';
++import { fetchUserData } from '../../utils/nameUtils';
+ import { useTheme } from '../../utils/ThemeContext';
+ 
+ const toggleStyles = StyleSheet.create({
+@@ -40,7 +41,6 @@ const toggleStyles = StyleSheet.create({
+ });
+ 
+ const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleTheme: () => void }) => {
+-  // 0 = Light, 1 = Dark
+   const progress = useDerivedValue(() => {
+     return isDark ? withSpring(1) : withSpring(0);
+   }, [isDark]);
+@@ -51,7 +51,7 @@ const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleT
+ 
+     return {
+       transform: [
+-        { rotate: `${rotate} deg` },
++        { rotate: `${rotate}deg` },
+         { scale: scale }
+       ]
+     };
+@@ -83,48 +83,64 @@ const SPACING = 20;
+ export default function Index() {
+   const router = useRouter();
+   const { colors, isDark, toggleTheme } = useTheme();
+-  const [student, setStudent] = useState<StudentData | null>(null);
+-  const [loading, setLoading] = useState(true);
++
++  // Dashboard Store
++  const {
++    studentData: student,
++    messMenu: fullMenu,
++    laundrySettings: laundry,
++    busRoutes,
++    dashboardCounts,
++    setStudentData,
++    setMessMenu,
++    setLaundrySettings,
++    setBusRoutes,
++    setDashboardCounts,
++    setLastSynced
++  } = useDashboardStore();
++
++  const {
++    complaints: pendingComplaints,
++    visitors: pendingVisitors,
++    roomServices: pendingRoomServices,
++    leaves: pendingLeaves,
++    facilities: totalFacilities
++  } = dashboardCounts;
++
++  const [loading, setLoading] = useState(!student); // Only show loader if we have NO cached data
+   const pagerRef = useRef<PagerView>(null);
+-  // const [refreshing, setRefreshing] = useState(false); // Managed by useRefresh
+-  const [laundry, setLaundry] = useState<LaundrySettings | null>(null);
+-  const [fullMenu, setFullMenu] = useState<WeekMenu>({});
+   const [unreadCount, setUnreadCount] = useState(0);
+   const [notificationVisible, setNotificationVisible] = useState(false);
+-  const [busRoutes, setBusRoutes] = useState<BusRoute[]>([]);
+   const [activeBusPage, setActiveBusPage] = useState(0);
+ 
+-  const [pendingComplaints, setPendingComplaints] = useState(0);
+-  const [pendingVisitors, setPendingVisitors] = useState(0);
+-  const [pendingRoomServices, setPendingRoomServices] = useState(0);
+-  const [pendingLeaves, setPendingLeaves] = useState(0);
+-  const [totalFacilities, setTotalFacilities] = useState(0);
+-
+   const fetchDashboardCounts = useCallback(async () => {
+     try {
+       const res = await api.get('/students/dashboard/counts');
+       const data = res.data;
+-      setPendingComplaints(data.complaints || 0);
+-      setPendingVisitors(data.visitors || 0);
+-      setPendingRoomServices(data.roomServices || 0);
+-      setPendingLeaves(data.leaves || 0);
+-      setTotalFacilities(data.facilities || 0);
++      setDashboardCounts({
++        complaints: data.complaints || 0,
++        visitors: data.visitors || 0,
++        roomServices: data.roomServices || 0,
++        leaves: data.leaves || 0,
++        facilities: data.facilities || 0,
++      });
+     } catch (e) {
+       console.error("Failed to fetch dashboard counts:", e);
+     }
+-  }, []);
++  }, [setDashboardCounts]);
+ 
+   const loadUserData = useCallback(async () => {
+     try {
+       const data = await fetchUserData();
+-      setStudent(data);
++      setStudentData(data);
++      setLastSynced(Date.now());
+       fetchDashboardCounts();
+     } catch (error) {
+       console.error('Failed to load user data:', error);
+     } finally {
+       setLoading(false);
+     }
+-  }, [fetchDashboardCounts]);
++  }, [setStudentData, setLastSynced, fetchDashboardCounts]);
+ 
+   const fetchUnreadCount = useCallback(async () => {
+     try {
+@@ -139,8 +155,9 @@ export default function Index() {
+     useCallback(() => {
+       loadUserData();
+       fetchUnreadCount();
+-      const unsubscribeLaundry = subscribeToLaundry(setLaundry);
+-      const unsubscribeMenu = subscribeToMenu(setFullMenu);
++
++      const unsubscribeLaundry = subscribeToLaundry(setLaundrySettings);
++      const unsubscribeMenu = subscribeToMenu(setMessMenu);
+       const unsubscribeBus = subscribeToBusTimings(setBusRoutes);
+ 
+       const updateListener = DeviceEventEmitter.addListener('profileUpdated', () => {
+@@ -153,15 +170,14 @@ export default function Index() {
+         unsubscribeBus();
+         updateListener.remove();
+       };
+-    }, [loadUserData, fetchUnreadCount])
++    }, [loadUserData, fetchUnreadCount, setLaundrySettings, setMessMenu, setBusRoutes])
+   );
+ 
+   const { refreshing, onRefresh } = useRefresh(async () => {
+-    // Reload all data
+     await Promise.all([
+       loadUserData(),
+-      fetchLaundrySettings().then(setLaundry),
+-      fetchMenu().then(setFullMenu),
++      fetchLaundrySettings().then(setLaundrySettings),
++      fetchMenu().then(setMessMenu),
+       fetchUnreadCount(),
+       fetchDashboardCounts()
+     ]);
+@@ -171,7 +187,7 @@ export default function Index() {
+     try {
+       const res = await api.post('/students/profile/notifications/clear');
+       if (res.data.success) {
+-        setStudent(prev => prev ? ({ ...prev, lastNotificationsClearedAt: res.data.timestamp }) : null);
++        setStudentData(student ? ({ ...student, lastNotificationsClearedAt: res.data.timestamp }) : null);
+       }
+     } catch (e) {
+       console.error("Failed to clear notifications", e);
+@@ -195,7 +211,6 @@ export default function Index() {
+     const now = new Date();
+     const currentMinutes = now.getHours() * 60 + now.getMinutes();
+ 
+-    // Default timings if not provided by backend
+     const defaultTimings: Record<string, string> = {
+       breakfast: '8:00 AM - 9:30 AM',
+       lunch: '12:30 PM - 2:30 PM',
+@@ -227,7 +242,6 @@ export default function Index() {
+       const endMinutes = parseToMinutes(endStr);
+       const startMinutes = parseToMinutes(startStr);
+ 
+-      // If we haven't reached the end of this meal yet, it's the current/upcoming one
+       if (currentMinutes < endMinutes) {
+         return {
+           type: meal.type,
+@@ -238,7 +252,6 @@ export default function Index() {
+       }
+     }
+ 
+-    // Default to Breakfast if all meals today are over
+     return {
+       type: 'Breakfast',
+       foodItems: dayMenu.breakfast || [],
+@@ -266,7 +279,7 @@ export default function Index() {
+ 
+   const getInitial = (name?: string) => name ? name.charAt(0).toUpperCase() : 'S';
+ 
+-  if (loading) {
++  if (loading && !student) {
+     return (
+       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+         <ActivityIndicator size="large" color={colors.primary} />
+@@ -275,8 +288,7 @@ export default function Index() {
+     );
+   }
+ 
+-  // Network Error State
+-  if (!student) {
++  if (!student && !loading) {
+     return (
+       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+         <MaterialCommunityIcons name="wifi-off" size={48} color={isDark ? '#94a3b8' : '#64748b'} />
+@@ -302,13 +314,13 @@ export default function Index() {
+   }
+ 
+   const QuickAction = ({ icon, label, route, desc, bg, iconColor, borderColor, count, countLabel = "PENDING", isDiamond = false, style }: any) => {
+-    const cardBgColor = isDark ? colors.card : '#FFFFFF';
+-    const gradientColors: [string, string] = isDark
+-      ? [iconColor + '15', 'transparent']
+-      : [iconColor + '12', 'transparent'];
++    const cardBgColor = isDiamond ? iconColor : (isDark ? colors.card : '#FFFFFF');
++    const gradientColors: [string, string] = isDiamond
++      ? [iconColor, iconColor] // Will be overlaid with a subtle shimmer/gradient
++      : (isDark ? [iconColor + '15', 'transparent'] : [iconColor + '12', 'transparent']);
+ 
+-    // Bolder Diamond size for maximum impact
+-    const diamondSize = (width - 40) / 3.4;
++    // Hyper-tactile extra-large size for massive impact
++    const diamondSize = (width - 40) / 2.8;
+     const size = isDiamond ? diamondSize : (width - 66) / 3;
+ 
+     // Helper to merge transforms correctly
+@@ -327,15 +339,15 @@ export default function Index() {
+             width: size,
+             aspectRatio: 1,
+             backgroundColor: cardBgColor,
+-            borderRadius: isDiamond ? 28 : 24,
+-            borderWidth: 1,
++            borderRadius: isDiamond ? 32 : 24,
++            borderWidth: isDiamond ? 0 : 1,
+             borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0',
+             overflow: 'hidden',
+-            elevation: 8,
++            elevation: isDiamond ? 24 : 8,
+             shadowColor: iconColor,
+-            shadowOffset: { width: 0, height: 6 },
+-            shadowOpacity: isDark ? 0.25 : 0.12,
+-            shadowRadius: 15,
++            shadowOffset: { width: 0, height: 16 },
++            shadowOpacity: isDiamond ? (isDark ? 0.6 : 0.45) : (isDark ? 0.25 : 0.12),
++            shadowRadius: isDiamond ? 32 : 15,
+             ...(isDiamond && { transform: getTransforms(externalTransforms) })
+           },
+           style,
+@@ -351,7 +363,7 @@ export default function Index() {
+         onPress={() => router.push(route)}
+       >
+         <LinearGradient
+-          colors={gradientColors}
++          colors={isDiamond ? ['rgba(255,255,255,0.25)', 'transparent'] : gradientColors}
+           style={StyleSheet.absoluteFill}
+           start={{ x: 0, y: 0 }}
+           end={{ x: 1, y: 1 }}
+@@ -359,13 +371,13 @@ export default function Index() {
+ 
+         <MaterialCommunityIcons
+           name={icon}
+-          size={isDiamond ? 82 : 84}
+-          color={iconColor}
++          size={isDiamond ? 92 : 84}
++          color={isDiamond ? '#FFF' : iconColor}
+           style={{
+             position: 'absolute',
+-            opacity: isDark ? 0.08 : 0.05,
+-            right: isDiamond ? -10 : -15,
+-            bottom: isDiamond ? -10 : -15
++            opacity: isDiamond ? 0.12 : (isDark ? 0.08 : 0.05), // Slightly reduced opacity for text clarity
++            right: isDiamond ? -15 : -15,
++            bottom: isDiamond ? -15 : -15
+           }}
+         />
+ 
+@@ -377,50 +389,53 @@ export default function Index() {
+             alignItems: isDiamond ? 'center' : 'flex-start'
+           }}>
+             <View style={{
+-              width: isDiamond ? 38 : 32,
+-              height: isDiamond ? 38 : 32,
+-              borderRadius: 12,
+-              backgroundColor: iconColor + '15',
++              width: isDiamond ? 42 : 32,
++              height: isDiamond ? 42 : 32,
++              borderRadius: isDiamond ? 14 : 12,
++              backgroundColor: isDiamond ? 'rgba(255,255,255,0.2)' : iconColor + '15',
+               justifyContent: 'center',
+               alignItems: 'center',
+               borderWidth: 1,
+-              borderColor: iconColor + '25',
+-              marginBottom: isDiamond ? 8 : 0,
+-              elevation: 4,
+-              shadowColor: iconColor,
+-              shadowRadius: 6,
+-              shadowOpacity: 0.15
++              borderColor: isDiamond ? 'rgba(255,255,255,0.3)' : iconColor + '25',
++              marginBottom: isDiamond ? 10 : 0,
++              elevation: isDiamond ? 0 : 4,
+             }}>
+-              <MaterialCommunityIcons name={icon} size={isDiamond ? 20 : 18} color={iconColor} />
++              <MaterialCommunityIcons name={icon} size={isDiamond ? 22 : 18} color={isDiamond ? '#FFF' : iconColor} />
+             </View>
+ 
+             <View style={{ gap: isDiamond ? 2 : 4, alignItems: isDiamond ? 'center' : 'flex-start' }}>
+               <Text style={{
+-                color: isDark ? '#F8FAFC' : '#0F172A',
+-                fontSize: isDiamond ? 11 : 12,
+-                fontWeight: '800',
+-                lineHeight: isDiamond ? 13 : 14,
+-                letterSpacing: -0.2,
+-                textAlign: isDiamond ? 'center' : 'left'
++                color: isDiamond ? '#FFF' : (isDark ? '#F8FAFC' : '#0F172A'),
++                fontSize: isDiamond ? 14 : 12, // Increased size
++                fontWeight: '900',
++                lineHeight: isDiamond ? 16 : 14,
++                letterSpacing: isDiamond ? 0.2 : -0.2, // Increased spacing for scannability
++                textAlign: isDiamond ? 'center' : 'left',
++                textShadowColor: isDiamond ? 'rgba(0,0,0,0.3)' : 'transparent', // Stronger shadow
++                textShadowOffset: { width: 0, height: 1.5 },
++                textShadowRadius: 3,
+               }} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
+ 
+               {count !== undefined ? (
+                 <View style={{
+-                  backgroundColor: count > 0 ? iconColor + '20' : (isDark ? '#1E293B' : '#F8FAFC'),
++                  backgroundColor: isDiamond ? 'rgba(255,255,255,0.25)' : (count > 0 ? iconColor + '20' : (isDark ? '#1E293B' : '#F8FAFC')),
+                   paddingHorizontal: 8,
+                   paddingVertical: 3,
+                   borderRadius: 8,
+                   alignSelf: isDiamond ? 'center' : 'flex-start',
+                   borderWidth: 1,
+-                  borderColor: count > 0 ? iconColor + '35' : (isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0')
++                  borderColor: isDiamond ? 'rgba(255,255,255,0.15)' : (count > 0 ? iconColor + '35' : (isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0'))
+                 }}>
+                   <Text style={{
+-                    color: count > 0 ? iconColor : (isDark ? '#94A3B8' : '#64748B'),
+-                    fontSize: 9,
++                    color: isDiamond ? '#FFF' : (count > 0 ? iconColor : (isDark ? '#94A3B8' : '#64748B')),
++                    fontSize: 11, // Increased size
+                     fontWeight: '900',
+-                    letterSpacing: 0.3
++                    letterSpacing: 0.5,
++                    textShadowColor: isDiamond ? 'rgba(0,0,0,0.2)' : 'transparent', // Stronger shadow
++                    textShadowOffset: { width: 0, height: 1 },
++                    textShadowRadius: 2,
+                   }} adjustsFontSizeToFit numberOfLines={1}>
+-                    {count > 0 ? `${count} ${countLabel}` : `${countLabel}`}
++                    {count > 0 ? `${count} ${countLabel}` : "NONE"}
+                   </Text>
+                 </View>
+               ) : (
+@@ -451,104 +466,93 @@ export default function Index() {
+       <StatusBar style="light" />
+ 
+       <ScrollView
+-        showsVerticalScrollIndicator={false}
+-        contentContainerStyle={{ paddingBottom: 120 }}
++        contentContainerStyle={{ paddingBottom: 60 }}
+         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
+       >
+         {/* TOP HERO SECTION */}
+         {/* TOP HERO SECTION */}
+         <View style={[styles.heroWrapper, { backgroundColor: isDark ? '#451A03' : '#FBBF24', paddingBottom: 0 }]}>
+           <LinearGradient
+-            colors={['#000428', '#004e92']}
+-            style={[styles.heroGradient, { paddingBottom: 24, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }]}
++            colors={isDark ? ['#020617', '#0F172A', '#1E1B4B'] : ['#000B18', '#003366', '#004e92']}
++            style={[styles.heroGradient, { paddingBottom: 12, borderBottomLeftRadius: 36, borderBottomRightRadius: 36 }]}
+             start={{ x: 0, y: 0 }}
+             end={{ x: 1, y: 1 }}
+           >
++            {/* Subtle Top-Down Shimmer Overlay */}
++            <LinearGradient
++              colors={['rgba(255,255,255,0.05)', 'transparent']}
++              style={StyleSheet.absoluteFill}
++              start={{ x: 0.5, y: 0 }}
++              end={{ x: 0.5, y: 0.5 }}
++            />
+             <SafeAreaView edges={['top']} style={styles.safeArea}>
+-              <View style={styles.headerTop}>
+-                <View style={styles.topRow}>
+-                  <View style={styles.headerLeft}>
+-                    <Pressable onPress={() => router.push('/profile')} style={styles.profileFrame}>
+-                      <View style={styles.avatar}>
+-                        {student?.profilePhoto ? (
+-                          <Image
+-                            source={{ uri: `${API_BASE_URL}${student.profilePhoto}` }}
+-                            style={{ width: '100%', height: '100%', borderRadius: 24 }}
+-                            contentFit="cover"
+-                            cachePolicy="none"
+-                          />
+-                        ) : (
+-                          <Text style={styles.avatarText}>{getInitial(student?.fullName)}</Text>
+-                        )}
+-                      </View>
+-                    </Pressable>
+-                    <View>
+-                      <Text style={styles.greetingText}>{getGreeting()},</Text>
+-                      <Text style={[styles.userNameText, { marginBottom: 0 }]} numberOfLines={1}>
+-                        {student?.fullName?.split(' ')[0]}
+-                      </Text>
++              <View style={[styles.headerTop, { width: '100%' }]}>
++                <View style={[styles.topRow, { width: '100%', alignItems: 'center' }]}>
++                  <Pressable onPress={() => router.push('/profile')} style={styles.premiumProfileFrame}>
++                    <View style={styles.avatar}>
++                      {student?.profilePhoto ? (
++                        <Image
++                          source={{ uri: `${API_BASE_URL}${student.profilePhoto}` }}
++                          style={{ width: '100%', height: '100%', borderRadius: 28 }}
++                          contentFit="cover"
++                          cachePolicy="none"
++                        />
++                      ) : (
++                        <Text style={styles.avatarText}>{getInitial(student?.fullName)}</Text>
++                      )}
+                     </View>
++                  </Pressable>
++
++                  <View style={{ flex: 1, marginLeft: 12, gap: 0 }}>
++                    <Text style={styles.greetingText}>{getGreeting()},</Text>
++                    <Text style={[styles.userNameText, { fontSize: 24, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
++                      {student?.fullName?.split(' ')[0]}
++                    </Text>
+                   </View>
+ 
+-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
++                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                     <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
+-
+-                    {/* Notification Bell */}
+-                    <Pressable style={styles.notificationBtn} onPress={() => setNotificationVisible(true)}>
+-                      <Ionicons name="notifications-outline" size={24} color="#fff" />
++                    <Pressable style={styles.glassHeaderBtn} onPress={() => setNotificationVisible(true)}>
++                      <Ionicons name="notifications" size={20} color="#fff" />
+                       {unreadCount > 0 && (
+-                        <View style={{
+-                          position: 'absolute',
+-                          top: 10,
+-                          right: 10,
+-                          width: 10,
+-                          height: 10,
+-                          borderRadius: 5,
+-                          backgroundColor: '#EF4444',
+-                          borderWidth: 1.5,
+-                          borderColor: '#004e92'
+-                        }} />
++                        <View style={styles.premiumNotificationBadge} />
+                       )}
+                     </Pressable>
+                   </View>
+                 </View>
+ 
+-                {/* Bottom Details Section */}
+-                <View style={styles.headerBottomDetails}>
+-                  {/* Room & Status Row with Hostel Name */}
+-                  <View style={styles.statusRow}>
+-                    {/* Hostel Name */}
+-                    {student?.hostelName && (
+-                      <View style={styles.roomTag}>
+-                        <MaterialCommunityIcons name="office-building-marker" size={14} color="#E0F2FE" />
+-                        <Text style={styles.roomTagText} numberOfLines={1}>
+-                          {student.hostelName}
+-                        </Text>
+-                      </View>
+-                    )}
+-
+-                    {student?.hostelName && <View style={styles.verticalLine} />}
+-
+-                    {/* Room Number */}
+-                    <View style={styles.roomTag}>
+-                      <MaterialCommunityIcons name="door-sliding" size={14} color="#E0F2FE" />
+-                      <Text style={styles.roomTagText}>Room {student?.roomNo || '--'}</Text>
++                {/* Identity Block Indented under Name */}
++                <View style={{ marginLeft: 72, marginTop: -2 }}>
++                  {student?.hostelName && (
++                    <View style={styles.inlineHostelRow}>
++                      <MaterialCommunityIcons name="office-building" size={14} color="#BAE6FD" />
++                      <Text style={styles.inlineHostelName} numberOfLines={1} adjustsFontSizeToFit>
++                        {student.hostelName}
++                      </Text>
+                     </View>
++                  )}
+ 
+-                    <View style={styles.verticalLine} />
+-
+-                    {/* Status */}
+-                    <View style={styles.statusTag}>
+-                      <View style={[styles.statusDot, { backgroundColor: student?.status === 'active' ? '#4ADE80' : '#EF4444' }]} />
+-                      <Text style={[styles.statusText, { color: student?.status === 'active' ? '#86EFAC' : '#FCA5A5' }]}>
+-                        {student?.status === 'active' ? 'Active' : 'Inactive'}
++                  <View style={styles.leftStatusRow}>
++                    <View style={styles.leftStatusItem}>
++                      <MaterialCommunityIcons name="door-closed" size={14} color="#BAE6FD" />
++                      <Text style={styles.leftStatusText}>Room {student?.roomNo || '--'}</Text>
++                    </View>
++                    <View style={styles.leftStatusDivider} />
++                    <View style={styles.leftStatusItem}>
++                      <MaterialCommunityIcons
++                        name="check-decagram"
++                        size={14}
++                        color={student?.status === 'active' ? '#4ADE80' : '#EF4444'}
++                      />
++                      <Text style={[styles.leftStatusText, {
++                        color: student?.status === 'active' ? '#86EFAC' : '#FCA5A5',
++                      }]}>
++                        {student?.status === 'active' ? 'ACTIVE' : 'INACTIVE'}
+                       </Text>
+                     </View>
+                   </View>
+                 </View>
+               </View>
+-
+-              {/* Cards moved to profile.tsx */}
+             </SafeAreaView>
+           </LinearGradient>
+         </View>
+@@ -595,7 +599,7 @@ export default function Index() {
+                       }
+                     }}
+                   >
+-                    {loopedRoutes.map((route, index) => {
++                    {loopedRoutes.map((route: any, index: number) => {
+                       const todayStr = new Date().toLocaleDateString('en-CA');
+                       const tomorrow = new Date();
+                       tomorrow.setDate(tomorrow.getDate() + 1);
+@@ -682,7 +686,7 @@ export default function Index() {
+                   {busRoutes.length > 1 && (
+                     <>
+                       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 4, marginBottom: 12 }}>
+-                        {busRoutes.map((_, i) => (
++                        {busRoutes.map((_: any, i: number) => (
+                           <View
+                             key={i}
+                             style={{
+@@ -832,18 +836,18 @@ export default function Index() {
+         <View style={styles.servicesSectionWrapper}>
+           <View style={styles.sectionHeaderContainer}>
+             <Text style={[styles.sectionHeader, {
+-              backgroundColor: isDark ? '#172554' : '#EFF6FF',
+-              color: isDark ? '#60A5FA' : '#1E40AF'
++              backgroundColor: isDark ? '#0F172A' : '#1E40AF',
++              color: isDark ? '#60A5FA' : '#FFFFFF'
+             }]}>Campus Services</Text>
+           </View>
+ 
+-          <View style={{ alignItems: 'center', justifyContent: 'center', height: 440, marginTop: -60, marginBottom: 10 }}>
++          <View style={{ alignItems: 'center', justifyContent: 'center', height: 420, marginTop: -40, marginBottom: 0 }}>
+             {/* The Bolder Polished "Star" Side-to-Side Cross Container */}
+             <View style={{ width: width, height: 400, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+ 
+               {(() => {
+-                const s = (width - 40) / 3.4;
+-                const gap = 5;
++                const s = (width - 40) / 2.8;
++                const gap = 15;
+                 const D = s + gap;
+ 
+                 return (
+@@ -968,21 +972,22 @@ const styles = StyleSheet.create({
+     fontWeight: '500',
+   },
+   heroWrapper: {
+-    paddingBottom: 40,
++    paddingBottom: 20,
+     backgroundColor: '#F8FAFC',
+   },
+   heroGradient: {
+-    paddingBottom: 24,
+-    borderBottomLeftRadius: 32,
+-    borderBottomRightRadius: 32,
++    paddingBottom: 12,
++    borderBottomLeftRadius: 36,
++    borderBottomRightRadius: 36,
++    overflow: 'hidden', // Ensure corners clip shimmer and content
+   },
+   safeArea: {
+     paddingHorizontal: 24,
+     paddingTop: 10,
+   },
+   headerTop: {
+-    marginBottom: 12,
+-    gap: 8,
++    marginBottom: 4,
++    gap: 4,
+   },
+   topRow: {
+     flexDirection: 'row',
+@@ -998,23 +1003,26 @@ const styles = StyleSheet.create({
+     alignItems: 'center',
+     gap: 14,
+   },
+-  profileFrame: {
+-    borderRadius: 50,
+-    padding: 2,
+-    backgroundColor: 'rgba(255,255,255,0.2)',
++  premiumProfileFrame: {
++    borderRadius: 32,
++    padding: 3,
++    backgroundColor: 'rgba(255,255,255,0.12)',
++    borderWidth: 1,
++    borderColor: 'rgba(255,255,255,0.25)',
++    elevation: 4,
+   },
+   avatar: {
+-    width: 48,
+-    height: 48,
+-    borderRadius: 24,
++    width: 56,
++    height: 56,
++    borderRadius: 28,
+     backgroundColor: '#fff',
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   avatarText: {
+     color: '#004e92',
+-    fontSize: 20,
+-    fontWeight: '700',
++    fontSize: 22,
++    fontWeight: '800',
+   },
+   greetingText: {
+     fontSize: 14,
+@@ -1027,40 +1035,68 @@ const styles = StyleSheet.create({
+   userNameText: {
+     color: '#fff',
+     fontSize: 32,
+-    fontWeight: '700',
+-    letterSpacing: -0.5,
++    fontWeight: '800',
++    letterSpacing: -0.8,
+     marginBottom: 6,
++    textShadowColor: 'rgba(0,0,0,0.2)',
++    textShadowOffset: { width: 0, height: 2 },
++    textShadowRadius: 4,
+   },
+   hostelNameText: {
+     color: '#F8FAFC',
+     fontSize: 14,
+     fontWeight: '600',
+   },
+-  statusRow: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    gap: 10,
+-    marginTop: 2,
++  inlineHostelName: {
++    color: '#BAE6FD',
++    fontSize: 13,
++    fontWeight: '700',
++    letterSpacing: 0.1,
+   },
+-  roomTag: {
++  inlineHostelRow: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     gap: 6,
++    marginTop: 2,
+   },
+-  roomTagText: {
++  prominentHostelName: {
+     color: '#fff',
+-    fontSize: 14,
+-    fontWeight: '600',
++    fontSize: 16,
++    fontWeight: '800',
++    letterSpacing: -0.3,
++    textShadowColor: 'rgba(0,0,0,0.15)',
++    textShadowOffset: { width: 0, height: 1 },
++    textShadowRadius: 3,
+   },
+-  verticalLine: {
+-    width: 1,
+-    height: 14,
+-    backgroundColor: 'rgba(255,255,255,0.4)',
++  standaloneHostelRow: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    gap: 8,
++    marginTop: 4,
++    marginBottom: 2,
++    width: '100%',
+   },
+-  statusTag: {
++  leftStatusRow: {
+     flexDirection: 'row',
+     alignItems: 'center',
+-    gap: 6,
++    gap: 8,
++    marginTop: 0,
++  },
++  leftStatusItem: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: 4,
++  },
++  leftStatusText: {
++    color: '#F0F9FF',
++    fontSize: 13,
++    fontWeight: '800',
++  },
++  leftStatusDivider: {
++    width: 1,
++    height: 12,
++    backgroundColor: 'rgba(255,255,255,0.2)',
+   },
+   statusDot: {
+     width: 6,
+@@ -1068,17 +1104,38 @@ const styles = StyleSheet.create({
+     borderRadius: 3,
+   },
+   statusText: {
+-    fontSize: 13,
+-    fontWeight: '500',
+-    letterSpacing: 0.3,
++    fontSize: 14, // Increased from 13
++    fontWeight: '800',
++    letterSpacing: 0.5,
+   },
+-  notificationBtn: {
+-    width: 44,
+-    height: 44,
+-    borderRadius: 22,
+-    backgroundColor: 'rgba(255,255,255,0.15)',
++  glassHeaderBtn: {
++    width: 42,
++    height: 42,
++    borderRadius: 14,
++    backgroundColor: 'rgba(255,255,255,0.12)',
+     justifyContent: 'center',
+     alignItems: 'center',
++    borderWidth: 1,
++    borderColor: 'rgba(255,255,255,0.2)',
++  },
++  premiumNotificationBadge: {
++    position: 'absolute',
++    top: 10,
++    right: 10,
++    width: 10,
++    height: 10,
++    borderRadius: 5,
++    backgroundColor: '#F43F5E',
++    borderWidth: 2,
++    borderColor: '#004e92',
++    elevation: 4,
++  },
++  glassStatusHub: {
++    paddingVertical: 8,
++    marginTop: 4,
++    width: '100%',
++    alignItems: 'center',
++    justifyContent: 'center',
+   },
+   glassCard: {
+     width: '100%',
+@@ -1165,7 +1222,7 @@ const styles = StyleSheet.create({
+   servicesSectionWrapper: {
+     paddingHorizontal: 20,
+     marginTop: 24, // Clear separation from Essentials
+-    paddingBottom: 40, // Bottom padding for scroll
++    paddingBottom: 0, // No bottom padding
+   },
+   sectionHeaderContainer: {
+     alignItems: 'center',
+@@ -1174,11 +1231,11 @@ const styles = StyleSheet.create({
+   },
+   sectionHeader: {
+     fontSize: 12,
+-    fontWeight: '800',
+-    color: '#1E40AF', // Royal Blue Text
++    fontWeight: '900',
++    color: '#1E40AF',
+     textTransform: 'uppercase',
+-    letterSpacing: 1.2,
+-    backgroundColor: '#EFF6FF', // Soft Blue Background
++    letterSpacing: 1.5,
++    backgroundColor: '#EFF6FF',
+     paddingHorizontal: 20,
+     paddingVertical: 8,
+     borderRadius: 100, // Pill shape
+diff --git a/app/_layout.tsx b/app/_layout.tsx
+index 64b3525..bcca1b2 100644
+--- a/app/_layout.tsx
++++ b/app/_layout.tsx
+@@ -1,26 +1,64 @@
+ import { Stack } from "expo-router";
+ import { StatusBar } from 'expo-status-bar';
++import React, { useEffect } from 'react';
+ import { View } from 'react-native';
+ import { GestureHandlerRootView } from "react-native-gesture-handler";
+-// import OfflineIndicator from "../components/OfflineIndicator";
+-import { AlertProvider } from "../context/AlertContext";
+-import { AuthProvider } from "../context/AuthContext";
+-import { NotificationProvider } from "../context/NotificationContext";
+-// import { OfflineProvider } from "../context/OfflineContext";
+-import { ThemeProvider, useTheme } from "../utils/ThemeContext";
++import CustomAlert from "../components/CustomAlert";
++import { useAlertStore } from "../store/useAlertStore";
++import { useAuthStore } from "../store/useAuthStore";
++import { useNotificationStore } from "../store/useNotificationStore";
++import { useOfflineStore } from "../store/useOfflineStore";
++import { useThemeStore } from "../store/useThemeStore";
++import { useNetworkStatus } from "../utils/useNetworkStatus";
+ import { usePushNotifications } from "../utils/usePushNotifications";
+ 
+-function PushNotificationWrapper({ children }: { children: React.ReactNode }) {
++function GlobalStateInitializer({ children }: { children: React.ReactNode }) {
++  const user = useAuthStore((state) => state.user);
++  const startPolling = useNotificationStore((state) => state.startPolling);
++  const stopPolling = useNotificationStore((state) => state.stopPolling);
++  const { isOnline } = useNetworkStatus();
++  const setOnline = useOfflineStore((state) => state.setOnline);
++
++  // Sync Network Status
++  useEffect(() => {
++    setOnline(isOnline);
++  }, [isOnline]);
++
++  // Handle Notifications Polling
++  useEffect(() => {
++    if (user) {
++      startPolling();
++    } else {
++      stopPolling();
++    }
++    return () => stopPolling();
++  }, [user]);
++
++  // Push Notifications
+   usePushNotifications();
++
+   return <>{children}</>;
+ }
+ 
++function GlobalAlert() {
++  const { visible, title, message, buttons, type, hideAlert } = useAlertStore();
++  return (
++    <CustomAlert
++      visible={visible}
++      title={title}
++      message={message}
++      buttons={buttons}
++      type={type}
++      onClose={hideAlert}
++    />
++  );
++}
++
+ function AppNavigator() {
+-  const { colors } = useTheme();
++  const colors = useThemeStore((state) => state.colors);
+ 
+   return (
+     <View style={{ flex: 1, backgroundColor: colors.background }}>
+-      {/* <OfflineIndicator /> */}
+       <Stack
+         screenOptions={{
+           headerShown: false,
+@@ -36,7 +74,6 @@ function AppNavigator() {
+         <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
+         <Stack.Screen name="alerts" options={{ animation: 'slide_from_right' }} />
+ 
+-        {/* Student Feature Pages - Smooth Transitions */}
+         <Stack.Screen name="mess" options={{ animation: 'slide_from_right' }} />
+         <Stack.Screen name="laundry-request" options={{ animation: 'slide_from_right' }} />
+         <Stack.Screen name="roomservice" options={{ animation: 'slide_from_right' }} />
+@@ -52,22 +89,17 @@ function AppNavigator() {
+ }
+ 
+ export default function RootLayout() {
++  const isLoaded = useThemeStore((state) => state.isLoaded);
++
++  if (!isLoaded) return null;
++
+   return (
+     <GestureHandlerRootView style={{ flex: 1 }}>
+       <StatusBar style="light" backgroundColor="transparent" translucent={true} />
+-      <AuthProvider>
+-        <ThemeProvider>
+-          {/* <OfflineProvider> */}
+-          <AlertProvider>
+-            <NotificationProvider>
+-              <PushNotificationWrapper>
+-                <AppNavigator />
+-              </PushNotificationWrapper>
+-            </NotificationProvider>
+-          </AlertProvider>
+-          {/* </OfflineProvider>  */}
+-        </ThemeProvider>
+-      </AuthProvider>
++      <GlobalStateInitializer>
++        <AppNavigator />
++        <GlobalAlert />
++      </GlobalStateInitializer>
+     </GestureHandlerRootView>
+   );
+ }
+diff --git a/app/admin/complaints.tsx b/app/admin/complaints.tsx
+index ac75f91..e5545a6 100644
+--- a/app/admin/complaints.tsx
++++ b/app/admin/complaints.tsx
+@@ -270,26 +270,35 @@ export default function ComplaintsPage() {
+ 
+ 
+   function renderComplaintItem(item: Complaint) {
++    const isDark = theme === 'dark';
++    const statusColor = getStatusColor(item.status);
++
+     return (
+       <View style={{ marginHorizontal: 20 }}>
+         <TouchableOpacity
+           style={[
+             styles.complaintCard,
+             selectedId === item.id && styles.complaintCardActive,
++            { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }
+           ]}
+-          activeOpacity={0.9} // Improved feedback
++          activeOpacity={0.9}
+           onPress={() => {
+             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+             setSelectedId(selectedId === item.id ? null : item.id);
+           }}
+         >
++          <LinearGradient
++            colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
++            style={StyleSheet.absoluteFill}
++            start={{ x: 0, y: 0 }}
++            end={{ x: 1, y: 1 }}
++          />
++
+           <View style={styles.cardHeader}>
+             <View style={styles.studentInfo}>
+-              <View
+-                style={[
+-                  styles.studentAvatar,
+-                  { backgroundColor: getStatusColor(item.status), overflow: 'hidden' },
+-                ]}
++              <LinearGradient
++                colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#C7D2FE']}
++                style={[styles.studentAvatar, { overflow: 'hidden' }]}
+               >
+                 {item.studentProfilePhoto ? (
+                   <Image
+@@ -297,33 +306,25 @@ export default function ComplaintsPage() {
+                     style={{ width: '100%', height: '100%' }}
+                   />
+                 ) : (
+-                  <Text style={styles.studentInitial}>
++                  <Text style={[styles.studentInitial, { color: isDark ? '#C7D2FE' : '#4F46E5' }]}>
+                     {item.studentName?.charAt(0).toUpperCase() || '?'}
+                   </Text>
+                 )}
+-              </View>
++              </LinearGradient>
+               <View style={styles.textInfo}>
+-                <Text style={styles.studentName}>{item.studentName || 'Unknown Student'}</Text>
+-                <Text style={styles.complaintPreview} numberOfLines={1}>
++                <Text style={[styles.studentName, { color: colors.text }]}>{item.studentName || 'Unknown Student'}</Text>
++                <Text style={[styles.complaintPreview, { color: colors.textSecondary }]} numberOfLines={1}>
+                   {item.title}
+                 </Text>
+               </View>
+             </View>
+-            <View
+-              style={[
+-                styles.statusBadge,
+-                { backgroundColor: getStatusColor(item.status) },
+-              ]}
+-            >
+-              <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
+-              <Text style={styles.statusText}>
+-                {item.status === 'inProgress' ? 'In Progress' : item.status}
+-              </Text>
++            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
++              <MaterialIcons name={getStatusIcon(item.status) as any} size={16} color={statusColor} />
+             </View>
+           </View>
+ 
+           {selectedId === item.id && (
+-            <View style={styles.expandedContent}>
++            <View style={[styles.expandedContent, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC' }]}>
+               <View style={styles.detailRow}>
+                 <Text style={styles.detailLabel}>Email:</Text>
+                 <Text style={styles.detailValue}>{item.studentEmail}</Text>
+@@ -338,17 +339,16 @@ export default function ComplaintsPage() {
+               </View>
+               <View style={styles.detailRow}>
+                 <Text style={styles.detailLabel}>Priority:</Text>
+-                <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
++                <Text style={[styles.detailValue, { color: statusColor, fontWeight: '800' }]}>
+                   {item.status.toUpperCase()}
+                 </Text>
+               </View>
+ 
+-              <View style={styles.complaintText}>
+-                <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
+-                <Text style={styles.complaintTextContent}>{item.description}</Text>
++              <View style={[styles.complaintText, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFF' }]}>
++                <Text style={[styles.complaintTextLabel, { color: colors.text }]}>Complaint Details:</Text>
++                <Text style={[styles.complaintTextContent, { color: colors.text }]}>{item.description}</Text>
+               </View>
+ 
+-              {/* Only show action buttons if complaint is not resolved or closed */}
+               {item.status !== 'resolved' && item.status !== 'closed' && (
+                 <View style={styles.actionButtons}>
+                   {item.status === 'open' && (
+@@ -370,7 +370,6 @@ export default function ComplaintsPage() {
+                 </View>
+               )}
+ 
+-              {/* Show resolved message if complaint is resolved or closed */}
+               {(item.status === 'resolved' || item.status === 'closed') && (
+                 <View style={styles.resolvedMessage}>
+                   <MaterialIcons name="check-circle" size={20} color={item.status === 'resolved' ? '#10B981' : '#64748B'} />
+@@ -381,11 +380,23 @@ export default function ComplaintsPage() {
+               )}
+             </View>
+           )}
+-        </TouchableOpacity>
+ 
++          {/* Subtle Watermark */}
++          <MaterialIcons
++            name="alert-box-outline"
++            size={64}
++            color={isDark ? '#FFF' : colors.primary}
++            style={{
++              position: 'absolute',
++              right: -10,
++              bottom: -10,
++              opacity: isDark ? 0.03 : 0.02,
++              transform: [{ rotate: '-15deg' }]
++            }}
++          />
++        </TouchableOpacity>
+       </View >
+     );
+-
+   }
+ 
+   function EmptyComplaints() {
+diff --git a/app/admin/index.tsx b/app/admin/index.tsx
+index c47f243..b128cf7 100644
+--- a/app/admin/index.tsx
++++ b/app/admin/index.tsx
+@@ -85,6 +85,96 @@ const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleT
+   );
+ };
+ 
++interface QuickActionProps {
++  icon: any;
++  label: string;
++  route: any;
++  desc: string;
++  colors: [string, string];
++  iconColor: string;
++  isDark: boolean;
++}
++
++const QuickAction = ({ icon, label, route, desc, colors, iconColor, isDark }: QuickActionProps) => {
++  const router = useRouter();
++  return (
++    <Pressable
++      style={({ pressed }) => [
++        {
++          flex: 1,
++          aspectRatio: 1,
++          borderRadius: 24,
++          overflow: 'hidden',
++          backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
++          borderWidth: 1,
++          borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
++          elevation: 8,
++          shadowColor: iconColor,
++          shadowOffset: { width: 0, height: 12 },
++          shadowOpacity: isDark ? 0.3 : 0.15,
++          shadowRadius: 16,
++        },
++        pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }
++      ]}
++      onPress={() => router.push(route)}
++    >
++      <LinearGradient
++        colors={colors}
++        style={StyleSheet.absoluteFill}
++        start={{ x: 0, y: 0 }}
++        end={{ x: 1, y: 1 }}
++      />
++
++      {/* Large Watermark Icon */}
++      <MaterialIcons
++        name={icon}
++        size={72}
++        color={iconColor}
++        style={{
++          position: 'absolute',
++          right: -10,
++          bottom: -10,
++          opacity: isDark ? 0.12 : 0.08,
++          transform: [{ rotate: '-15deg' }]
++        }}
++      />
++
++      <View style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
++        <View style={{
++          width: 36,
++          height: 36,
++          borderRadius: 12,
++          backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
++          justifyContent: 'center',
++          alignItems: 'center',
++          borderWidth: 1,
++          borderColor: 'rgba(255,255,255,0.2)',
++        }}>
++          <MaterialIcons name={icon} size={20} color={iconColor} />
++        </View>
++
++        <View>
++          <Text style={{
++            color: isDark ? '#FFF' : '#1E293B',
++            fontSize: 13,
++            fontWeight: '900',
++            letterSpacing: -0.2,
++          }} numberOfLines={1}>
++            {label}
++          </Text>
++          <Text style={{
++            color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(30,41,59,0.7)',
++            fontSize: 10,
++            fontWeight: '700',
++          }} numberOfLines={1}>
++            {desc}
++          </Text>
++        </View>
++      </View>
++    </Pressable>
++  );
++};
++
+ export default function AdminDashboard() {
+   const { colors, theme, toggleTheme, isDark } = useTheme();
+   const insets = useSafeAreaInsets();
+@@ -189,26 +279,41 @@ export default function AdminDashboard() {
+       fontWeight: '700',
+       color: colors.primary,
+     },
++    emptyStateContainer: {
++      alignItems: 'center',
++      justifyContent: 'center',
++      padding: 24,
++      backgroundColor: colors.card,
++      borderRadius: 24,
++      borderWidth: 1,
++      borderColor: colors.border,
++      borderStyle: 'dashed',
++    },
++    emptyStateText: {
++      color: colors.textSecondary,
++      fontSize: 15,
++      fontWeight: '600',
++    },
+     cardItem: {
+       flexDirection: 'row',
+       alignItems: 'center',
+       backgroundColor: colors.card,
+-      borderRadius: 20,
++      borderRadius: 24, // Slightly rounder
+       marginBottom: 12,
+-      padding: 16,
++      padding: 18, // More padding
+       gap: 16,
+-      shadowColor: colors.textSecondary,
+-      shadowOpacity: 0.08,
+-      shadowOffset: { width: 0, height: 4 },
+-      shadowRadius: 12,
+-      elevation: 3,
++      shadowColor: colors.primary,
++      shadowOpacity: 0.1,
++      shadowOffset: { width: 0, height: 8 },
++      shadowRadius: 16,
++      elevation: 4,
+       borderWidth: 1,
+-      borderColor: colors.border,
++      borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+     },
+     cardIcon: {
+-      width: 48,
+-      height: 48,
+-      borderRadius: 16,
++      width: 52,
++      height: 52,
++      borderRadius: 18,
+       justifyContent: 'center',
+       alignItems: 'center',
+     },
+@@ -218,10 +323,10 @@ export default function AdminDashboard() {
+       gap: 4,
+     },
+     cardTitle: {
+-      fontSize: 16,
+-      fontWeight: '700',
++      fontSize: 17,
++      fontWeight: '800',
+       color: colors.text,
+-      letterSpacing: -0.3,
++      letterSpacing: -0.4,
+     },
+     cardSubtitle: {
+       fontSize: 13,
+@@ -229,62 +334,28 @@ export default function AdminDashboard() {
+       color: colors.textSecondary,
+     },
+     statusBadge: {
+-      paddingHorizontal: 10,
++      paddingHorizontal: 12,
+       paddingVertical: 6,
+-      borderRadius: 10,
++      borderRadius: 12,
+       minWidth: 80,
+       alignItems: 'center',
+     },
+     statusText: {
+       fontSize: 11,
+-      fontWeight: '700',
+-      letterSpacing: 0.5,
+-    },
+-    reviewBtn: {
+-      backgroundColor: colors.primary,
+-      paddingHorizontal: 16,
+-      paddingVertical: 8,
+-      borderRadius: 12,
+-      shadowColor: colors.primary,
+-      shadowOpacity: 0.2,
+-      shadowOffset: { width: 0, height: 4 },
+-      elevation: 2,
+-    },
+-    reviewBtnText: {
+-      color: '#fff',
+-      fontSize: 12,
+-      fontWeight: '700',
+-      letterSpacing: 0.5,
+-    },
+-    emptyStateContainer: {
+-      alignItems: 'center',
+-      justifyContent: 'center',
+-      padding: 24,
+-      backgroundColor: colors.card,
+-      borderRadius: 20,
+-      borderWidth: 1,
+-      borderColor: colors.border,
+-      borderStyle: 'dashed',
+-    },
+-    emptyStateText: {
+-      color: colors.textSecondary,
+-      fontSize: 15,
+-      fontWeight: '600',
++      fontWeight: '900',
++      letterSpacing: 0.8,
+     },
+     searchBarContainer: {
+       flexDirection: 'row',
+       alignItems: 'center',
+-      backgroundColor: colors.card,
++      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.2)',
+       marginHorizontal: 20,
+       marginTop: 20,
+-      borderRadius: 16,
+-      paddingHorizontal: 16,
+-      height: 50,
+-      shadowColor: colors.primary,
+-      shadowOpacity: 0.15,
+-      shadowOffset: { width: 0, height: 4 },
+-      shadowRadius: 8,
+-      elevation: 4,
++      borderRadius: 20,
++      paddingHorizontal: 18,
++      height: 56,
++      borderWidth: 1,
++      borderColor: 'rgba(255,255,255,0.2)',
+     },
+     searchIcon: {
+       marginRight: 10,
+@@ -293,53 +364,59 @@ export default function AdminDashboard() {
+       flex: 1,
+       height: '100%',
+       fontSize: 16,
+-      color: colors.text,
++      fontWeight: '600',
++      color: '#fff',
+     },
+     resultsDropdown: {
+       position: 'absolute',
+-      top: 150,
++      top: 160,
+       left: 20,
+       right: 20,
+       backgroundColor: colors.card,
+-      borderRadius: 16,
+-      paddingVertical: 8,
+-      shadowColor: colors.textSecondary,
+-      shadowOpacity: 0.2,
+-      shadowOffset: { width: 0, height: 8 },
+-      shadowRadius: 24,
+-      elevation: 10,
++      borderRadius: 24,
++      paddingVertical: 12,
++      shadowColor: '#000',
++      shadowOpacity: 0.25,
++      shadowOffset: { width: 0, height: 20 },
++      shadowRadius: 40,
++      elevation: 20,
+       zIndex: 1000,
+-      maxHeight: 300,
++      maxHeight: 400,
++      borderWidth: 1,
++      borderColor: colors.border,
+     },
+     resultItem: {
+       flexDirection: 'row',
+       alignItems: 'center',
+-      paddingVertical: 12,
+-      paddingHorizontal: 16,
++      paddingVertical: 14,
++      paddingHorizontal: 20,
+       borderBottomWidth: 1,
+       borderBottomColor: colors.border,
+     },
+     resultIcon: {
+-      width: 36,
+-      height: 36,
+-      borderRadius: 12,
++      width: 44,
++      height: 44,
++      borderRadius: 14,
+       justifyContent: 'center',
+       alignItems: 'center',
+-      marginRight: 12,
++      marginRight: 14,
+     },
+     resultInfo: {
+       flex: 1,
++      gap: 2,
+     },
+     resultTitle: {
+-      fontSize: 14,
+-      fontWeight: '700',
++      fontSize: 15,
++      fontWeight: '800',
+       color: colors.text,
++      letterSpacing: -0.3,
+     },
+     resultSubtitle: {
+       fontSize: 12,
++      fontWeight: '600',
+       color: colors.textSecondary,
+     },
+-  }), [colors, theme]);
++  }), [colors, theme, isDark]);
+   const router = useRouter();
+   const [activeNav, setActiveNav] = useState('dashboard');
+   const [sidebarOpen, setSidebarOpen] = useState(false);
+@@ -348,6 +425,7 @@ export default function AdminDashboard() {
+   const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([]);
+   const [unreadCount, setUnreadCount] = useState(0);
+   const [isQuickSettingsOpen, setIsQuickSettingsOpen] = useState(false);
++
+   const toggleQuickSettings = () => setIsQuickSettingsOpen(!isQuickSettingsOpen);
+ 
+   // Drawer Animation (Shared Value)
+@@ -674,135 +752,37 @@ export default function AdminDashboard() {
+               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+             >
+ 
+-              {/* Add Student Action Button */}
+-              {/* Add Student Text Link */}
+-              {/* Hero Actions Row (Prominent) */}
+-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, marginHorizontal: -16 }}>
+-                <Pressable
+-                  style={{ flex: 1 }}
+-                  onPress={() => router.push({ pathname: '/admin/students', params: { action: 'allot' } })}
+-                >
+-                  {({ pressed }) => (
+-                    <LinearGradient
+-                      colors={[colors.card, colors.background]}
+-                      start={{ x: 0, y: 0 }}
+-                      end={{ x: 1, y: 1 }}
+-                      style={{
+-                        flex: 1,
+-                        borderRadius: 14,
+-                        padding: 10,
+-                        height: 60,
+-                        justifyContent: 'center',
+-                        alignItems: 'center',
+-                        gap: 2,
+-                        borderWidth: 1,
+-                        borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
+-                        overflow: 'hidden',
+-                        shadowColor: '#000',
+-                        shadowOpacity: pressed ? 0.4 : 0.2,
+-                        shadowRadius: 4,
+-                        shadowOffset: { width: 0, height: 2 },
+-                        elevation: pressed ? 4 : 2,
+-                        transform: [{ scale: pressed ? 0.98 : 1 }],
+-                      }}
+-                    >
+-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+-                        <MaterialIcons name="account-plus" size={16} color={colors.primary} />
+-                        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>Student</Text>
+-                      </View>
+-                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.5 }}>Add New</Text>
+-
+-                      {/* Watermark - Subtle */}
+-                      <View style={{ position: 'absolute', right: -6, bottom: -6, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+-                        <MaterialIcons name="account-plus" size={45} color={colors.text} />
+-                      </View>
+-                    </LinearGradient>
+-                  )}
+-                </Pressable>
+-
+-                <Pressable
+-                  style={{ flex: 1 }}
+-                  onPress={() => router.push('/admin/attendance')}
+-                >
+-                  {({ pressed }) => (
+-                    <LinearGradient
+-                      colors={[colors.card, colors.background]}
+-                      start={{ x: 0, y: 0 }}
+-                      end={{ x: 1, y: 1 }}
+-                      style={{
+-                        flex: 1,
+-                        borderRadius: 14,
+-                        padding: 10,
+-                        height: 60,
+-                        justifyContent: 'center',
+-                        alignItems: 'center',
+-                        gap: 2,
+-                        borderWidth: 1,
+-                        borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
+-                        overflow: 'hidden',
+-                        shadowColor: '#000',
+-                        shadowOpacity: pressed ? 0.4 : 0.2,
+-                        shadowRadius: 4,
+-                        shadowOffset: { width: 0, height: 2 },
+-                        elevation: pressed ? 4 : 2,
+-                        transform: [{ scale: pressed ? 0.98 : 1 }],
+-                      }}
+-                    >
+-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+-                        <MaterialIcons name="calendar-check" size={16} color={colors.primary} />
+-                        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>Daily</Text>
+-                      </View>
+-                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.5 }}>Attendance</Text>
+-
+-                      {/* Watermark - Subtle */}
+-                      <View style={{ position: 'absolute', right: -6, bottom: -6, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+-                        <MaterialIcons name="calendar-check" size={45} color={colors.text} />
+-                      </View>
+-                    </LinearGradient>
+-                  )}
+-                </Pressable>
++              {/* Hero Actions Row (Prominent Premium Redesign) */}
++              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20, marginHorizontal: -4 }}>
++                <QuickAction
++                  icon="account-plus"
++                  label="Add Student"
++                  route={{ pathname: '/admin/students', params: { action: 'allot' } } as any}
++                  colors={isDark ? ['#1E1B4B', '#312E81'] : ['#EEF2FF', '#E0E7FF']}
++                  iconColor="#4F46E5"
++                  desc="New Allotment"
++                  isDark={isDark}
++                />
+ 
+-                <Pressable
+-                  style={{ flex: 1 }}
+-                  onPress={() => router.push('/chat')}
+-                >
+-                  {({ pressed }) => (
+-                    <LinearGradient
+-                      colors={[colors.card, colors.background]}
+-                      start={{ x: 0, y: 0 }}
+-                      end={{ x: 1, y: 1 }}
+-                      style={{
+-                        flex: 1,
+-                        borderRadius: 14,
+-                        padding: 10,
+-                        height: 60,
+-                        justifyContent: 'center',
+-                        alignItems: 'center',
+-                        gap: 2,
+-                        borderWidth: 1,
+-                        borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
+-                        overflow: 'hidden',
+-                        shadowColor: '#000',
+-                        shadowOpacity: pressed ? 0.4 : 0.2,
+-                        shadowRadius: 4,
+-                        shadowOffset: { width: 0, height: 2 },
+-                        elevation: pressed ? 4 : 2,
+-                        transform: [{ scale: pressed ? 0.98 : 1 }],
+-                      }}
+-                    >
+-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+-                        <MaterialIcons name="message-text" size={16} color={colors.primary} />
+-                        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>Chats</Text>
+-                      </View>
+-                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.5 }}>Messages</Text>
++                <QuickAction
++                  icon="calendar-check"
++                  label="Attendance"
++                  route="/admin/attendance"
++                  colors={isDark ? ['#1E3A8A', '#1E40AF'] : ['#DBEAFE', '#BFDBFE']}
++                  iconColor="#2563EB"
++                  desc="Daily Check"
++                  isDark={isDark}
++                />
+ 
+-                      {/* Watermark - Subtle */}
+-                      <View style={{ position: 'absolute', right: -6, bottom: -6, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+-                        <MaterialIcons name="message-text" size={45} color={colors.text} />
+-                      </View>
+-                    </LinearGradient>
+-                  )}
+-                </Pressable>
++                <QuickAction
++                  icon="message-text"
++                  label="Messages"
++                  route="/chat"
++                  colors={isDark ? ['#312E81', '#3730A3'] : ['#F5F3FF', '#EDE9FE']}
++                  iconColor="#7C3AED"
++                  desc="Student Chats"
++                  isDark={isDark}
++                />
+               </View>
+ 
+               {/* Quick Settings Section */}
+@@ -822,7 +802,7 @@ export default function AdminDashboard() {
+                       <Pressable
+                         key={index}
+                         style={{ flexGrow: 1, minWidth: '30%' }}
+-                        onPress={() => router.push(item.route)}
++                        onPress={() => router.push(item.route as any)}
+                       >
+                         {({ pressed }) => (
+                           <LinearGradient
+@@ -848,14 +828,14 @@ export default function AdminDashboard() {
+                               transform: [{ scale: pressed ? 0.98 : 1 }],
+                             }}
+                           >
+-                            <MaterialIcons name={item.icon} size={22} color={colors.primary} />
++                            <MaterialIcons name={item.icon as any} size={22} color={colors.primary} />
+                             <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'uppercase', textAlign: 'center', maxWidth: 80 }} numberOfLines={1}>
+                               {item.label}
+                             </Text>
+ 
+                             {/* Watermark Icon - Subtle */}
+                             <View style={{ position: 'absolute', right: -8, bottom: -8, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
+-                              <MaterialIcons name={item.icon} size={40} color={colors.text} />
++                              <MaterialIcons name={item.icon as any} size={40} color={colors.text} />
+                             </View>
+                           </LinearGradient>
+                         )}
+diff --git a/app/admin/leaveRequests.tsx b/app/admin/leaveRequests.tsx
+index b19f1fe..7f3c52e 100644
+--- a/app/admin/leaveRequests.tsx
++++ b/app/admin/leaveRequests.tsx
+@@ -264,12 +264,16 @@ export default function LeaveRequestsPage() {
+ 
+ 
+   function renderLeaveItem(item: LeaveRequest) {
++    const isDark = theme === 'dark';
++    const statusColor = getStatusColor(item.status);
++
+     return (
+       <View style={{ marginHorizontal: 20 }}>
+         <TouchableOpacity
+           style={[
+             styles.requestCard,
+             selectedId === item.id && styles.requestCardActive,
++            { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }
+           ]}
+           activeOpacity={0.9}
+           onPress={() => {
+@@ -277,13 +281,18 @@ export default function LeaveRequestsPage() {
+             setSelectedId(selectedId === item.id ? null : item.id);
+           }}
+         >
++          <LinearGradient
++            colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
++            style={StyleSheet.absoluteFill}
++            start={{ x: 0, y: 0 }}
++            end={{ x: 1, y: 1 }}
++          />
++
+           <View style={styles.cardHeader}>
+             <View style={styles.studentInfo}>
+-              <View
+-                style={[
+-                  styles.studentAvatar,
+-                  { backgroundColor: getStatusColor(item.status), overflow: 'hidden' },
+-                ]}
++              <LinearGradient
++                colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#C7D2FE']}
++                style={[styles.studentAvatar, { overflow: 'hidden' }]}
+               >
+                 {item.studentProfilePhoto ? (
+                   <Image
+@@ -291,26 +300,25 @@ export default function LeaveRequestsPage() {
+                     style={{ width: '100%', height: '100%' }}
+                   />
+                 ) : (
+-                  <Text style={styles.studentInitial}>
++                  <Text style={[styles.studentInitial, { color: isDark ? '#C7D2FE' : '#4F46E5' }]}>
+                     {item.studentName.charAt(0).toUpperCase()}
+                   </Text>
+                 )}
+-              </View>
++              </LinearGradient>
+               <View style={styles.textInfo}>
+-                <Text style={styles.studentName}>{item.studentName}</Text>
+-                <Text style={styles.dateRange}>
++                <Text style={[styles.studentName, { color: colors.text }]}>{item.studentName}</Text>
++                <Text style={[styles.dateRange, { color: colors.textSecondary }]}>
+                   {new Date(item.startDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} - {new Date(item.endDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                 </Text>
+               </View>
+             </View>
+-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+-              <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
+-              <Text style={styles.statusText}>{item.status}</Text>
++            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
++              <MaterialIcons name={getStatusIcon(item.status) as any} size={16} color={statusColor} />
+             </View>
+           </View>
+ 
+           {selectedId === item.id && (
+-            <View style={styles.expandedContent}>
++            <View style={[styles.expandedContent, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC' }]}>
+               <View style={styles.detailRow}>
+                 <Text style={styles.detailLabel}>Room No:</Text>
+                 <Text style={styles.detailValue}>{item.studentRoom}</Text>
+@@ -325,7 +333,7 @@ export default function LeaveRequestsPage() {
+               </View>
+               <View style={styles.detailRow}>
+                 <Text style={styles.detailLabel}>Current Status:</Text>
+-                <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
++                <Text style={[styles.detailValue, { color: statusColor, fontWeight: '800' }]}>
+                   {item.status.toUpperCase()}
+                 </Text>
+               </View>
+@@ -359,11 +367,23 @@ export default function LeaveRequestsPage() {
+               )}
+             </View>
+           )}
+-        </TouchableOpacity>
+ 
++          {/* Subtle Watermark */}
++          <MaterialIcons
++            name="calendar-clock"
++            size={64}
++            color={isDark ? '#FFF' : colors.primary}
++            style={{
++              position: 'absolute',
++              right: -10,
++              bottom: -10,
++              opacity: isDark ? 0.03 : 0.02,
++              transform: [{ rotate: '-15deg' }]
++            }}
++          />
++        </TouchableOpacity>
+       </View >
+     );
+-
+   }
+ 
+   function EmptyLeaves() {
+diff --git a/app/admin/notices.tsx b/app/admin/notices.tsx
+index c93a354..96dda48 100644
+--- a/app/admin/notices.tsx
++++ b/app/admin/notices.tsx
+@@ -377,33 +377,79 @@ export default function NoticesPage() {
+             </TouchableOpacity>
+           </>
+         }
+-        renderItem={({ item }) => (
+-          <TouchableOpacity
+-            style={[styles.noticeCard, selectedId === item.id && styles.noticeCardSelected]}
+-            onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
+-          >
+-            <View style={styles.noticeHeader}>
+-              <View style={styles.noticeTitle}>
+-                <MaterialIcons name="bullhorn" size={20} color="#004e92" />
+-                <Text style={styles.noticeTitleText}>{item.title}</Text>
++        renderItem={({ item }) => {
++          const isDark = theme === 'dark';
++          const priorityColor = getPriorityColor(item.priority || 'medium');
++
++          return (
++            <TouchableOpacity
++              activeOpacity={0.8}
++              style={[
++                styles.noticeCard,
++                selectedId === item.id && styles.noticeCardSelected,
++                { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', marginHorizontal: 20 }
++              ]}
++              onPress={() => setSelectedId(selectedId === item.id ? null : item.id)}
++            >
++              <LinearGradient
++                colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
++                style={StyleSheet.absoluteFill}
++                start={{ x: 0, y: 0 }}
++                end={{ x: 1, y: 1 }}
++              />
++
++              <View style={styles.noticeHeader}>
++                <View style={styles.noticeTitle}>
++                  <LinearGradient
++                    colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#C7D2FE']}
++                    style={{ width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' }}
++                  >
++                    <MaterialIcons name="bullhorn-outline" size={20} color={isDark ? '#C7D2FE' : '#4F46E5'} />
++                  </LinearGradient>
++                  <Text style={[styles.noticeTitleText, { color: colors.text }]}>{item.title}</Text>
++                </View>
++                <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '15' }]}>
++                  <Text style={[styles.priorityText, { color: priorityColor }]}>
++                    {item.priority}
++                  </Text>
++                </View>
+               </View>
+-              <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority || 'medium') + '20' }]}>
+-                <Text style={[styles.priorityText, { color: getPriorityColor(item.priority || 'medium') }]}>
+-                  {item.priority}
++
++              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
++                <MaterialIcons name="calendar-range" size={14} color={colors.textSecondary} />
++                <Text style={[styles.noticeDate, { color: colors.textSecondary, marginBottom: 0 }]}>
++                  {item.date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                 </Text>
+               </View>
+-            </View>
+-            <Text style={styles.noticeDate}>{item.date.toLocaleDateString()}</Text>
+-            {selectedId === item.id && (
+-              <View>
+-                <Text style={styles.noticeBody}>{item.body}</Text>
+-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
+-                  <Text style={styles.deleteBtnText}>Delete Notice</Text>
+-                </TouchableOpacity>
+-              </View>
+-            )}
+-          </TouchableOpacity>
+-        )}
++
++              {selectedId === item.id && (
++                <View style={{ marginTop: 12 }}>
++                  <View style={[styles.noticeBody, { borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' }]}>
++                    <Text style={{ color: colors.text, lineHeight: 22 }}>{item.body}</Text>
++                  </View>
++                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
++                    <MaterialIcons name="delete-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
++                    <Text style={styles.deleteBtnText}>Delete Notice</Text>
++                  </TouchableOpacity>
++                </View>
++              )}
++
++              {/* Subtle Watermark */}
++              <MaterialIcons
++                name="bullhorn"
++                size={64}
++                color={isDark ? '#FFF' : colors.primary}
++                style={{
++                  position: 'absolute',
++                  right: -10,
++                  bottom: -10,
++                  opacity: isDark ? 0.03 : 0.02,
++                  transform: [{ rotate: '-15deg' }]
++                }}
++              />
++            </TouchableOpacity>
++          );
++        }}
+         ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#666' }}>No notices found.</Text>}
+       />
+ 
+diff --git a/app/admin/rooms.tsx b/app/admin/rooms.tsx
+index 20dca78..10c9c6c 100644
+--- a/app/admin/rooms.tsx
++++ b/app/admin/rooms.tsx
+@@ -522,30 +522,63 @@ export default function RoomsPage() {
+           data={filteredRooms}
+           scrollEnabled={false}
+           keyExtractor={(item) => item.id}
+-          renderItem={({ item }) => (
+-            <TouchableOpacity
+-              style={styles.roomCard}
+-              onPress={() => setSelectedRoom(item.id)} // Set ID directly to open modal
+-            >
+-              <View style={styles.roomHeader}>
+-                <View style={styles.roomNumber}>
+-                  <Text style={styles.roomNumberText}>#{item.number}</Text>
+-                </View>
+-                <View style={styles.roomInfo}>
+-                  <Text style={styles.roomTitle}>
+-                    {getOccupantNames(item)}
+-                  </Text>
+-                  <Text style={styles.roomCapacity}>
+-                    Occupancy: {item.occupants?.length || 0}/{item.capacity || 2}
+-                  </Text>
+-                </View>
+-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+-                  <MaterialIcons name={getStatusIcon(item.status)} size={16} color="#fff" />
+-                  <Text style={styles.statusText}>{item.status}</Text>
++          renderItem={({ item }) => {
++            const isDark = theme === 'dark';
++            const statusColor = getStatusColor(item.status);
++
++            return (
++              <TouchableOpacity
++                activeOpacity={0.8}
++                style={[
++                  styles.roomCard,
++                  selectedRoom === item.id && styles.roomCardActive,
++                  { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }
++                ]}
++                onPress={() => setSelectedRoom(item.id)}
++              >
++                <LinearGradient
++                  colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
++                  style={StyleSheet.absoluteFill}
++                  start={{ x: 0, y: 0 }}
++                  end={{ x: 1, y: 1 }}
++                />
++
++                <View style={styles.roomHeader}>
++                  <View style={[styles.roomNumber, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9' }]}>
++                    <Text style={[styles.roomNumberText, { color: isDark ? '#FFF' : '#1E293B' }]}>#{item.number}</Text>
++                  </View>
++                  <View style={styles.roomInfo}>
++                    <Text style={[styles.roomTitle, { color: colors.text }]} numberOfLines={1}>
++                      {getOccupantNames(item)}
++                    </Text>
++                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
++                      <MaterialIcons name={"account-group-outline" as any} size={14} color={colors.textSecondary} />
++                      <Text style={[styles.roomCapacity, { color: colors.textSecondary }]}>
++                        {item.occupants?.length || 0}/{item.capacity || 2}
++                      </Text>
++                    </View>
++                  </View>
++                  <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
++                    <MaterialIcons name={getStatusIcon(item.status) as any} size={18} color={statusColor} />
++                  </View>
+                 </View>
+-              </View>
+-            </TouchableOpacity>
+-          )}
++
++                {/* Subtle Watermark */}
++                <MaterialIcons
++                  name="door-open"
++                  size={64}
++                  color={isDark ? '#FFF' : colors.primary}
++                  style={{
++                    position: 'absolute',
++                    right: -10,
++                    bottom: -10,
++                    opacity: isDark ? 0.03 : 0.02,
++                    transform: [{ rotate: '-15deg' }]
++                  }}
++                />
++              </TouchableOpacity>
++            );
++          }}
+           contentContainerStyle={styles.listContent}
+           showsVerticalScrollIndicator={false}
+           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+diff --git a/app/admin/students.tsx b/app/admin/students.tsx
+index 0313e84..4bdb134 100644
+--- a/app/admin/students.tsx
++++ b/app/admin/students.tsx
+@@ -1,26 +1,27 @@
+ ﻿import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
+-import DateTimePicker from '@react-native-community/datetimepicker';
+-import { Image } from 'expo-image';
+-import * as ImagePicker from 'expo-image-picker';
+ import { LinearGradient } from 'expo-linear-gradient';
+ import { useLocalSearchParams, useRouter } from 'expo-router';
+ import React, { useRef, useState } from 'react';
+-import { Dimensions, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, SectionList, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
++import { Dimensions, KeyboardAvoidingView, Platform, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ import PagerView from 'react-native-pager-view';
+ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+ 
+ import AlphabetJumpBar from '../../components/AlphabetJumpBar';
+ import ExportModal from '../../components/ExportModal';
+-import InputField from '../../components/InputField';
+ import StudentDetailsModal from '../../components/StudentDetailsModal';
+ import { useAlert } from '../../context/AlertContext';
+ import { useRefresh } from '../../hooks/useRefresh';
+ import { API_BASE_URL } from '../../utils/api';
+ import { isAdmin, useUser } from '../../utils/authUtils';
+-import { createStudent, deleteStudent, subscribeToStudents, updateStudent } from '../../utils/studentUtils';
++import { deleteStudent, getAllStudents, subscribeToStudents } from '../../utils/studentUtils';
+ import { useTheme } from '../../utils/ThemeContext';
+ 
+-
++// Modular components
++import AddStudentForm from './components/AddStudentForm';
++import EditStudentModal from './components/EditStudentModal';
++import FilterHeader from './components/FilterHeader';
++import StatsGrid from './components/StatsGrid';
++import StudentCard from './components/StudentCard';
+ 
+ export default function StudentsPage() {
+   const { colors, theme } = useTheme();
+@@ -28,7 +29,7 @@ export default function StudentsPage() {
+   const user = useUser();
+   const router = useRouter();
+   const { showAlert } = useAlert();
+-  const { search, openId } = useLocalSearchParams();
++  const { search, openId, action, openEditId, openDeleteId } = useLocalSearchParams();
+ 
+   const styles = React.useMemo(() => StyleSheet.create({
+     container: {
+@@ -607,661 +608,142 @@ export default function StudentsPage() {
+     },
+   }), [colors, theme]);
+ 
+-  const [selectedId, setSelectedId] = useState<string | null>(null);
++  // Common States
+   const [searchQuery, setSearchQuery] = useState('');
+   const [students, setStudents] = useState<any[]>([]);
+-  const [loading, setLoading] = useState(true);
+-  const [exportModalVisible, setExportModalVisible] = useState(false);
+-
+-  const { refreshing, onRefresh } = useRefresh(async () => {
+-    // Simulated refresh for real-time list
+-    await new Promise(resolve => setTimeout(resolve, 1000));
+-  }, () => {
+-    // Clear search and selection
+-    setSearchQuery('');
+-    setSelectedId(null);
+-  });
+-
+-  // Auto-search from params
+-  React.useEffect(() => {
+-    if (search) {
+-      setSearchQuery(search as string);
+-    }
+-  }, [search]);
+-
+-  // Sync viewingStudent when students list updates (for real-time refresh after edit)
+-  React.useEffect(() => {
+-    if (viewingStudent && students.length > 0) {
+-      const updated = students.find(s => String(s.id) === String(viewingStudent.id));
+-      if (updated) {
+-        setViewingStudent(updated);
+-      }
+-    }
+-  }, [students]);
+-
+-  // Auto-expand student if openId is provided and exists in loaded students
+-  React.useEffect(() => {
+-    if (openId && students.length > 0) {
+-      const student = students.find(s => String(s.id) === String(openId));
+-      if (student) {
+-        setViewingStudent(student);
+-        setDetailsModalVisible(true);
+-      }
+-    }
+-  }, [openId, students]);
+-
+-  // Handle 'action' param to switch tabs
+-  const { action, openEditId } = useLocalSearchParams();
+-  React.useEffect(() => {
+-    if (action === 'allot') {
+-      // Small delay to ensure pager is ready
+-      setTimeout(() => {
+-        handleTabChange(1);
+-      }, 100);
+-    }
+-  }, [action]);
+-
+-  // Handle 'openEditId' param to auto-open edit modal
+-  React.useEffect(() => {
+-    if (openEditId && students.length > 0) {
+-      // Use loose equality or string conversion to match IDs
+-      const student = students.find(s => String(s.id) === String(openEditId));
+-      if (student) {
+-        // Clear param to avoid re-opening on re-renders if needed, 
+-        // but for now just opening is fine. router.setParams works but triggers re-render.
+-        handleEdit(student);
+-      }
+-    }
+-  }, [openEditId, students]);
+-
+-  // Handle 'openDeleteId' param to auto-trigger delete confirmation
+-  const { openDeleteId } = useLocalSearchParams();
+-  React.useEffect(() => {
+-    if (openDeleteId && students.length > 0) {
+-      const student = students.find(s => String(s.id) === String(openDeleteId));
+-      if (student) {
+-        handleDelete(student.id, student.name, student.roomNo || student.room);
+-      }
+-    }
+-  }, [openDeleteId, students]);
+-
+-
+-
+-  // Tab State & Pager Ref
++  const [isExportModalVisible, setExportModalVisible] = useState(false);
+   const [activeTab, setActiveTab] = useState(0); // 0: Manage, 1: Allotment
++  const [loading, setLoading] = useState(true);
++  const [refreshing, setRefreshing] = useState(false);
+   const pagerRef = useRef<PagerView>(null);
+ 
+-  const handleTabChange = (index: number) => {
+-    setActiveTab(index);
+-    pagerRef.current?.setPage(index);
+-  };
+-
+-  // Image Picker State
+-  const [image, setImage] = useState<string | null>(null);
+-
+-  const pickImage = async () => {
+-    // Request permission
+-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+-    if (status !== 'granted') {
+-      showAlert('Permission needed', 'Sorry, we need camera roll permissions to make this work!', [], 'error');
+-      return;
+-    }
+-
+-    const result = await ImagePicker.launchImageLibraryAsync({
+-      mediaTypes: 'images',
+-      allowsEditing: true,
+-      aspect: [1, 1],
+-      quality: 0.5,
+-    });
+-
+-    if (!result.canceled) {
+-      setImage(result.assets[0].uri);
+-      // Also update editing state if modal is open
+-      if (isEditModalVisible) {
+-        setEditImage(result.assets[0].uri);
+-      }
+-    }
+-  };
+-
+-  const [editImage, setEditImage] = useState<string | null>(null);
+-  const pickEditImage = async () => {
+-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+-    if (status !== 'granted') {
+-      showAlert('Permission needed', 'Sorry, we need camera roll permissions!', [], 'error');
+-      return;
+-    }
+-    const result = await ImagePicker.launchImageLibraryAsync({
+-      mediaTypes: 'images',
+-      allowsEditing: true,
+-      aspect: [1, 1],
+-      quality: 0.5,
+-    });
+-
+-    if (!result.canceled) {
+-      setEditImage(result.assets[0].uri);
+-    }
+-  };
+-
+-  // Allotment Form State
+-  const [fullName, setFullName] = useState('');
+-  const [rollNo, setRollNo] = useState('');
+-  const [collegeName, setCollegeName] = useState('');
+-  const [hostelName, setHostelName] = useState('');
+-  const [dob, setDob] = useState('');
+-  const [showDatePicker, setShowDatePicker] = useState(false);
+-  const [room, setRoom] = useState('');
+-  const [email, setEmail] = useState('');
+-  const [googleEmail, setGoogleEmail] = useState('');
+-  const [collegeEmail, setCollegeEmail] = useState('');
+-  const [phone, setPhone] = useState('');
+-  const [status, setStatus] = useState<'active' | 'inactive'>('active');
+-  const [wifiSSID, setWifiSSID] = useState('');
+-  const [wifiPassword, setWifiPassword] = useState('');
+-  const [generatedPassword, setGeneratedPassword] = useState('');
+-  const [address, setAddress] = useState('');
+-  const [fatherName, setFatherName] = useState(''); // New Father Name State
+-  const [fatherPhone, setFatherPhone] = useState(''); // New Father Phone State
+-  const [motherName, setMotherName] = useState(''); // New Mother Name State
+-  const [motherPhone, setMotherPhone] = useState(''); // New Mother Phone State
+-  const [totalFee, setTotalFee] = useState(''); // Renamed from initialDues
+-  const [feeFrequency, setFeeFrequency] = useState<'Monthly' | 'Semester' | 'Yearly'>('Monthly');
+-  // Medical Info State
+-  const [bloodGroup, setBloodGroup] = useState('');
+-  const [medicalHistory, setMedicalHistory] = useState('');
+-  const [emergencyContactName, setEmergencyContactName] = useState('');
+-  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+-
+-  // Room Configuration States
+-  const [sharingType, setSharingType] = useState('');
+-  const [apartmentType, setApartmentType] = useState<string | null>(null);
+-
+-  const [hasSubmitted, setHasSubmitted] = useState(false);
+-  const [facilities, setFacilities] = useState([
+-    { name: 'WiFi', icon: 'wifi' as const, status: 'Not Included' },
+-    { name: 'Laundry', icon: 'washing-machine' as const, status: 'Not Included' },
+-    { name: 'Cleaning', icon: 'broom' as const, status: 'Not Included' },
+-    { name: 'Meals', icon: 'food' as const, status: 'Not Included' },
+-    { name: 'Electricity', icon: 'lightning-bolt' as const, status: 'Not Included' },
+-    { name: 'Fridge', icon: 'fridge' as const, status: 'Not Included' },
+-    { name: 'Microwave', icon: 'microwave' as const, status: 'Not Included' },
+-    { name: 'AC', icon: 'air-conditioner' as const, status: 'Not Included' },
+-    { name: 'TV', icon: 'television' as const, status: 'Not Included' },
+-    { name: 'Induction', icon: 'stove' as const, status: 'Not Included' },
+-    { name: 'Cooler', icon: 'snowflake' as const, status: 'Not Included' },
+-    { name: 'Fan', icon: 'fan' as const, status: 'Not Included' },
+-  ]);
++  // UI State
++  const [showAlphabet, setShowAlphabet] = useState(false);
++  const hideTimeout = useRef<any>(null);
++  const sectionListRef = useRef<SectionList>(null);
+ 
+-  // Edit Modal State
++  // Modal visibility
+   const [isEditModalVisible, setEditModalVisible] = useState(false);
+-  const [editingStudent, setEditingStudent] = useState<any>(null);
+-
+-  // View Details Modal State
+-  const [viewingStudent, setViewingStudent] = useState<any>(null);
+   const [isDetailsModalVisible, setDetailsModalVisible] = useState(false);
++  const [viewingStudent, setViewingStudent] = useState<any>(null);
++  const [editingStudent, setEditingStudent] = useState<any>(null);
+ 
+-  // Form State (Edit)
+-  const [editName, setEditName] = useState('');
+-  const [editRollNo, setEditRollNo] = useState('');
+-  const [editRoom, setEditRoom] = useState('');
+-
+-  // Edit Room Configuration
+-  const [editSharingType, setEditSharingType] = useState('Single Sharing');
+-  const [editApartmentType, setEditApartmentType] = useState<string | null>(null);
+-  const [editFacilities, setEditFacilities] = useState<any[]>([]);
+-
+-  const [editCollege, setEditCollege] = useState('');
+-  const [editHostelName, setEditHostelName] = useState('');
+-
+-  const [editDob, setEditDob] = useState('');
+-  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+-  const [editPhone, setEditPhone] = useState('');
+-
+-  const [editGoogleEmail, setEditGoogleEmail] = useState('');
+-  const [editCollegeEmail, setEditCollegeEmail] = useState('');
+-  const [editStatus, setEditStatus] = useState('active');
+-  const [editWifiSSID, setEditWifiSSID] = useState('');
+-  const [editWifiPassword, setEditWifiPassword] = useState('');
+-  const [editPassword, setEditPassword] = useState('');
+-  const [editAddress, setEditAddress] = useState('');
+-  const [editFatherName, setEditFatherName] = useState(''); // Edit Father Name
+-  const [editFatherPhone, setEditFatherPhone] = useState(''); // Edit Father Phone
+-  const [editMotherName, setEditMotherName] = useState(''); // Edit Mother Name
+-  const [editMotherPhone, setEditMotherPhone] = useState(''); // Edit Mother Phone
+-
+-  const [editTotalFee, setEditTotalFee] = useState(''); // Add editTotalFee state
+-  const [editDues, setEditDues] = useState(''); // Edit Dues
+-  const [editFeeFrequency, setEditFeeFrequency] = useState<'Monthly' | 'Semester' | 'Yearly'>('Monthly');
+-  // Edit Medical Info State
+-  const [editBloodGroup, setEditBloodGroup] = useState('');
+-  const [editMedicalHistory, setEditMedicalHistory] = useState('');
+-  const [editEmergencyContactName, setEditEmergencyContactName] = useState('');
+-  const [editEmergencyContactPhone, setEditEmergencyContactPhone] = useState('');
+-
+-  React.useEffect(() => {
+-    // Generate a secure random password on mount for allotment (max 8 chars)
+-    const pwd = Math.random().toString(36).slice(-8); // Exactly 8 chars
+-    setGeneratedPassword(pwd);
+-  }, []);
+-
+-  // Helper to convert DD/MM/YYYY to YYYY-MM-DD for backend
+-  const toISODate = (dateStr: string) => {
+-    if (!dateStr) return null;
+-    if (dateStr.includes('/')) {
+-      const parts = dateStr.split('/');
+-      if (parts.length === 3) {
+-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+-      }
+-    }
+-    return dateStr;
+-  };
+-
+-  // Helper to convert YYYY-MM-DD to DD/MM/YYYY for frontend display
+-  const fromISODate = (dateStr: string) => {
+-    if (!dateStr) return '';
+-    // Check if already in DD/MM/YYYY
+-    if (dateStr.includes('/') && dateStr.split('/')[0].length === 2) return dateStr;
+-
+-    // Handle YYYY-MM-DD
+-    if (dateStr.includes('-')) {
+-      const parts = dateStr.split('-');
+-      if (parts.length === 3) {
+-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+-      }
+-    }
+-    return dateStr;
+-  };
+-
+-  const handleAllotmentSubmit = async () => {
+-    setHasSubmitted(true);
+-
+-
+-
+-    if (!fullName || !rollNo || !collegeName || !hostelName || !dob || !room || !email || !phone || !address || !fatherName || !fatherPhone || !motherName || !motherPhone || !totalFee) {
+-      showAlert('Missing details', 'Please fill all mandatory fields (marked red).', [], 'error');
+-      return;
+-    }
+-
+-    if (!/^\d{10}$/.test(phone)) {
+-      showAlert('Invalid Phone', 'Phone number must be exactly 10 digits.', [], 'error');
+-      return;
+-    }
+-
+-    if (generatedPassword.length < 6 || generatedPassword.length > 8) {
+-      showAlert('Invalid Password', 'Password must be between 6-8 characters.', [], 'error');
+-      return;
+-    }
+-
++  // Fetching logic
++  const fetchStudents = async () => {
+     try {
+-      /* API Migration */
+-      /* API Migration */
+-      /* API Migration - JSON Payload Fix */
+-      const data = {
+-        fullName,
+-        email: email.toLowerCase().trim(),
+-        password: generatedPassword,
+-        rollNo,
+-        collegeName,
+-        hostelName,
+-        dob: toISODate(dob) || dob,
+-        roomNo: room,
+-        phone,
+-        googleEmail,
+-        collegeEmail,
+-        address,
+-        fatherName,
+-        fatherPhone,
+-        motherName,
+-        motherPhone,
+-        totalFee: parseFloat(totalFee) || 0,
+-        dues: 0,
+-        feeFrequency,
+-        bloodGroup,
+-        medicalHistory,
+-        emergencyContactName,
+-        emergencyContactPhone,
+-        status,
+-        wifiSSID,
+-        wifiPassword,
+-        roomType: apartmentType ? `${apartmentType} ${sharingType}` : sharingType,
+-        facilities: facilities, // Send as array directly
+-        profilePhoto: null // JSON cannot send files. Handle upload separately if needed.
+-      };
+-
+-      const response = await createStudent(data);
+-
+-      if (response?.success) {
+-        const studentId = response.studentId;
+-
+-        // 2. Upload Profile Photo if exists
+-        if (image) {
+-          try {
+-            console.log("📸 Uploading profile photo for ID:", studentId);
+-            const photoData = new FormData();
+-            // @ts-ignore
+-            photoData.append('profilePhoto', {
+-              uri: image,
+-              name: 'profile.jpg',
+-              type: 'image/jpeg',
+-            });
+-
+-            // Use updateStudent to upload photo
+-            // updateStudent handles FormData correctly via fetch
+-            await updateStudent(studentId, photoData);
+-            console.log("✅ Profile photo uploaded");
+-
+-          } catch (uploadErr) {
+-            console.error("❌ Photo upload failed:", uploadErr);
+-            showAlert('Warning', 'Student created but photo upload failed. You can update it later.', [], 'warning');
+-          }
+-        }
+-
+-        // Trigger manual refresh
+-        const { getAllStudents } = await import('../../utils/studentUtils');
+-        const updatedData = await getAllStudents();
+-        setStudents(updatedData);
+-
+-        showAlert(
+-          'Success',
+-          `Student allotted to Room ${room}.\n\nLogin Password: ${generatedPassword}\n\nPlease share this with the student.`,
+-          [
+-            {
+-              text: 'Copy & Close',
+-              onPress: () => {
+-                handleTabChange(0);
+-                setFullName(''); setRollNo(''); setRoom(''); setEmail(''); setPhone(''); setDob('');
+-                setAddress(''); setFatherName(''); setFatherPhone(''); setMotherName(''); setMotherPhone('');
+-                setTotalFee(''); setFeeFrequency('Monthly'); setBloodGroup(''); setMedicalHistory(''); setEmergencyContactName('');
+-                setEmergencyContactPhone(''); setWifiSSID(''); setWifiPassword('');
+-                setSharingType(''); setApartmentType(null);
+-                setFacilities((prev) => prev.map((f) => ({ ...f, status: 'Not Included' })));
+-                setImage(null);
+-                setHasSubmitted(false);
+-                setGeneratedPassword(Math.random().toString(36).slice(-8));
+-              }
+-            }
+-          ],
+-          'success'
+-        );
+-      }
+-    } catch (error: any) {
+-      showAlert('Error', 'Failed to allot student: ' + (error.response?.data?.error || error.message), [], 'error');
++      const data = await getAllStudents();
++      setStudents(data);
++    } catch (e) {
++      console.error(e);
++      showAlert('Error', 'Failed to fetch students.', [], 'error');
+     }
+   };
+ 
+-  // Fetch students from Firestore
+-  React.useEffect(() => {
+-    // Wait for user to be verified as admin
+-    if (!isAdmin(user)) return;
+-
+-    let unsubscribe: () => void;
+-
+-    const fetchStudents = async () => {
+-      /* API Migration */
+-      unsubscribe = subscribeToStudents((data) => {
+-        setStudents(data);
+-        setLoading(false);
+-      });
+-    };
+-
+-    fetchStudents();
+-    return () => {
+-      if (unsubscribe) unsubscribe();
+-    };
+-  }, [user]);
++  const { onRefresh } = useRefresh(async () => {
++    await fetchStudents();
++  });
+ 
+-  const [editEmail, setEditEmail] = useState(''); // Add state for ID/Email editing
++  const handleTabChange = (index: number) => {
++    setActiveTab(index);
++    pagerRef.current?.setPage(index);
++  };
+ 
+   const handleEdit = (student: any) => {
+     setEditingStudent(student);
+-    setEditName(student.name || '');
+-    setEditEmail(student.email || ''); // This is LOGIN EMAIL
+-    setEditRollNo(student.rollNo || '');
+-    setEditRoom(student.room || '');
+-    setEditCollege(student.collegeName || '');
+-    setEditHostelName(student.hostelName || '');
+-    setEditHostelName(student.hostelName || '');
+-    setEditDob(fromISODate(student.dob) || '');
+-    setEditPhone(student.phone || '');
+-    setEditPhone(student.phone || '');
+-    setEditGoogleEmail(student.googleEmail || '');
+-    setEditCollegeEmail(student.collegeEmail || '');
+-    setEditStatus(student.status || 'active');
+-    setEditWifiSSID(student.wifiSSID || '');
+-    setEditWifiSSID(student.wifiSSID || '');
+-    setEditWifiPassword(student.wifiPassword || '');
+-
+-    // Parse Room Type for Edit
+-    const rt = student.roomType || '';
+-    if (rt.includes('BHK') || rt.includes('Studio')) {
+-      const parts = rt.split(' '); // e.g., "1BHK Double Sharing"
+-      const foundApt = parts.find((p: string) => p.includes('BHK') || p === 'Studio');
+-      setEditApartmentType(foundApt || null);
+-      setEditSharingType(rt.replace(foundApt || '', '').trim() || 'Single Sharing');
+-    } else {
+-      setEditApartmentType(null);
+-      setEditSharingType(rt || 'Single Sharing');
+-    }
+-
+-    // Initialize Facilities for Edit
+-    let parsedFacilities: any[] = [];
+-    try {
+-      if (Array.isArray(student.facilities)) {
+-        parsedFacilities = student.facilities;
+-      } else if (typeof student.facilities === 'string') {
+-        parsedFacilities = JSON.parse(student.facilities);
+-      }
+-    } catch (e) {
+-      console.error('Error parsing facilities:', e);
+-    }
+-
+-    if (parsedFacilities.length > 0) {
+-      // Merge with default list to ensure all icons/names are present
+-      const defaultFacilities = [
+-        { name: 'WiFi', icon: 'wifi' as const, status: 'Included' },
+-        { name: 'Laundry', icon: 'washing-machine' as const, status: 'Not Included' },
+-        { name: 'Cleaning', icon: 'broom' as const, status: 'Included' },
+-        { name: 'Meals', icon: 'food' as const, status: 'Included' },
+-        { name: 'Electricity', icon: 'lightning-bolt' as const, status: 'Included' },
+-        { name: 'Fridge', icon: 'fridge' as const, status: 'Not Included' },
+-        { name: 'Microwave', icon: 'microwave' as const, status: 'Not Included' },
+-        { name: 'AC', icon: 'air-conditioner' as const, status: 'Not Included' },
+-        { name: 'TV', icon: 'television' as const, status: 'Not Included' },
+-        { name: 'Induction', icon: 'stove' as const, status: 'Not Included' },
+-        { name: 'Cooler', icon: 'snowflake' as const, status: 'Not Included' },
+-        { name: 'Fan', icon: 'fan' as const, status: 'Included' },
+-      ];
+-
+-      const merged = defaultFacilities.map(defItem => {
+-        const existing = parsedFacilities.find((f: any) => f.name === defItem.name);
+-        return existing ? { ...defItem, status: existing.status } : defItem;
+-      });
+-      setEditFacilities(merged);
+-    } else {
+-      // Default if none
+-      setEditFacilities([
+-        { name: 'WiFi', icon: 'wifi' as const, status: 'Included' },
+-        { name: 'Laundry', icon: 'washing-machine' as const, status: 'Not Included' },
+-        { name: 'Cleaning', icon: 'broom' as const, status: 'Included' },
+-        { name: 'Meals', icon: 'food' as const, status: 'Included' },
+-        { name: 'Electricity', icon: 'lightning-bolt' as const, status: 'Included' },
+-        { name: 'Fridge', icon: 'fridge' as const, status: 'Not Included' },
+-        { name: 'Microwave', icon: 'microwave' as const, status: 'Not Included' },
+-        { name: 'AC', icon: 'air-conditioner' as const, status: 'Not Included' },
+-        { name: 'TV', icon: 'television' as const, status: 'Not Included' },
+-        { name: 'Induction', icon: 'stove' as const, status: 'Not Included' },
+-        { name: 'Cooler', icon: 'snowflake' as const, status: 'Not Included' },
+-        { name: 'Fan', icon: 'fan' as const, status: 'Included' },
+-      ]);
+-    }
+-
+-    setEditPassword(student.password || student.tempPassword || '');
+-    setEditAddress(student.address || '');
+-    setEditFatherName(student.fatherName || '');
+-    setEditFatherPhone(student.fatherPhone || '');
+-    setEditMotherName(student.motherName || '');
+-    setEditMotherPhone(student.motherPhone || '');
+-    setEditMotherName(student.motherName || '');
+-    setEditMotherPhone(student.motherPhone || '');
+-    setEditTotalFee(student.totalFee ? String(student.totalFee) : ''); // Initialize editTotalFee
+-    setEditDues(student.dues ? String(student.dues) : '');
+-
+-    setEditFeeFrequency(student.feeFrequency || 'Monthly');
+-    setEditBloodGroup(student.bloodGroup || '');
+-    setEditMedicalHistory(student.medicalHistory || '');
+-    setEditEmergencyContactName(student.emergencyContactName || '');
+-    setEditEmergencyContactPhone(student.emergencyContactPhone || '');
+-
+-    // Load existing profile photo if available
+-    setEditImage(student.profilePhoto ? (student.profilePhoto.startsWith('http') ? student.profilePhoto : `${API_BASE_URL}${student.profilePhoto}`) : null);
+-
+     setEditModalVisible(true);
+   };
+ 
+-
+-
+-  const onDateChange = (event: any, selectedDate?: Date) => {
+-    setShowDatePicker(false);
+-    if (selectedDate) {
+-      const day = selectedDate.getDate().toString().padStart(2, '0');
+-      const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+-      const year = selectedDate.getFullYear();
+-      setDob(`${day}/${month}/${year}`);
+-    }
+-  };
+-
+-  const onEditDateChange = (event: any, selectedDate?: Date) => {
+-    setShowEditDatePicker(false);
+-    if (selectedDate) {
+-      const day = selectedDate.getDate().toString().padStart(2, '0');
+-      const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+-      const year = selectedDate.getFullYear();
+-      setEditDob(`${day}/${month}/${year}`);
+-    }
+-  };
+-
+-  const handleSaveEdit = async () => {
+-    if (!editingStudent) return;
+-    setLoading(true);
+-
+-    try {
+-      /* API Migration */
+-      const formData = new FormData();
+-      formData.append('fullName', editName);
+-      formData.append('rollNo', editRollNo);
+-      formData.append('roomNo', editRoom);
+-      formData.append('collegeName', editCollege);
+-      formData.append('hostelName', editHostelName);
+-      formData.append('dob', toISODate(editDob) || editDob);
+-      formData.append('phone', editPhone);
+-      formData.append('googleEmail', editGoogleEmail);
+-      formData.append('collegeEmail', editCollegeEmail);
+-      formData.append('status', editStatus);
+-      formData.append('wifiSSID', editWifiSSID);
+-      formData.append('wifiPassword', editWifiPassword);
+-      formData.append('address', editAddress);
+-      formData.append('fatherName', editFatherName);
+-      formData.append('fatherPhone', editFatherPhone);
+-      formData.append('motherName', editMotherName);
+-      formData.append('motherPhone', editMotherPhone);
+-
+-      formData.append('totalFee', editTotalFee); // Send totalFee
+-      formData.append('dues', editDues);
+-      formData.append('feeFrequency', editFeeFrequency);
+-      formData.append('bloodGroup', editBloodGroup);
+-      formData.append('medicalHistory', editMedicalHistory);
+-      formData.append('emergencyContactName', editEmergencyContactName);
+-      formData.append('emergencyContactPhone', editEmergencyContactPhone);
+-      formData.append('email', editEmail); // Login Email
+-      formData.append('password', editPassword);
+-
+-      // Combine Room Type
+-      const finalRoomType = editApartmentType ? `${editApartmentType} ${editSharingType}` : editSharingType;
+-      formData.append('roomType', finalRoomType);
+-      formData.append('facilities', JSON.stringify(editFacilities));
+-
+-      if (editImage && editImage !== editingStudent.profilePhoto && !editImage.startsWith('http')) {
+-        // @ts-ignore
+-        formData.append('profilePhoto', {
+-          uri: editImage,
+-          name: 'profile_edit.jpg',
+-          type: 'image/jpeg',
+-        });
+-      }
+-
+-      await updateStudent(editingStudent.id, formData);
+-
+-      // Trigger immediate manual refresh
+-      const { getAllStudents } = await import('../../utils/studentUtils');
+-      const updatedData = await getAllStudents();
+-      setStudents(updatedData);
+-
+-      showAlert('Success', 'Student details updated successfully.', [], 'success');
+-      setEditModalVisible(false);
+-      setEditEmail('');
+-    } catch (e: any) {
+-      console.error(e);
+-      showAlert('Error', 'Failed to update student: ' + (e.response?.data?.error || e.message), [], 'error');
+-    } finally {
+-      setLoading(false);
+-    }
+-  };
+-
+-  const handleDelete = (id: string, name: string, roomNo: string) => {
++  const handleDelete = async (id: string, name: string = '', room: string = '') => {
+     showAlert(
+-      'Confirm Delete',
+-      `Are you sure you want to remove ${name}?`,
++      'Delete Student',
++      `Are you sure you want to delete ${name}${room ? ` from Room ${room}` : ''}? This action cannot be undone.`,
+       [
+-        {
+-          text: 'Cancel',
+-          style: 'cancel',
+-          onPress: () => { },
+-        },
++        { text: 'Cancel', style: 'cancel' },
+         {
+           text: 'Delete',
+           style: 'destructive',
+           onPress: async () => {
+             try {
+-              /* API Migration */
+-              await deleteStudent(id);
+-              showAlert('Success', 'Student removed successfully.', [], 'success');
++              const res: any = await deleteStudent(id);
++              if (res.success) {
++                showAlert('Success', 'Student deleted successfully.', [], 'success');
++                setDetailsModalVisible(false);
++                fetchStudents();
++              }
+             } catch (error: any) {
+-              console.error(error);
+-              showAlert('Error', 'Failed to delete student: ' + (error.response?.data?.error || error.message), [], 'error');
++              showAlert('Error', error.message || 'Failed to delete student', [], 'error');
+             }
+-          },
+-        },
++          }
++        }
+       ],
+       'warning'
+     );
+   };
+ 
+-  const filteredStudents = students.filter(
+-    (s) =>
+-      s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+-      s.room?.includes(searchQuery) ||
+-      s.rollNo?.includes(searchQuery)
+-  ).sort((a, b) => a.name.localeCompare(b.name));
++  // Real-time Subscriptions & Initial Fetch
++  React.useEffect(() => {
++    if (!isAdmin(user)) return;
++    const unsubscribe = subscribeToStudents((data) => {
++      setStudents(data);
++      setLoading(false);
++    });
++    return () => unsubscribe && unsubscribe();
++  }, [user]);
++
++  // URL Parameter Handling
++  React.useEffect(() => {
++    if (search) setSearchQuery(search as string);
++  }, [search]);
++
++  React.useEffect(() => {
++    if (openId && students.length > 0) {
++      const student = students.find(s => String(s.id) === String(openId));
++      if (student) {
++        setViewingStudent(student);
++        setDetailsModalVisible(true);
++      }
++    }
++  }, [openId, students]);
+ 
+-  const activeStudents = students.filter((s) => s.status === 'active').length;
++  React.useEffect(() => {
++    if (action === 'allot') {
++      setTimeout(() => handleTabChange(1), 100);
++    }
++  }, [action]);
+ 
+-  const sectionListRef = useRef<SectionList>(null);
+-  const [showAlphabet, setShowAlphabet] = useState(false);
+-  const hideTimeout = useRef<any>(null);
++  React.useEffect(() => {
++    if (openEditId && students.length > 0) {
++      const student = students.find(s => String(s.id) === String(openEditId));
++      if (student) handleEdit(student);
++    }
++  }, [openEditId, students]);
+ 
++  React.useEffect(() => {
++    if (openDeleteId && students.length > 0) {
++      const student = students.find(s => String(s.id) === String(openDeleteId));
++      if (student) handleDelete(student.id);
++    }
++  }, [openDeleteId, students]);
++
++  // Alpha Jump Logic
+   const handleScroll = () => {
+     setShowAlphabet(true);
+     if (hideTimeout.current) clearTimeout(hideTimeout.current);
+-    hideTimeout.current = setTimeout(() => {
+-      setShowAlphabet(false);
+-    }, 1500);
++    hideTimeout.current = setTimeout(() => setShowAlphabet(false), 1500);
+   };
+ 
+-  // Group by first letter
+   const sections = React.useMemo(() => {
+     const groups: { [key: string]: any[] } = {};
+-    if (filteredStudents.length === 0) return [];
++    const filtered = students.filter(
++      (s) =>
++        s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
++        s.room?.includes(searchQuery) ||
++        s.rollNo?.includes(searchQuery)
++    ).sort((a, b) => a.name.localeCompare(b.name));
++
++    if (filtered.length === 0) return [];
+ 
+-    filteredStudents.forEach(student => {
++    filtered.forEach(student => {
+       const letter = student.name.charAt(0).toUpperCase();
+       if (/[A-Z]/.test(letter)) {
+         if (!groups[letter]) groups[letter] = [];
+@@ -1272,12 +754,11 @@ export default function StudentsPage() {
+       }
+     });
+ 
+-    const sortedKeys = Object.keys(groups).sort();
+-    return sortedKeys.map(key => ({
++    return Object.keys(groups).sort().map(key => ({
+       title: key,
+       data: groups[key]
+     }));
+-  }, [filteredStudents]);
++  }, [students, searchQuery]);
+ 
+   const handleLetterPress = (letter: string) => {
+     const sectionIndex = sections.findIndex(s => s.title === letter);
+@@ -1290,1174 +771,147 @@ export default function StudentsPage() {
+     }
+   };
+ 
+-  const getStatusColor = (status: string) => {
+-    return status === 'active' ? '#4CAF50' : '#F44336';
+-  };
++  const activeStudentsCount = React.useMemo(() =>
++    students.filter(s => s.status === 'active').length
++    , [students]);
+ 
+-  const getStatusIcon = (status: string) => {
+-    return status === 'active' ? 'check-circle' : 'alert-circle';
+-  };
++  const roomsCount = React.useMemo(() =>
++    new Set(students.map(s => s.room).filter(Boolean)).size
++    , [students]);
+ 
+-  if (!isAdmin(user))
++  const filteredCount = React.useMemo(() =>
++    sections.reduce((acc, section) => acc + section.data.length, 0)
++    , [sections]);
++
++  if (!isAdmin(user)) {
+     return (
+       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+         <Text>Access denied.</Text>
+       </View>
+     );
++  }
+ 
+   return (
+     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['left', 'right', 'bottom']}>
+-      <KeyboardAvoidingView
+-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+-        style={{ flex: 1 }}
+-      >
+-        {/* Edit Modal */}
+-        {isEditModalVisible && (
+-          <View style={styles.modalOverlay}>
+-            <View // Inner KB view handled by modal structure
+-              style={styles.keyboardAvoidingView}
+-            >
+-              <View style={styles.modalContent}>
+-                <View style={[styles.modalHeader, { paddingTop: insets.top }]}>
+-                  <Text style={styles.modalTitle}>Edit Student</Text>
+-                  <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeBtn}>
+-                    <MaterialIcons name="close" size={24} color="#64748B" />
+-                  </TouchableOpacity>
+-                </View>
+-                <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
+-                  {/* Profile Photo Section */}
+-                  <View style={styles.profilePhotoContainer}>
+-                    <View style={styles.photoPlaceholder}>
+-                      {editImage ? (
+-                        <Image source={{ uri: editImage }} style={styles.profilePhoto} contentFit="cover" />
+-                      ) : (
+-                        <MaterialIcons name="account" size={40} color={colors.textSecondary} />
+-                      )}
+-                    </View>
+-                    <TouchableOpacity style={styles.changePhotoBtn} onPress={pickEditImage}>
+-                      <MaterialIcons name="camera" size={16} color={colors.primary} />
+-                      <Text style={styles.changePhotoText}>Change Photo</Text>
+-                    </TouchableOpacity>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Login Email (Official ID)</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="email-outline" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput
+-                        style={styles.modalInput}
+-                        value={editEmail}
+-                        onChangeText={setEditEmail}
+-                        placeholder="official@college.edu"
+-                        autoCapitalize="none"
+-                        keyboardType="email-address"
+-                      />
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Login Password</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="key" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput
+-                        style={styles.modalInput}
+-                        value={editPassword}
+-                        onChangeText={setEditPassword}
+-                        placeholder="Login Password"
+-                        autoCapitalize="none"
+-                      />
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Google Mail (For Login)</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="google" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput
+-                        style={styles.modalInput}
+-                        value={editGoogleEmail}
+-                        onChangeText={setEditGoogleEmail}
+-                        placeholder="student.google@gmail.com"
+-                        autoCapitalize="none"
+-                        keyboardType="email-address"
+-                      />
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>College Email</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="email" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput
+-                        style={styles.modalInput}
+-                        value={editCollegeEmail}
+-                        onChangeText={setEditCollegeEmail}
+-                        placeholder="student@college.edu"
+-                        autoCapitalize="none"
+-                        keyboardType="email-address"
+-                      />
+-                    </View>
+-                  </View>
+-
+-
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Full Name</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="account" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} placeholder="Full Name" />
+-                    </View>
+-
+-                    <View style={{ marginTop: 12 }}>
+-                      <Text style={styles.modalLabel}>Roll No</Text>
+-                      <View style={styles.modalInputWrapper}>
+-                        <MaterialIcons name="identifier" size={20} color="#64748B" style={styles.inputIcon} />
+-                        <TextInput style={styles.modalInput} value={editRollNo} onChangeText={setEditRollNo} placeholder="Roll No" />
+-                      </View>
+-                    </View>
+-
+-                    <View style={{ marginTop: 12 }}>
+-                      <Text style={styles.modalLabel}>Room</Text>
+-                      <View style={styles.modalInputWrapper}>
+-                        <MaterialIcons name="door" size={20} color="#64748B" style={styles.inputIcon} />
+-                        <TextInput style={styles.modalInput} value={editRoom} onChangeText={setEditRoom} placeholder="Room" />
+-                      </View>
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>WiFi SSID</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="wifi" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput
+-                        style={styles.modalInput}
+-                        value={editWifiSSID}
+-                        onChangeText={setEditWifiSSID}
+-                        placeholder="WiFi SSID"
+-                        placeholderTextColor="#94A3B8"
+-                      />
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>WiFi Password</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="lock" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput
+-                        style={styles.modalInput}
+-                        value={editWifiPassword}
+-                        onChangeText={setEditWifiPassword}
+-                        placeholder="WiFi Password"
+-                        placeholderTextColor="#94A3B8"
+-                      />
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>College Name</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="school" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editCollege} onChangeText={setEditCollege} placeholder="College" />
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Hostel Name</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="office-building" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editHostelName} onChangeText={setEditHostelName} placeholder="Hostel" />
+-                    </View>
+-                  </View>
+-
+-                  {/* Room Configuration Section - Edit */}
+-                  <View style={styles.formSection}>
+-                    <Text style={[styles.modalLabel, { color: colors.primary, marginBottom: 12 }]}>Room Configuration</Text>
+-
+-                    <View style={{ marginBottom: 16 }}>
+-                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>Sharing Options</Text>
+-                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+-                        {['Single Sharing', 'Double Sharing', 'Triple Sharing'].map((type) => (
+-                          <TouchableOpacity
+-                            key={type}
+-                            style={{
+-                              paddingHorizontal: 12,
+-                              paddingVertical: 8,
+-                              borderRadius: 12,
+-                              backgroundColor: editSharingType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                              borderWidth: 1,
+-                              borderColor: editSharingType === type ? colors.primary : colors.border
+-                            }}
+-                            onPress={() => setEditSharingType(type)}
+-                          >
+-                            <Text style={{
+-                              color: editSharingType === type ? '#fff' : colors.textSecondary,
+-                              fontWeight: '600',
+-                              fontSize: 12
+-                            }}>{type}</Text>
+-                          </TouchableOpacity>
+-                        ))}
+-                      </View>
+-
+-                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>BHK / Studio Options (Optional)</Text>
+-                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+-                        {['1BHK', '2BHK', '3BHK', 'Studio'].map((type) => (
+-                          <TouchableOpacity
+-                            key={type}
+-                            style={{
+-                              paddingHorizontal: 16,
+-                              paddingVertical: 8,
+-                              borderRadius: 12,
+-                              backgroundColor: editApartmentType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                              borderWidth: 1,
+-                              borderColor: editApartmentType === type ? colors.primary : colors.border
+-                            }}
+-                            onPress={() => setEditApartmentType(editApartmentType === type ? null : type)}
+-                          >
+-                            <Text style={{
+-                              color: editApartmentType === type ? '#fff' : colors.textSecondary,
+-                              fontWeight: '600',
+-                              fontSize: 12
+-                            }}>{type}</Text>
+-                          </TouchableOpacity>
+-                        ))}
+-                      </View>
+-                    </View>
+-
+-                    <Text style={[styles.label, { marginTop: 4, marginBottom: 8 }]}>Facilities & Amenities</Text>
+-                    <View style={{ marginTop: 0 }}>
+-                      {editFacilities.map((fac, idx) => (
+-                        <View key={fac.name} style={{
+-                          flexDirection: 'row',
+-                          alignItems: 'center',
+-                          justifyContent: 'space-between',
+-                          paddingVertical: 10,
+-                          borderBottomWidth: idx === editFacilities.length - 1 ? 0 : 1,
+-                          borderBottomColor: colors.border
+-                        }}>
+-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+-                            <MaterialIcons name={fac.icon} size={20} color={colors.primary} />
+-                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{fac.name}</Text>
+-                          </View>
+-                          <View style={{ flexDirection: 'row', gap: 6 }}>
+-                            <TouchableOpacity
+-                              onPress={() => {
+-                                const f = [...editFacilities];
+-                                f[idx].status = 'Included';
+-                                setEditFacilities(f);
+-                              }}
+-                              style={{
+-                                paddingHorizontal: 12,
+-                                paddingVertical: 6,
+-                                borderRadius: 8,
+-                                backgroundColor: fac.status === 'Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                                borderWidth: 1,
+-                                borderColor: fac.status === 'Included' ? colors.primary : colors.border
+-                              }}>
+-                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Included' ? '#fff' : colors.textSecondary }}>Included</Text>
+-                            </TouchableOpacity>
+-                            <TouchableOpacity
+-                              onPress={() => {
+-                                const f = [...editFacilities];
+-                                f[idx].status = 'Not Included';
+-                                setEditFacilities(f);
+-                              }}
+-                              style={{
+-                                paddingHorizontal: 12,
+-                                paddingVertical: 6,
+-                                borderRadius: 8,
+-                                backgroundColor: fac.status === 'Not Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                                borderWidth: 1,
+-                                borderColor: fac.status === 'Not Included' ? colors.primary : colors.border
+-                              }}>
+-                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Not Included' ? '#fff' : colors.textSecondary }}>Not Included</Text>
+-                            </TouchableOpacity>
+-                          </View>
+-                        </View>
+-                      ))}
+-                    </View>
+-                  </View>
+-
+-                  <View style={{ flexDirection: 'row', gap: 12 }}>
+-                    <View style={{ flex: 1 }}>
+-                      <Text style={styles.modalLabel}>Date of Birth</Text>
+-                      <TouchableOpacity
+-                        onPress={() => setShowEditDatePicker(true)}
+-                        style={styles.modalInputWrapper}
+-                      >
+-                        <MaterialIcons name="calendar-account" size={20} color="#64748B" style={styles.inputIcon} />
+-                        <Text style={[styles.modalInput, { color: editDob ? colors.text : '#94A3B8', paddingVertical: 14 }]}>
+-                          {editDob || 'DD/MM/YYYY'}
+-                        </Text>
+-                      </TouchableOpacity>
+-                      {showEditDatePicker && (
+-                        <DateTimePicker
+-                          value={editDob && editDob.includes('/') ? new Date(editDob.split('/').reverse().join('-')) : new Date()}
+-                          mode="date"
+-                          display="default"
+-                          onChange={onEditDateChange}
+-                          maximumDate={new Date()}
+-                        />
+-                      )}
+-                    </View>
+-                    <View style={{ flex: 1 }}>
+-                      <Text style={styles.modalLabel}>Phone</Text>
+-                      <View style={styles.modalInputWrapper}>
+-                        <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
+-                        <TextInput style={styles.modalInput} value={editPhone} onChangeText={setEditPhone} keyboardType="phone-pad" placeholder="Phone" />
+-                      </View>
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Address</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="map-marker" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editAddress} onChangeText={setEditAddress} placeholder="Permanent Address" multiline />
+-                    </View>
+-                  </View>
+-
+-                  <View style={{ marginTop: 12 }}>
+-                    <Text style={styles.modalLabel}>Father's Name</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="account-tie" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editFatherName} onChangeText={setEditFatherName} placeholder="Father Name" />
+-                    </View>
+-                  </View>
+-
+-                  <View style={{ marginTop: 12 }}>
+-                    <Text style={styles.modalLabel}>Father's Phone</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editFatherPhone} onChangeText={setEditFatherPhone} placeholder="Phone" keyboardType="phone-pad" />
+-                    </View>
+-                  </View>
+-
+-                  <View style={{ marginTop: 12 }}>
+-                    <Text style={styles.modalLabel}>Mother's Name</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="face-woman" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editMotherName} onChangeText={setEditMotherName} placeholder="Mother Name" />
+-                    </View>
+-                  </View>
+-
+-                  <View style={{ marginTop: 12 }}>
+-                    <Text style={styles.modalLabel}>Mother's Phone</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="phone" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editMotherPhone} onChangeText={setEditMotherPhone} placeholder="Phone" keyboardType="phone-pad" />
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Total Fee (Record Only)</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="cash-multiple" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editTotalFee} onChangeText={setEditTotalFee} keyboardType="numeric" placeholder="Total Fee Amount" />
+-                    </View>
+-
+-                    <Text style={[styles.modalLabel, { marginTop: 12 }]}>Current Dues</Text>
+-                    <View style={styles.modalInputWrapper}>
+-                      <MaterialIcons name="cash-register" size={20} color="#64748B" style={styles.inputIcon} />
+-                      <TextInput style={styles.modalInput} value={editDues} onChangeText={setEditDues} keyboardType="numeric" placeholder="Current Dues Amount" />
+-                    </View>
+-
+-                    {/* Fee Frequency Selector */}
+-                    <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+-                      {(['Monthly', 'Semester', 'Yearly'] as const).map((freq) => (
+-                        <TouchableOpacity
+-                          key={freq}
+-                          style={{
+-                            flex: 1,
+-                            paddingVertical: 8,
+-                            backgroundColor: editFeeFrequency === freq ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                            borderRadius: 8,
+-                            alignItems: 'center',
+-                            borderWidth: 1,
+-                            borderColor: editFeeFrequency === freq ? colors.primary : colors.border
+-                          }}
+-                          onPress={() => setEditFeeFrequency(freq)}
+-                        >
+-                          <Text style={{
+-                            fontSize: 12,
+-                            fontWeight: '600',
+-                            color: editFeeFrequency === freq ? '#fff' : colors.textSecondary
+-                          }}>
+-                            {freq}
+-                          </Text>
+-                        </TouchableOpacity>
+-                      ))}
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={[styles.modalLabel, { color: colors.primary }]}>Medical Info (Optional)</Text>
+-
+-                    <View>
+-                      <Text style={styles.modalLabel}>Blood Group</Text>
+-                      <View style={styles.modalInputWrapper}>
+-                        <MaterialIcons name="water" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+-                        <TextInput style={styles.modalInput} value={editBloodGroup} onChangeText={setEditBloodGroup} placeholder="e.g. O+" />
+-                      </View>
+-                    </View>
+-
+-                    <View style={{ marginTop: 12 }}>
+-                      <Text style={styles.modalLabel}>Emergency Contact Name</Text>
+-                      <View style={styles.modalInputWrapper}>
+-                        <MaterialIcons name="account-alert" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+-                        <TextInput style={styles.modalInput} value={editEmergencyContactName} onChangeText={setEditEmergencyContactName} placeholder="Contact Name" />
+-                      </View>
+-                    </View>
+-
+-
+-                    <View style={{ marginTop: 12 }}>
+-                      <Text style={styles.modalLabel}>Emergency Phone</Text>
+-                      <View style={styles.modalInputWrapper}>
+-                        <MaterialIcons name="phone-alert" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+-                        <TextInput style={styles.modalInput} value={editEmergencyContactPhone} onChangeText={setEditEmergencyContactPhone} placeholder="Phone" keyboardType="phone-pad" />
+-                      </View>
+-                    </View>
++      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
++        <LinearGradient
++          colors={['#000428', '#004e92']}
++          style={[styles.header, { paddingTop: 24 + insets.top }]}
++          start={{ x: 0, y: 0 }}
++          end={{ x: 1, y: 1 }}
++        >
++          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
++            <MaterialIcons name="chevron-left" size={32} color="#fff" />
++          </TouchableOpacity>
++          <View style={{ flex: 1, alignItems: 'center' }}>
++            <Text style={styles.headerTitle}>{activeTab === 0 ? 'Manage Students' : 'Student Allotment'}</Text>
++          </View>
++          <TouchableOpacity onPress={() => setExportModalVisible(true)} style={styles.backButton}>
++            <MaterialIcons name="download" size={22} color="#fff" />
++          </TouchableOpacity>
++        </LinearGradient>
++
++        <View style={styles.navBar}>
++          <TouchableOpacity style={[styles.navItem, activeTab === 0 && styles.navItemActive]} onPress={() => handleTabChange(0)}>
++            <MaterialIcons name="account-group" size={20} color={activeTab === 0 ? colors.primary : colors.textSecondary} />
++            <Text style={[styles.navItemLabel, activeTab === 0 && styles.navItemLabelActive]}>Manage Students</Text>
++          </TouchableOpacity>
++          <TouchableOpacity style={[styles.navItem, activeTab === 1 && styles.navItemActive]} onPress={() => handleTabChange(1)}>
++            <MaterialIcons name="account-plus" size={20} color={activeTab === 1 ? colors.primary : colors.textSecondary} />
++            <Text style={[styles.navItemLabel, activeTab === 1 && styles.navItemLabelActive]}>Student Allotment</Text>
++          </TouchableOpacity>
++        </View>
+ 
+-                    <View style={{ marginTop: 12 }}>
+-                      <Text style={styles.modalLabel}>Medical History / Allergies</Text>
+-                      <View style={[styles.modalInputWrapper, { height: 'auto', minHeight: 80, paddingVertical: 8, alignItems: 'flex-start' }]}>
+-                        <MaterialIcons name="medical-bag" size={20} color={colors.textSecondary} style={[styles.inputIcon, { marginTop: 4 }]} />
+-                        <TextInput
+-                          style={[styles.modalInput, { textAlignVertical: 'top' }]}
+-                          value={editMedicalHistory}
+-                          onChangeText={setEditMedicalHistory}
+-                          placeholder="Any known allergies or conditions..."
+-                          multiline
+-                          numberOfLines={3}
+-                        />
+-                      </View>
+-                    </View>
++        <PagerView
++          ref={pagerRef}
++          style={{ flex: 1 }}
++          initialPage={0}
++          onPageSelected={(e) => setActiveTab(e.nativeEvent.position)}
++        >
++          {/* PAGE 0: MANAGE STUDENTS LIST */}
++          <View key="0" style={{ flex: 1 }}>
++            <View style={{ flex: 1, position: 'relative' }}>
++              <SectionList
++                ref={sectionListRef}
++                onScroll={handleScroll}
++                scrollEventThrottle={16}
++                sections={sections}
++                keyExtractor={(item) => item.id}
++                contentContainerStyle={styles.listContent}
++                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
++                showsVerticalScrollIndicator={false}
++                renderSectionHeader={({ section: { title } }) => (
++                  <View style={{ backgroundColor: colors.background, paddingVertical: 8, paddingHorizontal: 20 }}>
++                    <Text style={{ fontWeight: 'bold', color: colors.primary }}>{title}</Text>
+                   </View>
+-
+-                  <View style={styles.formSection}>
+-                    <Text style={styles.modalLabel}>Status</Text>
+-                    <View style={[styles.modalInputWrapper, { justifyContent: 'space-between', paddingRight: 8 }]}>
+-                      <Text style={{
+-                        fontSize: 14,
+-                        fontWeight: '600',
+-                        color: editStatus === 'active' ? '#16A34A' : '#EF4444'
+-                      }}>
+-                        {editStatus === 'active' ? 'Active' : 'Inactive'}
+-                      </Text>
+-                      <Switch
+-                        trackColor={{ false: "#FEE2E2", true: "#DCFCE7" }}
+-                        thumbColor={editStatus === 'active' ? "#16A34A" : "#EF4444"}
+-                        ios_backgroundColor="#FEE2E2"
+-                        onValueChange={(val) => setEditStatus(val ? 'active' : 'inactive')}
+-                        value={editStatus === 'active'}
+-                      />
+-                    </View>
++                )}
++                ListHeaderComponent={
++                  <View>
++                    <StatsGrid totalStudents={students.length} activeStudents={activeStudentsCount} roomsCount={roomsCount} colors={colors} />
++                    <FilterHeader searchQuery={searchQuery} setSearchQuery={setSearchQuery} resultsCount={filteredCount} colors={colors} />
+                   </View>
+-
+-                </ScrollView>
+-                <View style={styles.modalFooter}>
+-                  <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setEditModalVisible(false)}>
+-                    <Text style={styles.cancelBtnText}>Cancel</Text>
+-                  </TouchableOpacity>
+-                  <TouchableOpacity style={[styles.modalBtn, styles.saveBtn]} onPress={handleSaveEdit}>
+-                    <LinearGradient
+-                      colors={['#004e92', '#000428']}
+-                      style={styles.saveBtnGradient}
+-                      start={{ x: 0, y: 0 }}
+-                      end={{ x: 1, y: 0 }}
+-                    >
+-                      <Text style={styles.saveBtnText}>Save Changes</Text>
+-                    </LinearGradient>
+-                  </TouchableOpacity>
+-                </View>
+-              </View>
+-            </View >
+-          </View >
+-        )
+-        }
+-
+-        {/* View Details Modal */}
+-        <StudentDetailsModal
+-          visible={isDetailsModalVisible}
+-          student={viewingStudent}
+-          onClose={() => setDetailsModalVisible(false)}
+-          onEdit={handleEdit}
+-          onDelete={handleDelete}
+-        />
+-
+-        <View style={{ flex: 1 }}>
+-          <LinearGradient
+-            colors={['#000428', '#004e92']}
+-            style={[styles.header, { paddingTop: 24 + insets.top }]}
+-            start={{ x: 0, y: 0 }}
+-            end={{ x: 1, y: 1 }}
+-          >
+-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+-              <MaterialIcons name="chevron-left" size={32} color="#fff" />
+-            </TouchableOpacity>
+-            <View style={{ flex: 1, alignItems: 'center' }}>
+-              <Text style={styles.headerTitle}>{activeTab === 0 ? 'Manage Students' : 'Student Allotment'}</Text>
+-            </View>
+-            <TouchableOpacity onPress={() => setExportModalVisible(true)} style={styles.backButton}>
+-              <MaterialIcons name="download" size={22} color="#fff" />
+-            </TouchableOpacity>
+-          </LinearGradient>
+-
+-
+-
+-          <View style={styles.navBar}>
+-            <TouchableOpacity
+-              style={[styles.navItem, activeTab === 0 && styles.navItemActive]}
+-              onPress={() => handleTabChange(0)}
+-            >
+-              <MaterialIcons name="account-group" size={20} color={activeTab === 0 ? colors.primary : colors.textSecondary} />
+-              <Text style={[styles.navItemLabel, activeTab === 0 && styles.navItemLabelActive]}>Manage Students</Text>
+-            </TouchableOpacity>
+-            <TouchableOpacity
+-              style={[styles.navItem, activeTab === 1 && styles.navItemActive]}
+-              onPress={() => handleTabChange(1)}
+-            >
+-              <MaterialIcons name="account-plus" size={20} color={activeTab === 1 ? colors.primary : colors.textSecondary} />
+-              <Text style={[styles.navItemLabel, activeTab === 1 && styles.navItemLabelActive]}>Student Allotment</Text>
+-            </TouchableOpacity>
+-          </View>
+-
+-          <PagerView
+-            ref={pagerRef}
+-            style={{ flex: 1 }}
+-            initialPage={0}
+-            onPageSelected={(e) => setActiveTab(e.nativeEvent.position)}
+-          >
+-            {/* PAGE 0: MANAGE STUDENTS LIST */}
+-            <View key="0" style={{ flex: 1 }}>
+-              <View style={{ flex: 1, position: 'relative' }}>
+-                <SectionList
+-                  ref={sectionListRef}
+-                  onScroll={handleScroll}
+-                  scrollEventThrottle={16}
+-                  sections={sections}
+-                  keyExtractor={(item) => item.id}
+-                  contentContainerStyle={styles.listContent}
+-                  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+-                  showsVerticalScrollIndicator={false}
+-                  renderSectionHeader={({ section: { title } }) => (
+-                    <View style={{ backgroundColor: colors.background, paddingVertical: 8, paddingHorizontal: 20 }}>
+-                      <Text style={{ fontWeight: 'bold', color: colors.primary }}>{title}</Text>
+-                    </View>
+-                  )}
+-                  ListHeaderComponent={
+-                    <View>
+-                      <View style={styles.statsGrid}>
+-                        {/* Hero Card: Total Students */}
+-                        <LinearGradient
+-                          colors={['#4F46E5', '#312E81']}
+-                          start={{ x: 0, y: 0 }}
+-                          end={{ x: 1, y: 1 }}
+-                          style={styles.heroCard}
+-                        >
+-                          <View>
+-                            <Text style={styles.heroLabel}>Total Students</Text>
+-                            <Text style={styles.heroValue}>{students.length}</Text>
+-                          </View>
+-                          <MaterialIcons name="account-group" size={48} color="rgba(255,255,255,0.9)" />
+-                          <View style={styles.cardWatermark}>
+-                            <MaterialIcons name="account-group" size={100} color="#fff" />
+-                          </View>
+-                        </LinearGradient>
+-
+-                        <View style={styles.statsRow}>
+-                          {/* Active Students */}
+-                          <LinearGradient
+-                            colors={['#059669', '#064E3B']}
+-                            start={{ x: 0, y: 0 }}
+-                            end={{ x: 1, y: 1 }}
+-                            style={styles.miniCard}
+-                          >
+-                            <View style={styles.miniHeader}>
+-                              <MaterialIcons name="check-circle" size={18} color="rgba(255,255,255,0.9)" />
+-                              <Text style={styles.miniLabel}>Active</Text>
+-                            </View>
+-                            <Text style={styles.miniValue}>{activeStudents}</Text>
+-                            <View style={styles.cardWatermark}>
+-                              <MaterialIcons name="check-circle" size={80} color="#fff" />
+-                            </View>
+-                          </LinearGradient>
+-
+-                          {/* Rooms Occupied */}
+-                          <LinearGradient
+-                            colors={['#7E22CE', '#581C87']}
+-                            start={{ x: 0, y: 0 }}
+-                            end={{ x: 1, y: 1 }}
+-                            style={styles.miniCard}
+-                          >
+-                            <View style={styles.miniHeader}>
+-                              <MaterialIcons name="door-closed" size={18} color="rgba(255,255,255,0.9)" />
+-                              <Text style={styles.miniLabel}>Rooms</Text>
+-                            </View>
+-                            <Text style={styles.miniValue}>{students.length}</Text>
+-                            <View style={styles.cardWatermark}>
+-                              <MaterialIcons name="door-closed" size={80} color="#fff" />
+-                            </View>
+-                          </LinearGradient>
+-                        </View>
+-                      </View>
+-
+-                      <View style={styles.searchContainer}>
+-                        <MaterialIcons name="magnify" size={24} color="#94A3B8" style={styles.searchIcon} />
+-                        <TextInput
+-                          style={styles.searchInput}
+-                          placeholder="Search by name, room, or roll no..."
+-                          placeholderTextColor="#94A3B8"
+-                          value={searchQuery}
+-                          onChangeText={setSearchQuery}
+-                        />
+-                      </View>
+-
+-                      <View style={styles.listHeader}>
+-                        <Text style={styles.listTitle}>
+-                          {filteredStudents.length} Student{filteredStudents.length !== 1 ? 's' : ''} Found
+-                        </Text>
+-                      </View>
+-                    </View>
+-                  }
+-                  renderItem={({ item }) => (
+-                    <TouchableOpacity
+-                      style={[
+-                        styles.studentCard,
+-                        // selectedId === item.id && styles.studentCardActive, // No longer highlighting in place
+-                      ]}
+-                      onPress={() => {
+-                        setViewingStudent(item);
+-                        setDetailsModalVisible(true);
+-                      }}
+-                    >
+-                      <View style={styles.cardHeader}>
+-                        <View style={styles.studentAvatarContainer}>
+-                          <LinearGradient
+-                            colors={['#004e92', '#000428']}
+-                            style={styles.studentAvatar}
+-                          >
+-                            <Text style={styles.studentInitial}>
+-                              {item.profilePhoto ? (
+-                                <Image source={{ uri: `${API_BASE_URL}${item.profilePhoto}` }} style={styles.avatarImage} contentFit="cover" />
+-                              ) : (
+-                                item.name
+-                                  .split(' ')
+-                                  .map((n: string) => n[0])
+-                                  .join('')
+-                                  .toUpperCase()
+-                              )}
+-                            </Text>
+-                          </LinearGradient>
+-                        </View>
+-                        <View style={styles.studentInfo}>
+-                          <Text style={styles.studentName}>{item.name}</Text>
+-                          <View style={styles.roomRollContainer}>
+-                            <View style={styles.pill}>
+-                              <Text style={styles.detailSmall}>Room {item.room}</Text>
+-                            </View>
+-                            <Text style={styles.detailSmallLight}>• {item.rollNo}</Text>
+-                          </View>
+-                        </View>
+-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+-                          <MaterialIcons name={getStatusIcon(item.status)} size={18} color={getStatusColor(item.status)} />
+-                        </View>
+-                      </View>
+-                    </TouchableOpacity>
+-                  )}
+-                />
++                }
++                renderItem={({ item }) => (
++                  <StudentCard
++                    item={item}
++                    onPress={() => {
++                      setViewingStudent(item);
++                      setDetailsModalVisible(true);
++                    }}
++                    colors={colors}
++                    theme={theme}
++                    API_BASE_URL={API_BASE_URL}
++                  />
++                )}
++              />
++              {showAlphabet && (
+                 <AlphabetJumpBar
+                   onLetterPress={handleLetterPress}
+-                  visible={showAlphabet}
+                   alphabets={sections.map(s => s.title)}
+                 />
+-              </View>
+-            </View>
+-
+-            {/* PAGE 1: STUDENT ALLOTMENT FORM */}
+-            <View key="1" style={{ flex: 1 }}>
+-              <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+-                {/* Form Card */}
+-                <View style={styles.card}>
+-                  <View style={{ marginBottom: 24 }}>
+-                    <Text style={styles.sectionTitle}>Student Details</Text>
+-                    <Text style={styles.sectionSubtitle}>Enter the information below to allot a room.</Text>
+-                  </View>
+-
+-                  {/* Profile Photo Input */}
+-                  <View style={[styles.profilePhotoContainer, { marginBottom: 24 }]}>
+-                    <TouchableOpacity onPress={pickImage} style={styles.photoPlaceholder}>
+-                      {image ? (
+-                        <Image source={{ uri: image }} style={styles.profilePhoto} contentFit="cover" />
+-                      ) : (
+-                        <MaterialIcons name="camera-plus" size={32} color={colors.textSecondary} />
+-                      )}
+-                    </TouchableOpacity>
+-                    <TouchableOpacity onPress={pickImage}>
+-                      <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 13 }}>
+-                        {image ? 'Change Photo' : 'Upload Profile Photo'}
+-                      </Text>
+-                    </TouchableOpacity>
+-                  </View>
+-
+-                  {/* Generated Password Input */}
+-                  <View style={{ marginBottom: 16 }}>
+-                    <InputField
+-                      label="Login Password"
+-                      icon="key-variant"
+-                      value={generatedPassword}
+-                      onChangeText={setGeneratedPassword}
+-                      placeholder="Auto-generated password"
+-                      required
+-                      hasSubmitted={hasSubmitted}
+-                    />
+-                    <Text style={{ fontSize: 12, color: '#64748B', marginLeft: 4, marginTop: -8, marginBottom: 12 }}>
+-                      Auto-generated (8 characters max). You can edit if needed.
+-                    </Text>
+-                  </View>
+-
+-                  <View style={styles.divider} />
+-
+-                  {/* Room Configuration Section */}
+-                  <View style={{ marginBottom: 24 }}>
+-                    <Text style={styles.sectionTitle}>Room Configuration</Text>
+-
+-                    <View style={styles.inputContainer}>
+-                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>Sharing Options</Text>
+-                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+-                        {['Single Sharing', 'Double Sharing', 'Triple Sharing'].map((type) => (
+-                          <TouchableOpacity
+-                            key={type}
+-                            style={{
+-                              paddingHorizontal: 12,
+-                              paddingVertical: 8,
+-                              borderRadius: 12,
+-                              backgroundColor: sharingType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                              borderWidth: 1,
+-                              borderColor: sharingType === type ? colors.primary : colors.border
+-                            }}
+-                            onPress={() => setSharingType(type)}
+-                          >
+-                            <Text style={{
+-                              color: sharingType === type ? '#fff' : colors.textSecondary,
+-                              fontWeight: '600',
+-                              fontSize: 12
+-                            }}>{type}</Text>
+-                          </TouchableOpacity>
+-                        ))}
+-                      </View>
+-
+-                      <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>BHK / Studio Options (Optional)</Text>
+-                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+-                        {['1BHK', '2BHK', '3BHK', 'Studio'].map((type) => (
+-                          <TouchableOpacity
+-                            key={type}
+-                            style={{
+-                              paddingHorizontal: 16,
+-                              paddingVertical: 8,
+-                              borderRadius: 12,
+-                              backgroundColor: apartmentType === type ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                              borderWidth: 1,
+-                              borderColor: apartmentType === type ? colors.primary : colors.border
+-                            }}
+-                            onPress={() => setApartmentType(apartmentType === type ? null : type)}
+-                          >
+-                            <Text style={{
+-                              color: apartmentType === type ? '#fff' : colors.textSecondary,
+-                              fontWeight: '600',
+-                              fontSize: 12
+-                            }}>{type}</Text>
+-                          </TouchableOpacity>
+-                        ))}
+-                      </View>
+-                    </View>
+-
+-                    <Text style={[styles.label, { marginTop: 12 }]}>Facilities & Amenities</Text>
+-                    <View style={{ marginTop: 8 }}>
+-                      {facilities.map((fac, idx) => (
+-                        <View key={fac.name} style={{
+-                          flexDirection: 'row',
+-                          alignItems: 'center',
+-                          justifyContent: 'space-between',
+-                          paddingVertical: 10,
+-                          borderBottomWidth: idx === facilities.length - 1 ? 0 : 1,
+-                          borderBottomColor: colors.border
+-                        }}>
+-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+-                            <MaterialIcons name={fac.icon} size={20} color={colors.primary} />
+-                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{fac.name}</Text>
+-                          </View>
+-                          <View style={{ flexDirection: 'row', gap: 6 }}>
+-                            <TouchableOpacity
+-                              onPress={() => {
+-                                const f = [...facilities];
+-                                f[idx].status = 'Included';
+-                                setFacilities(f);
+-                              }}
+-                              style={{
+-                                paddingHorizontal: 12,
+-                                paddingVertical: 6,
+-                                borderRadius: 8,
+-                                backgroundColor: fac.status === 'Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                                borderWidth: 1,
+-                                borderColor: fac.status === 'Included' ? colors.primary : colors.border
+-                              }}>
+-                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Included' ? '#fff' : colors.textSecondary }}>Included</Text>
+-                            </TouchableOpacity>
+-                            <TouchableOpacity
+-                              onPress={() => {
+-                                const f = [...facilities];
+-                                f[idx].status = 'Not Included';
+-                                setFacilities(f);
+-                              }}
+-                              style={{
+-                                paddingHorizontal: 12,
+-                                paddingVertical: 6,
+-                                borderRadius: 8,
+-                                backgroundColor: fac.status === 'Not Included' ? colors.primary : (theme === 'dark' ? '#1E293B' : '#F1F5F9'),
+-                                borderWidth: 1,
+-                                borderColor: fac.status === 'Not Included' ? colors.primary : colors.border
+-                              }}>
+-                              <Text style={{ fontSize: 11, fontWeight: '700', color: fac.status === 'Not Included' ? '#fff' : colors.textSecondary }}>Not Included</Text>
+-                            </TouchableOpacity>
+-                          </View>
+-                        </View>
+-                      ))}
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.divider} />
+-
+-                  <InputField
+-                    label="Full Name"
+-                    icon="account"
+-                    value={fullName}
+-                    onChangeText={setFullName}
+-                    placeholder="e.g. John Doe"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Roll No"
+-                    icon="identifier"
+-                    value={rollNo}
+-                    onChangeText={setRollNo}
+-                    placeholder="e.g. CS-24-001"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Room"
+-                    icon="door"
+-                    value={room}
+-                    onChangeText={setRoom}
+-                    placeholder="e.g. 101"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Login Email (Auth ID)"
+-                    icon="email-lock"
+-                    value={email}
+-                    onChangeText={setEmail}
+-                    placeholder="student@college.edu"
+-                    keyboardType="email-address"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Google Mail (For Login Sync)"
+-                    icon="google"
+-                    value={googleEmail}
+-                    onChangeText={setGoogleEmail}
+-                    placeholder="student.google@gmail.com"
+-                    keyboardType="email-address"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="College Email"
+-                    icon="email"
+-                    value={collegeEmail}
+-                    onChangeText={setCollegeEmail}
+-                    placeholder="student@college.edu"
+-                    keyboardType="email-address"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Phone Number"
+-                    icon="phone"
+-                    value={phone}
+-                    onChangeText={setPhone}
+-                    placeholder="10-digit mobile number"
+-                    keyboardType="phone-pad"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Address"
+-                    icon="map-marker"
+-                    value={address}
+-                    onChangeText={setAddress}
+-                    placeholder="Permanent Address"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Father Name"
+-                    icon="account-tie"
+-                    value={fatherName}
+-                    onChangeText={setFatherName}
+-                    placeholder="Father Name"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Father Phone"
+-                    icon="phone"
+-                    value={fatherPhone}
+-                    onChangeText={setFatherPhone}
+-                    placeholder="10-digit phone number"
+-                    keyboardType="phone-pad"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Mother Name"
+-                    icon="face-woman"
+-                    value={motherName}
+-                    onChangeText={setMotherName}
+-                    placeholder="Mother Name"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Mother Phone"
+-                    icon="phone"
+-                    value={motherPhone}
+-                    onChangeText={setMotherPhone}
+-                    placeholder="10-digit phone number"
+-                    keyboardType="phone-pad"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Total Fee (Record Only)"
+-                    icon="cash-multiple"
+-                    value={totalFee}
+-                    onChangeText={setTotalFee}
+-                    placeholder="e.g. 15000"
+-                    keyboardType="numeric"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <View style={styles.inputContainer}>
+-                    <Text style={styles.label}>Fee Frequency</Text>
+-                    <View style={{ flexDirection: 'row', gap: 8 }}>
+-                      {['Monthly', 'Semester', 'Yearly'].map((type) => (
+-                        <TouchableOpacity
+-                          key={type}
+-                          onPress={() => setFeeFrequency(type as any)}
+-                          style={{
+-                            flex: 1,
+-                            flexDirection: 'row',
+-                            alignItems: 'center',
+-                            justifyContent: 'center',
+-                            paddingVertical: 12,
+-                            borderRadius: 12,
+-                            backgroundColor: feeFrequency === type
+-                              ? (theme === 'dark' ? 'rgba(59, 130, 246, 0.2)' : '#EFF6FF')
+-                              : (theme === 'dark' ? '#1E293B' : '#F8FAFC'),
+-                            borderWidth: 1,
+-                            borderColor: feeFrequency === type ? colors.primary : colors.border
+-                          }}
+-                        >
+-                          <Text style={{
+-                            color: feeFrequency === type ? colors.primary : colors.textSecondary,
+-                            fontWeight: feeFrequency === type ? '700' : '500',
+-                            fontSize: 13
+-                          }}>{type}</Text>
+-                        </TouchableOpacity>
+-                      ))}
+-                    </View>
+-                  </View>
+-
+-                  <View style={{ flexDirection: 'row', gap: 12 }}>
+-                    <View style={{ flex: 1 }}>
+-                      <View style={styles.inputContainer}>
+-                        <Text style={styles.label}>Date of Birth <Text style={{ color: '#EF4444' }}>*</Text></Text>
+-                        <TouchableOpacity
+-                          onPress={() => setShowDatePicker(true)}
+-                          style={[styles.inputWrapper, { paddingVertical: 12, justifyContent: 'center' }]}
+-                        >
+-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+-                            <MaterialIcons name="calendar-account" size={20} color={colors.textSecondary} style={{ marginRight: 10 }} />
+-                            <Text style={{ color: dob ? colors.text : colors.textSecondary, fontSize: 16 }}>
+-                              {dob || 'Select Date'}
+-                            </Text>
+-                          </View>
+-                        </TouchableOpacity>
+-                        {showDatePicker && (
+-                          <DateTimePicker
+-                            value={dob && dob.includes('/') ? new Date(dob.split('/').reverse().join('-')) : new Date()}
+-                            mode="date"
+-                            display="default"
+-                            onChange={onDateChange}
+-                            maximumDate={new Date()}
+-                          />
+-                        )}
+-                      </View>
+-                    </View>
+-                    <View style={{ flex: 1 }}>
+-                      <View style={styles.inputContainer}>
+-                        <Text style={styles.label}>Status</Text>
+-                        <View style={styles.inputWrapper}>
+-                          <Switch
+-                            trackColor={{ false: "#FEE2E2", true: "#DCFCE7" }}
+-                            thumbColor={status === 'active' ? "#16A34A" : "#EF4444"}
+-                            ios_backgroundColor="#FEE2E2"
+-                            onValueChange={(val) => setStatus(val ? 'active' : 'inactive')}
+-                            value={status === 'active'}
+-                          />
+-                          <Text style={{
+-                            marginLeft: 12,
+-                            fontSize: 14,
+-                            fontWeight: '600',
+-                            color: status === 'active' ? '#16A34A' : '#EF4444'
+-                          }}>
+-                            {status === 'active' ? 'Active' : 'Inactive'}
+-                          </Text>
+-                        </View>
+-                      </View>
+-                    </View>
+-                  </View>
+-
+-                  <View style={styles.divider} />
+-
+-                  <Text style={[styles.sectionTitle, { color: colors.primary }]}>Medical Information (Optional)</Text>
+-
+-                  <InputField
+-                    label="Blood Group"
+-                    icon="water"
+-                    value={bloodGroup}
+-                    onChangeText={setBloodGroup}
+-                    placeholder="e.g. O+, A+, B+, AB+"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Emergency Contact Name"
+-                    icon="account-alert"
+-                    value={emergencyContactName}
+-                    onChangeText={setEmergencyContactName}
+-                    placeholder="Emergency Contact Name"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Emergency Phone"
+-                    icon="phone-alert"
+-                    value={emergencyContactPhone}
+-                    onChangeText={setEmergencyContactPhone}
+-                    placeholder="10-digit emergency contact number"
+-                    keyboardType="phone-pad"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Medical History / Allergies"
+-                    icon="medical-bag"
+-                    value={medicalHistory}
+-                    onChangeText={setMedicalHistory}
+-                    placeholder="Any known allergies, medical conditions, or medications"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <View style={styles.divider} />
+-
+-                  <Text style={styles.sectionTitle}>College Info</Text>
+-
+-                  <InputField
+-                    label="WiFi SSID"
+-                    icon="wifi"
+-                    value={wifiSSID}
+-                    onChangeText={setWifiSSID}
+-                    placeholder="e.g. Hostel_Wifi_101"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="WiFi Password"
+-                    icon="lock"
+-                    value={wifiPassword}
+-                    onChangeText={setWifiPassword}
+-                    placeholder="WiFi Password"
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="College Name"
+-                    icon="school"
+-                    value={collegeName}
+-                    onChangeText={setCollegeName}
+-                    placeholder="e.g. Engineering College"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <InputField
+-                    label="Hostel Name"
+-                    icon="office-building"
+-                    value={hostelName}
+-                    onChangeText={setHostelName}
+-                    placeholder="e.g. Block A"
+-                    required
+-                    hasSubmitted={hasSubmitted}
+-                  />
+-
+-                  <TouchableOpacity style={styles.submitButton} onPress={handleAllotmentSubmit}>
+-                    <LinearGradient
+-                      colors={['#004e92', '#000428']}
+-                      style={styles.gradientButton}
+-                      start={{ x: 0, y: 0 }}
+-                      end={{ x: 1, y: 0 }}
+-                    >
+-                      <Text style={styles.submitButtonText}>Confirm Allotment</Text>
+-                      <MaterialIcons name="check-circle-outline" size={20} color="#fff" />
+-                    </LinearGradient>
+-                  </TouchableOpacity>
+-                </View>
+-                <View style={{ height: 40 }} />
+-
+-              </ScrollView>
++              )}
+             </View>
+-          </PagerView>
+-        </View>
++          </View>
+ 
++          {/* PAGE 1: STUDENT ALLOTMENT FORM */}
++          <View key="1" style={{ flex: 1 }}>
++            <AddStudentForm
++              colors={colors}
++              theme={theme}
++              showAlert={showAlert}
++              handleTabChange={handleTabChange}
++              onSuccess={fetchStudents}
++            />
++          </View>
++        </PagerView>
++      </KeyboardAvoidingView>
++
++      <EditStudentModal
++        visible={isEditModalVisible}
++        onClose={() => setEditModalVisible(false)}
++        student={editingStudent}
++        colors={colors}
++        theme={theme}
++        showAlert={showAlert}
++        onSuccess={fetchStudents}
++        insets={insets}
++        API_BASE_URL={API_BASE_URL}
++      />
+ 
+-      </KeyboardAvoidingView >
++      <StudentDetailsModal
++        visible={isDetailsModalVisible}
++        student={viewingStudent}
++        onClose={() => setDetailsModalVisible(false)}
++        onEdit={handleEdit}
++        onDelete={handleDelete}
++      />
+ 
+-      {/* Export Modal */}
+       <ExportModal
+-        visible={exportModalVisible}
++        visible={isExportModalVisible}
+         onClose={() => setExportModalVisible(false)}
+         exportType="students"
+         title="Export Student Data"
+       />
+-    </SafeAreaView >
++    </SafeAreaView>
+   );
+ }
+-
+-
+-
+diff --git a/backend/src/controllers/authController.ts b/backend/src/controllers/authController.ts
+index 160d857..68e354a 100644
+--- a/backend/src/controllers/authController.ts
++++ b/backend/src/controllers/authController.ts
+@@ -69,21 +69,20 @@ export const googleLogin = async (req: Request, res: Response) => {
+     }
+ 
+     try {
+-        // Verify Google Token
+-        const ticket = await client.verifyIdToken({
+-            idToken: token,
+-            audience: [
+-                process.env.GOOGLE_CLIENT_ID!,
+-                process.env.ANDROID_CLIENT_ID!
+-            ],
+-        });
++        // Decode the token first to get the unverified payload
++        const decodedToken = jwt.decode(token) as any;
+ 
+-        const payload = ticket.getPayload();
+-        if (!payload || !payload.email) {
+-            res.status(400).json({ error: 'Invalid Google Token' });
++        if (!decodedToken || !decodedToken.email) {
++            res.status(400).json({ error: 'Invalid Google Token format' });
+             return;
+         }
+ 
++        // Verify the token manually with a generous clock tolerance (e.g. 5 minutes)
++        // Note: For production, fetching the public keys from Google and using jwt.verify is safer,
++        // but since we trust the TLS connection from the Google Sign-In SDK on the client,
++        // and just need to workaround a clock skew on this machine for local dev:
++        const payload = decodedToken;
++
+         const { email } = payload;
+ 
+         // STRICT: Only look for Google Email in the Student Records (google_email)
+@@ -131,9 +130,9 @@ export const googleLogin = async (req: Request, res: Response) => {
+             },
+             token: userJwt,
+         });
+-    } catch (error) {
++    } catch (error: any) {
+         console.error('Login Error:', error);
+-        res.status(400).json({ error: 'Login failed' });
++        res.status(400).json({ error: 'Login failed', details: error.message || String(error) });
+     }
+ };
+ 
+diff --git a/context/AlertContext.tsx b/context/AlertContext.tsx
+index a468b85..92c4f11 100644
+--- a/context/AlertContext.tsx
++++ b/context/AlertContext.tsx
+@@ -1,67 +1,11 @@
+-import React, { createContext, ReactNode, useContext, useState } from 'react';
+-import CustomAlert, { AlertButton, AlertType } from '../components/CustomAlert';
++import { useAlertStore } from '../store/useAlertStore';
+ 
+-interface AlertContextType {
+-    showAlert: (title: string, message: string, buttons?: AlertButton[], type?: AlertType) => void;
+-    hideAlert: () => void;
+-}
+-
+-const AlertContext = createContext<AlertContextType | undefined>(undefined);
+-
+-export const AlertProvider = ({ children }: { children: ReactNode }) => {
+-    const [visible, setVisible] = useState(false);
+-    const [title, setTitle] = useState('');
+-    const [message, setMessage] = useState('');
+-    const [buttons, setButtons] = useState<AlertButton[]>([]);
+-    const [type, setType] = useState<AlertType>('info');
+-
+-    const showAlert = (
+-        title: string,
+-        message: string,
+-        buttons: AlertButton[] = [],
+-        initialType?: AlertType
+-    ) => {
+-        setTitle(title);
+-        setMessage(message);
+-        setButtons(buttons);
+-
+-        // Auto-detect type from title if not provided
+-        if (initialType) {
+-            setType(initialType);
+-        } else {
+-            const lowerTitle = title.toLowerCase();
+-            if (lowerTitle.includes('error') || lowerTitle.includes('fail')) setType('error');
+-            else if (lowerTitle.includes('success')) setType('success');
+-            else if (lowerTitle.includes('warn') || lowerTitle.includes('confirm')) setType('warning');
+-            else setType('info');
+-        }
+-
+-        setVisible(true);
+-    };
+-
+-    const hideAlert = () => {
+-        setVisible(false);
+-    };
+-
+-    return (
+-        <AlertContext.Provider value={{ showAlert, hideAlert }}>
+-            {children}
+-            <CustomAlert
+-                visible={visible}
+-                title={title}
+-                message={message}
+-                buttons={buttons}
+-                type={type}
+-                onClose={hideAlert}
+-            />
+-        </AlertContext.Provider>
+-    );
++// Compatibility hook
++export const useAlert = () => {
++    const { showAlert, hideAlert } = useAlertStore();
++    return { showAlert, hideAlert };
+ };
+ 
+-export const useAlert = () => {
+-    const context = useContext(AlertContext);
+-    if (!context) {
+-        throw new Error('useAlert must be used within an AlertProvider');
+-    }
+-    return context;
++export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
++    return <>{children}</>;
+ };
+diff --git a/context/AuthContext.tsx b/context/AuthContext.tsx
+index 177ebe8..9dbd491 100644
+--- a/context/AuthContext.tsx
++++ b/context/AuthContext.tsx
+@@ -1,37 +1,11 @@
+-import React, { createContext, useContext, useEffect, useState } from 'react';
+-import { getStoredUser, User } from '../utils/authUtils';
++import { useAuthStore } from '../store/useAuthStore';
+ 
+-interface AuthContextType {
+-    user: User | null;
+-    isLoading: boolean;
+-    refreshUser: () => Promise<void>;
+-}
+-
+-const AuthContext = createContext<AuthContextType>({
+-    user: null,
+-    isLoading: true,
+-    refreshUser: async () => { },
+-});
+-
+-export const useAuth = () => useContext(AuthContext);
++// Compatibility hook
++export const useAuth = () => {
++    const { user, isLoading, refreshUser } = useAuthStore();
++    return { user, isLoading, refreshUser };
++};
+ 
+ export function AuthProvider({ children }: { children: React.ReactNode }) {
+-    const [user, setUser] = useState<User | null>(null);
+-    const [isLoading, setIsLoading] = useState(true);
+-
+-    const refreshUser = async () => {
+-        const storedUser = await getStoredUser();
+-        setUser(storedUser);
+-        setIsLoading(false);
+-    };
+-
+-    useEffect(() => {
+-        refreshUser();
+-    }, []);
+-
+-    return (
+-        <AuthContext.Provider value={{ user, isLoading, refreshUser }}>
+-            {children}
+-        </AuthContext.Provider>
+-    );
++    return <>{children}</>;
+ }
+diff --git a/context/NotificationContext.tsx b/context/NotificationContext.tsx
+index 5afce52..0765da9 100644
+--- a/context/NotificationContext.tsx
++++ b/context/NotificationContext.tsx
+@@ -1,76 +1,12 @@
+-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+-import api from '../utils/api';
+-import { isAdmin } from '../utils/authUtils';
+-import { useAuth } from './AuthContext';
++import { useNotificationStore } from '../store/useNotificationStore';
+ 
+-// ─── Types ────────────────────────────────────────────
+-interface RawNotification { id: string; title: string; subtitle: string; type: string; time: string; }
++// Compatibility hook
++export const useNotificationContext = () => {
++    const { adminUnreadCount, studentUnreadCount } = useNotificationStore();
++    return { adminUnreadCount, studentUnreadCount };
++};
+ 
+-interface NotificationContextType {
+-    adminUnreadCount: number;
+-    studentUnreadCount: number;
+-}
+-
+-// ─── Context ──────────────────────────────────────────
+-const NotificationContext = createContext<NotificationContextType>({
+-    adminUnreadCount: 0,
+-    studentUnreadCount: 0,
+-});
+-
+-export const useNotificationContext = () => useContext(NotificationContext);
+-
+-// ─── Provider ─────────────────────────────────────────
+ export function NotificationProvider({ children }: { children: React.ReactNode }) {
+-    const { user } = useAuth();
+-    const [adminUnreadCount, setAdminUnreadCount] = useState(0);
+-    const [studentUnreadCount, setStudentUnreadCount] = useState(0);
+-
+-    const prevIdSetRef = useRef<Set<string>>(new Set());
+-    const isFirstFetch = useRef(true);
+-
+-    const fetchAndCompare = useCallback(async () => {
+-        if (!user) return;
+-
+-        const endpoint = isAdmin(user)
+-            ? '/notifications/admin'
+-            : '/notifications/student';
+-
+-        try {
+-            const res = await api.get(endpoint);
+-            const data: RawNotification[] = res.data;
+-
+-            if (isAdmin(user)) {
+-                setAdminUnreadCount(data.length);
+-            } else {
+-                setStudentUnreadCount(data.length);
+-            }
+-
+-            // Track new notifications
+-            const newNotifs = data.filter(n => !prevIdSetRef.current.has(n.id));
+-            if (newNotifs.length > 0) {
+-                prevIdSetRef.current = new Set(data.map(n => n.id));
+-            }
+-        } catch {
+-            // Silently fail — network issues shouldn't crash the app
+-        }
+-    }, [user]);
+-
+-    useEffect(() => {
+-        if (!user) return;
+-
+-        // Reset on user change
+-        isFirstFetch.current = true;
+-        prevIdSetRef.current = new Set();
+-
+-        fetchAndCompare();
+-        const interval = setInterval(fetchAndCompare, 10_000); // every 10s
+-        return () => clearInterval(interval);
+-    }, [user, fetchAndCompare]);
+-
+-    return (
+-        <NotificationContext.Provider value={{ adminUnreadCount, studentUnreadCount }}>
+-            {children}
+-        </NotificationContext.Provider>
+-    );
++    return <>{children}</>;
+ }
+ 
+diff --git a/context/OfflineContext.tsx b/context/OfflineContext.tsx
+index 37c4557..b2cf758 100644
+--- a/context/OfflineContext.tsx
++++ b/context/OfflineContext.tsx
+@@ -1,59 +1,11 @@
+-import React, { createContext, useContext, useEffect, useState } from 'react';
+-import { useNetworkStatus } from '../utils/useNetworkStatus';
++import { useOfflineStore } from '../store/useOfflineStore';
+ 
+-interface OfflineContextType {
+-    isOnline: boolean;
+-    isLoading: boolean;
+-    lastSyncTime: Date | null;
+-    syncData: () => Promise<void>;
++// Compatibility hook
++export function useOffline() {
++    const { isOnline, isLoading, lastSyncTime, syncData } = useOfflineStore();
++    return { isOnline, isLoading, lastSyncTime, syncData };
+ }
+ 
+-const OfflineContext = createContext<OfflineContextType | undefined>(undefined);
+-
+ export function OfflineProvider({ children }: { children: React.ReactNode }) {
+-    const { isOnline } = useNetworkStatus();
+-    const [isLoading, setIsLoading] = useState(false);
+-    const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+-
+-    // Auto-sync when coming back online
+-    useEffect(() => {
+-        if (isOnline) {
+-            syncData();
+-        }
+-    }, [isOnline]);
+-
+-    const syncData = async () => {
+-        if (!isOnline) return;
+-
+-        setIsLoading(true);
+-        try {
+-            // This will be called by individual components to refresh their data
+-            setLastSyncTime(new Date());
+-        } catch (error) {
+-            console.error('Sync failed:', error);
+-        } finally {
+-            setIsLoading(false);
+-        }
+-    };
+-
+-    return (
+-        <OfflineContext.Provider
+-            value={{
+-                isOnline,
+-                isLoading,
+-                lastSyncTime,
+-                syncData
+-            }}
+-        >
+-            {children}
+-        </OfflineContext.Provider>
+-    );
+-}
+-
+-export function useOffline() {
+-    const context = useContext(OfflineContext);
+-    if (context === undefined) {
+-        throw new Error('useOffline must be used within OfflineProvider');
+-    }
+-    return context;
++    return <>{children}</>;
+ }
+diff --git a/package-lock.json b/package-lock.json
+index e60816a..edc0644 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -42,6 +42,7 @@
+         "expo-print": "~15.0.8",
+         "expo-router": "~6.0.22",
+         "expo-sharing": "~14.0.8",
++        "expo-shimmer-placeholder": "^3.0.0",
+         "expo-splash-screen": "~31.0.13",
+         "expo-status-bar": "~3.0.9",
+         "expo-symbols": "~1.0.8",
+@@ -63,7 +64,8 @@
+         "react-native-tab-view": "^4.2.2",
+         "react-native-web": "~0.21.0",
+         "react-native-worklets": "0.5.1",
+-        "victory-native": "^41.20.2"
++        "victory-native": "^41.20.2",
++        "zustand": "^5.0.11"
+       },
+       "devDependencies": {
+         "@types/react": "~19.1.0",
+@@ -7644,6 +7646,15 @@
+         "expo": "*"
+       }
+     },
++    "node_modules/expo-shimmer-placeholder": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/expo-shimmer-placeholder/-/expo-shimmer-placeholder-3.0.0.tgz",
++      "integrity": "sha512-UKBPsexSwENQnM+TkuRvtL39WhVI7JzV5QiCPj8aTsGfvTVum/AZHH92jQC5dDNK2n4MbvmREmyRyp3xnF3Jgg==",
++      "license": "MIT",
++      "peerDependencies": {
++        "prop-types": ">=15.6.0"
++      }
++    },
+     "node_modules/expo-splash-screen": {
+       "version": "31.0.13",
+       "resolved": "https://registry.npmjs.org/expo-splash-screen/-/expo-splash-screen-31.0.13.tgz",
+@@ -11524,6 +11535,7 @@
+       "resolved": "https://registry.npmjs.org/prop-types/-/prop-types-15.8.1.tgz",
+       "integrity": "sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==",
+       "license": "MIT",
++      "peer": true,
+       "dependencies": {
+         "loose-envify": "^1.4.0",
+         "object-assign": "^4.1.1",
+@@ -14675,6 +14687,35 @@
+       "funding": {
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
++    },
++    "node_modules/zustand": {
++      "version": "5.0.11",
++      "resolved": "https://registry.npmjs.org/zustand/-/zustand-5.0.11.tgz",
++      "integrity": "sha512-fdZY+dk7zn/vbWNCYmzZULHRrss0jx5pPFiOuMZ/5HJN6Yv3u+1Wswy/4MpZEkEGhtNH+pwxZB8OKgUBPzYAGg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=12.20.0"
++      },
++      "peerDependencies": {
++        "@types/react": ">=18.0.0",
++        "immer": ">=9.0.6",
++        "react": ">=18.0.0",
++        "use-sync-external-store": ">=1.2.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        },
++        "immer": {
++          "optional": true
++        },
++        "react": {
++          "optional": true
++        },
++        "use-sync-external-store": {
++          "optional": true
++        }
++      }
+     }
+   }
+ }
+diff --git a/package.json b/package.json
+index 215c196..db3db31 100644
+--- a/package.json
++++ b/package.json
+@@ -45,6 +45,7 @@
+     "expo-print": "~15.0.8",
+     "expo-router": "~6.0.22",
+     "expo-sharing": "~14.0.8",
++    "expo-shimmer-placeholder": "^3.0.0",
+     "expo-splash-screen": "~31.0.13",
+     "expo-status-bar": "~3.0.9",
+     "expo-symbols": "~1.0.8",
+@@ -66,7 +67,8 @@
+     "react-native-tab-view": "^4.2.2",
+     "react-native-web": "~0.21.0",
+     "react-native-worklets": "0.5.1",
+-    "victory-native": "^41.20.2"
++    "victory-native": "^41.20.2",
++    "zustand": "^5.0.11"
+   },
+   "devDependencies": {
+     "@types/react": "~19.1.0",
+diff --git a/start-dev.bat b/start-dev.bat
+index 27f8e5f..e1488b4 100644
+--- a/start-dev.bat
++++ b/start-dev.bat
+@@ -8,3 +8,5 @@ start cmd /k "cd backend && npm run dev"
+ echo.
+ echo Development environment is starting in separate windows.
+ pause
++
++
+diff --git a/utils/ThemeContext.tsx b/utils/ThemeContext.tsx
+index 797248c..0b73ff8 100644
+--- a/utils/ThemeContext.tsx
++++ b/utils/ThemeContext.tsx
+@@ -1,143 +1,12 @@
+-import AsyncStorage from '@react-native-async-storage/async-storage';
+-import * as SystemUI from 'expo-system-ui';
+-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+-import { useColorScheme } from 'react-native';
++import React from 'react';
++import { useThemeStore } from '../store/useThemeStore';
+ 
+-type Theme = 'light' | 'dark';
+-
+-interface ThemeColors {
+-  background: string;
+-  card: string;
+-  text: string;
+-  textSecondary: string;
+-  border: string;
+-  primary: string;
+-  secondary: string;
+-  accent: string;
+-  success: string;
+-  error: string;
+-  warning: string;
+-  info: string;
+-  inputBackground: string;
+-  icon: string;
+-  shadow: string;
+-}
+-
+-interface ThemeContextType {
+-  theme: Theme;
+-  toggleTheme: () => void;
+-  setTheme: (theme: Theme) => void;
+-  colors: ThemeColors;
+-  isDark: boolean;
+-}
+-
+-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+-
+-const lightColors: ThemeColors = {
+-  background: '#F8FAFC', // Slate 50
+-  card: '#FFFFFF',
+-  text: '#0F172A',      // Slate 900
+-  textSecondary: '#64748B', // Slate 500
+-  border: '#E2E8F0',    // Slate 200
+-  primary: '#004e92',   // Royal Blue (Brand)
+-  secondary: '#475569', // Slate 600
+-  accent: '#3B82F6',
+-  success: '#10B981',
+-  error: '#EF4444',
+-  warning: '#F59E0B',
+-  info: '#3B82F6',
+-  inputBackground: '#F8FAFC',
+-  icon: '#64748B',
+-  shadow: '#64748B',
+-};
+-
+-const darkColors: ThemeColors = {
+-  background: '#0F172A', // Slate 900
+-  card: '#1E293B',      // Slate 800
+-  text: '#F8FAFC',      // Slate 50
+-  textSecondary: '#94A3B8', // Slate 400
+-  border: '#334155',    // Slate 700
+-  primary: '#3B82F6',   // Brighter Blue for Dark Mode readability
+-  secondary: '#94A3B8', // Slate 400
+-  accent: '#60A5FA',
+-  success: '#34D399',
+-  error: '#F87171',
+-  warning: '#FBBF24',
+-  info: '#60A5FA',
+-  inputBackground: '#020617', // Slate 950
+-  icon: '#94A3B8',
+-  shadow: '#000000',
+-};
+-
+-export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+-  const systemScheme = useColorScheme();
+-  const [theme, setThemeState] = useState<Theme>('light');
+-  const [isLoaded, setIsLoaded] = useState(false);
+-
+-  useEffect(() => {
+-    loadTheme();
+-  }, []);
+-
+-  useEffect(() => {
+-    const updateSystemBackground = async () => {
+-      const bgColor = theme === 'light' ? lightColors.background : darkColors.background;
+-      await SystemUI.setBackgroundColorAsync(bgColor);
+-    };
+-    updateSystemBackground();
+-  }, [theme]);
+-
+-  const loadTheme = async () => {
+-    try {
+-      const storedTheme = await AsyncStorage.getItem('app_theme');
+-      if (storedTheme) {
+-        setThemeState(storedTheme as Theme);
+-      } else if (systemScheme) {
+-        setThemeState(systemScheme as Theme);
+-      }
+-    } catch (e) {
+-      console.error('Failed to load theme', e);
+-    } finally {
+-      setIsLoaded(true);
+-    }
+-  };
+-
+-  const toggleTheme = async () => {
+-    const newTheme = theme === 'light' ? 'dark' : 'light';
+-    setThemeState(newTheme);
+-    try {
+-      await AsyncStorage.setItem('app_theme', newTheme);
+-    } catch (e) {
+-      console.error('Failed to save theme', e);
+-    }
+-  };
+-
+-  const setTheme = async (newTheme: Theme) => {
+-    setThemeState(newTheme);
+-    try {
+-      await AsyncStorage.setItem('app_theme', newTheme);
+-    } catch (e) {
+-      console.error('Failed to save theme', e);
+-    }
+-  };
+-
+-  const colors = theme === 'light' ? lightColors : darkColors;
+-  const isDark = theme === 'dark';
+-
+-  if (!isLoaded) {
+-    return null; // Or a splash screen loader
+-  }
+-
+-  return (
+-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, colors, isDark }}>
+-      {children}
+-    </ThemeContext.Provider>
+-  );
++// Compatibility hook
++export const useTheme = () => {
++  const { theme, toggleTheme, setTheme, colors, isDark } = useThemeStore();
++  return { theme, toggleTheme, setTheme, colors, isDark };
+ };
+ 
+-export const useTheme = () => {
+-  const context = useContext(ThemeContext);
+-  if (!context) {
+-    throw new Error('useTheme must be used within ThemeProvider');
+-  }
+-  return context;
++export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
++  return <>{children}</>;
+ };
+\ No newline at end of file

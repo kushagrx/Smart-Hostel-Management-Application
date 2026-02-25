@@ -9,23 +9,35 @@ export interface BusRoute {
     times: string[];
     createdAt?: any;
     message?: string;
+    schedule_type?: string;
+    valid_date?: string;
 }
 
 export const subscribeToBusTimings = (onUpdate: (timings: BusRoute[]) => void) => {
     const fetch = async () => {
         try {
-            const response = await api.get('/bus');
-            const timings = response.data.map((b: any) => {
-                const timeClean = b.departure_time.slice(0, 5);
-                return {
-                    id: b.id.toString(),
-                    route: b.destination || b.route_name,
-                    times: [timeClean],
-                    createdAt: null,
-                    message: b.message || ''
-                };
+            const response = await api.get('/services/bus');
+            const rawData = response.data;
+            const grouped: { [key: string]: BusRoute } = {};
+
+            rawData.forEach((item: any) => {
+                const dateKey = item.valid_date ? new Date(item.valid_date).toLocaleDateString('en-CA') : 'everday';
+                const groupKey = `${item.route}|${item.schedule_type}|${dateKey}`;
+
+                if (!grouped[groupKey]) {
+                    grouped[groupKey] = {
+                        id: item.id.toString(),
+                        route: item.route,
+                        times: [],
+                        message: item.message || '',
+                        schedule_type: item.schedule_type,
+                        valid_date: item.valid_date
+                    };
+                }
+                grouped[groupKey].times.push(item.time.substring(0, 5));
             });
-            onUpdate(timings);
+
+            onUpdate(Object.values(grouped));
         } catch (error) {
             console.error("Error fetching bus timings:", error);
         }
@@ -53,7 +65,7 @@ const convertTo24Hour = (timeStr: string) => {
     }
 };
 
-export const addBusRoute = async (route: string, times: string[], message?: string) => {
+export const addBusRoute = async (route: string, times: string[], message?: string, scheduleType: string = 'everyday') => {
     try {
         const promises = times.map(time => {
             const formattedTime = convertTo24Hour(time);
@@ -61,7 +73,8 @@ export const addBusRoute = async (route: string, times: string[], message?: stri
                 route_name: route,
                 departure_time: formattedTime,
                 destination: route,
-                message: message
+                message: message,
+                schedule_type: scheduleType
             });
         });
         await Promise.all(promises);
@@ -72,14 +85,15 @@ export const addBusRoute = async (route: string, times: string[], message?: stri
     }
 };
 
-export const updateBusRoute = async (id: string, route: string, time: string, message?: string) => {
+export const updateBusRoute = async (id: string, route: string, time: string, message?: string, scheduleType?: string) => {
     try {
         const formattedTime = convertTo24Hour(time);
         await api.put(`/bus/${id}`, {
             route_name: route,
             departure_time: formattedTime,
             destination: route,
-            message: message
+            message: message,
+            schedule_type: scheduleType
         });
         DeviceEventEmitter.emit(REFRESH_EVENT);
     } catch (error) {

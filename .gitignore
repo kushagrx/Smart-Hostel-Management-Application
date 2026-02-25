@@ -61,8 +61,13 @@ missing_files.txt
 google-services.json
 firestore.rules
 serviceAccountKey.json
-firebase-adminsdk*.json
+*firebase-adminsdk*.json
+firebase-service-account.json
 
 # IDE
 .vscode/
 .idea/
+
+# User uploads (contains PII)
+backend/uploads/
+uploads/

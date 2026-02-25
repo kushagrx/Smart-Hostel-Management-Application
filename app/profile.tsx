@@ -241,10 +241,12 @@ export default function ProfilePage() {
                             <Text style={styles.studentName}>{student?.fullName || 'Student Name'}</Text>
                             <Text style={styles.studentRoll}>{student?.rollNo || 'Roll No. --'}</Text>
 
+
+
                             <View style={styles.tagsRow}>
                                 <View style={styles.roomTag}>
                                     <MaterialCommunityIcons name="door-open" size={16} color="#fff" />
-                                    <Text style={styles.roomText}>Room {student?.roomNo}</Text>
+                                    <Text style={styles.roomText}>Room {student?.roomNo || '--'}</Text>
                                 </View>
 
                                 <View style={[styles.statusBadge, { backgroundColor: student?.status === 'active' ? '#10B981' : '#EF4444' }]}>
@@ -256,6 +258,51 @@ export default function ProfilePage() {
                     </LinearGradient>
 
                     <View style={[styles.curveBlock, { backgroundColor: colors.background }]} />
+                </View>
+
+                {/* Beautiful Info Card - Unified Location Style */}
+                <View style={[styles.glassCard, {
+                    backgroundColor: isDark ? colors.card : '#FFFFFF',
+                    borderColor: isDark ? colors.border : '#E6EEF5'
+                }]}>
+                    <View style={styles.locationBlock}>
+                        {/* Connector Line adjusted for smaller spacing */}
+                        <View style={[styles.connectorLine, {
+                            top: 30, bottom: 30, left: 18,
+                            backgroundColor: isDark ? colors.border : '#D1E0F0'
+                        }]} />
+
+                        {/* College Section */}
+                        <View style={styles.locItem}>
+                            <View style={[styles.locIcon, {
+                                backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                                borderColor: isDark ? colors.border : '#F1F5F9'
+                            }]}>
+                                <MaterialCommunityIcons name="school" size={20} color={isDark ? '#60A5FA' : '#004e92'} />
+                            </View>
+                            <View style={styles.locContent}>
+                                <Text style={[styles.locLabel, { color: colors.textSecondary }]}>Studying At</Text>
+                                <Text style={[styles.locValue, { color: colors.text }]} numberOfLines={2}>{student?.collegeName || 'Not Assigned'}</Text>
+                            </View>
+                        </View>
+
+                        {/* Smaller Spacer */}
+                        <View style={{ height: 12 }} />
+
+                        {/* Hostel Section */}
+                        <View style={styles.locItem}>
+                            <View style={[styles.locIcon, {
+                                backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                                borderColor: isDark ? colors.border : '#F1F5F9'
+                            }]}>
+                                <MaterialCommunityIcons name="office-building" size={20} color={isDark ? '#60A5FA' : '#2B6CB0'} />
+                            </View>
+                            <View style={styles.locContent}>
+                                <Text style={[styles.locLabel, { color: colors.textSecondary }]}>Living At</Text>
+                                <Text style={[styles.locValue, { color: colors.text }]} numberOfLines={2}>{student?.hostelName || 'Not Assigned'}</Text>
+                            </View>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Quick Stats Grid */}
@@ -314,8 +361,6 @@ export default function ProfilePage() {
                     <Text style={[styles.sectionHeader, { color: colors.text }]}>Personal Details</Text>
 
                     <View style={[styles.infoBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <InfoRow icon="school" label="College" value={student?.collegeName} colors={colors} isLast={false} />
-                        <InfoRow icon="office-building" label="Hostel" value={student?.hostelName} colors={colors} isLast={false} />
                         <InfoRow icon="email-lock" label="Personal Email (Login ID)" value={student?.email} colors={colors} isLast={false} />
                         {student?.googleEmail && (
                             <InfoRow icon="google" label="Google Mail (For Login)" value={student?.googleEmail} colors={colors} isLast={false} />
@@ -334,6 +379,32 @@ export default function ProfilePage() {
                         <InfoRow icon="wifi-lock" label="WiFi Password" value={student?.wifiPassword || 'Not Set'} colors={colors} isLast={true} />
                     </View>
                 </View>
+
+                {/* Room Configuration Section */}
+                {(student as any)?.roomType && (
+                    <View style={styles.detailsSection}>
+                        <Text style={[styles.sectionHeader, { color: colors.text, marginTop: 12 }]}>Room Configuration</Text>
+                        <View style={[styles.infoBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <InfoRow icon="door-closed" label="Room Type" value={(student as any).roomType} colors={colors} isLast={!(student as any).facilities} />
+
+                            {(student as any).facilities && (
+                                <View style={styles.facilitiesContainer}>
+                                    {JSON.parse(typeof (student as any).facilities === 'string' ? (student as any).facilities : JSON.stringify((student as any).facilities)).map((f: any, index: number, arr: any[]) => (
+                                        <View key={f.name} style={[styles.facilityItem, index === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                                            <View style={styles.facilityInfo}>
+                                                <MaterialCommunityIcons name={f.icon} size={20} color={colors.textSecondary} />
+                                                <Text style={[styles.facilityName, { color: colors.text }]}>{f.name}</Text>
+                                            </View>
+                                            <View style={[styles.miniStatusBadge, { backgroundColor: f.status === 'Included' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                                                <Text style={[styles.miniStatusText, { color: f.status === 'Included' ? '#10B981' : '#EF4444' }]}>{f.status}</Text>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                )}
 
                 {/* Financial Section */}
                 <View style={styles.detailsSection}>
@@ -516,6 +587,14 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: 'rgba(255,255,255,0.8)',
         fontWeight: '500',
+        marginBottom: 8,
+    },
+    hostelNameText: {
+        fontSize: 18,
+        color: '#fff',
+        fontWeight: '700',
+        letterSpacing: 0.5,
+        marginBottom: 4,
     },
     roomTag: {
         flexDirection: 'row',
@@ -572,6 +651,69 @@ const styles = StyleSheet.create({
     statValue: {
         fontSize: 15,
         fontWeight: '700',
+    },
+    glassCard: {
+        width: 'auto',
+        marginHorizontal: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        marginTop: 8,
+        marginBottom: 24,
+        shadowColor: '#004e92',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 8,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E6EEF5',
+    },
+    locationBlock: {
+        position: 'relative',
+    },
+    connectorLine: {
+        position: 'absolute',
+        left: 20,
+        top: 40,
+        bottom: 40,
+        width: 2,
+        backgroundColor: '#D1E0F0',
+        zIndex: -1,
+    },
+    locItem: {
+        flexDirection: 'row',
+        gap: 12,
+        alignItems: 'flex-start',
+    },
+    locIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        backgroundColor: '#F8FAFC',
+    },
+    locContent: {
+        flex: 1,
+        paddingTop: 0,
+        justifyContent: 'center',
+        minHeight: 36,
+    },
+    locLabel: {
+        fontSize: 10,
+        color: '#64748B',
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+        marginBottom: 2,
+    },
+    locValue: {
+        fontSize: 14,
+        color: '#0F172A',
+        fontWeight: '700',
+        lineHeight: 20,
     },
 
     // Details
@@ -637,5 +779,35 @@ const styles = StyleSheet.create({
     },
     versionText: {
         fontSize: 12,
+    },
+    facilitiesContainer: {
+        paddingHorizontal: 16,
+    },
+    facilityItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
+    },
+    facilityInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    facilityName: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    miniStatusBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    miniStatusText: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
     },
 });

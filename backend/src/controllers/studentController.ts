@@ -2,6 +2,31 @@ import bcrypt from 'bcrypt';
 import { Request, Response } from 'express';
 import { query } from '../config/db';
 
+// Helper to get capacity from room type
+// Helper to get capacity from room type: (BHK Count or 1) * (Sharing Count or 2)
+const getCapacityFromType = (roomType: string): number => {
+    if (!roomType) return 2; // Default
+    const lower = roomType.toLowerCase();
+
+    // 1. Determine Sharing Count
+    let sharingCount = 2; // Default
+    if (lower.includes('single')) sharingCount = 1;
+    else if (lower.includes('double')) sharingCount = 2;
+    else if (lower.includes('triple')) sharingCount = 3;
+    else if (lower.includes('four')) sharingCount = 4;
+
+    // 2. Determine BHK Count
+    let bhkCount = 1; // Default
+    const bhkMatch = lower.match(/(\d+)\s*bhk/);
+    if (bhkMatch) {
+        bhkCount = parseInt(bhkMatch[1], 10);
+    } else if (lower.includes('studio')) {
+        bhkCount = 1;
+    }
+
+    return bhkCount * sharingCount;
+};
+
 // --- Student Self-Profile ---
 export const getStudentProfile = async (req: Request, res: Response) => {
     const userId = req.currentUser?.id;
@@ -9,7 +34,7 @@ export const getStudentProfile = async (req: Request, res: Response) => {
     try {
         const result = await query(
             `SELECT s.*, u.email as user_email, u.full_name,
-            r.room_number, r.wifi_ssid, r.wifi_password
+            r.room_number, r.wifi_ssid, r.wifi_password, r.room_type, r.facilities
             FROM students s
             JOIN users u ON s.user_id = u.id
             LEFT JOIN room_allocations ra ON s.id = ra.student_id AND ra.is_active = true
@@ -51,6 +76,8 @@ export const getStudentProfile = async (req: Request, res: Response) => {
             dues: parseFloat(data.dues),
             wifiSSID: data.wifi_ssid,
             wifiPassword: data.wifi_password,
+            roomType: data.room_type,
+            facilities: data.facilities,
             email: data.user_email,
             address: data.address,
             fatherName: data.father_name,
@@ -62,14 +89,49 @@ export const getStudentProfile = async (req: Request, res: Response) => {
             emergencyContactName: data.emergency_contact_name,
             emergencyContactPhone: data.emergency_contact_phone,
             feeFrequency: data.fee_frequency || 'Monthly',
+            totalFee: parseFloat(data.total_fee || 0),
+            hostelFee: parseFloat(data.hostel_fee || 0),
+            messFee: parseFloat(data.mess_fee || 0),
             profilePhoto: data.profile_photo,
-            lastNotificationsClearedAt: parseInt(data.last_notifications_cleared_at || '0', 10),
             role: 'student'
         };
 
         res.json(responseData);
     } catch (error) {
         console.error('Error fetching profile:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// --- Student: Dashboard Counts ---
+export const getDashboardCounts = async (req: Request, res: Response) => {
+    const userId = req.currentUser?.id;
+
+    try {
+        const studentRes = await query('SELECT id FROM students WHERE user_id = $1', [userId]);
+        if (studentRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Student profile not found' });
+        }
+        const studentId = studentRes.rows[0].id;
+
+        // Perform parallel queries to get counts for different services
+        const [complaints, visitors, roomServices, leaves, facilities] = await Promise.all([
+            query(`SELECT COUNT(*) FROM complaints WHERE student_id = $1 AND status IN ('pending', 'open', 'inProgress')`, [studentId]),
+            query(`SELECT COUNT(*) FROM visitors WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM service_requests WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM leave_requests WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM facilities`)
+        ]);
+
+        res.json({
+            complaints: parseInt(complaints.rows[0].count, 10),
+            visitors: parseInt(visitors.rows[0].count, 10),
+            roomServices: parseInt(roomServices.rows[0].count, 10),
+            leaves: parseInt(leaves.rows[0].count, 10),
+            facilities: parseInt(facilities.rows[0].count, 10)
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard counts:', error);
         res.status(500).json({ error: 'Server error' });
     }
 };
@@ -120,7 +182,7 @@ export const clearNotifications = async (req: Request, res: Response) => {
 export const getAllStudents = async (req: Request, res: Response) => {
     try {
         const result = await query(`
-            SELECT s.*, u.email, u.full_name, r.room_number, r.wifi_ssid, r.wifi_password
+            SELECT s.*, u.email, u.full_name, r.room_number, r.wifi_ssid, r.wifi_password, r.room_type, r.facilities
             FROM students s
             JOIN users u ON s.user_id = u.id
             LEFT JOIN room_allocations ra ON s.id = ra.student_id AND ra.is_active = true
@@ -156,8 +218,13 @@ export const getAllStudents = async (req: Request, res: Response) => {
             emergencyContactName: row.emergency_contact_name,
             emergencyContactPhone: row.emergency_contact_phone,
             feeFrequency: row.fee_frequency || 'Monthly',
+            totalFee: parseFloat(row.total_fee || 0),
+            hostelFee: parseFloat(row.hostel_fee || 0),
+            messFee: parseFloat(row.mess_fee || 0),
             wifiSSID: row.wifi_ssid || 'N/A',
             wifiPassword: row.wifi_password || 'N/A',
+            roomType: row.room_type,
+            facilities: row.facilities,
             profilePhoto: row.profile_photo,
             password: row.password || '', // Plain text password for admin
             tempPassword: row.password || '' // Backwards compatibility
@@ -175,7 +242,7 @@ export const getStudentById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const result = await query(`
-            SELECT s.*, u.email, u.full_name, r.room_number, r.wifi_ssid, r.wifi_password
+            SELECT s.*, u.email, u.full_name, r.room_number, r.wifi_ssid, r.wifi_password, r.room_type, r.facilities
             FROM students s
             JOIN users u ON s.user_id = u.id
             LEFT JOIN room_allocations ra ON s.id = ra.student_id AND ra.is_active = true
@@ -215,8 +282,13 @@ export const getStudentById = async (req: Request, res: Response) => {
             emergencyContactName: row.emergency_contact_name,
             emergencyContactPhone: row.emergency_contact_phone,
             feeFrequency: row.fee_frequency || 'Monthly',
+            totalFee: parseFloat(row.total_fee || 0),
+            hostelFee: parseFloat(row.hostel_fee || 0),
+            messFee: parseFloat(row.mess_fee || 0),
             wifiSSID: row.wifi_ssid || 'N/A',
             wifiPassword: row.wifi_password || 'N/A',
+            roomType: row.room_type,
+            facilities: row.facilities,
             profilePhoto: row.profile_photo,
         };
 
@@ -241,8 +313,12 @@ export const createStudent = async (req: Request, res: Response) => {
             fullName, email, password, rollNo, collegeName, hostelName, dob,
             roomNo, phone, googleEmail, collegeEmail, address, fatherName, fatherPhone,
             motherName, motherPhone, dues, bloodGroup, medicalHistory,
-            emergencyContactName, emergencyContactPhone, status, wifiSSID, wifiPassword, feeFrequency
+            emergencyContactName, emergencyContactPhone, status, wifiSSID, wifiPassword, feeFrequency,
+            roomType, facilities, totalFee
         } = req.body;
+
+        // Ensure facilities is a string for DB storage
+        const facilitiesStr = typeof facilities === 'object' ? JSON.stringify(facilities) : facilities;
 
         const profilePhoto = req.file ? `/uploads/profiles/${req.file.filename}` : null;
         console.log('Profile photo path:', profilePhoto);
@@ -254,7 +330,16 @@ export const createStudent = async (req: Request, res: Response) => {
             throw new Error(`User with email ${email} already exists`);
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+
+        let hashedPassword;
+        try {
+            if (!password) throw new Error("Password is required");
+            hashedPassword = await bcrypt.hash(password, 10);
+        } catch (e) {
+            console.error("Bcrypt error:", e);
+            throw e;
+        }
+
         const userRes = await client.query(
             'INSERT INTO users (email, full_name, role, password_hash) VALUES ($1, $2, $3, $4) RETURNING id',
             [email, fullName, 'student', hashedPassword]
@@ -266,14 +351,14 @@ export const createStudent = async (req: Request, res: Response) => {
             `INSERT INTO students (
                 user_id, roll_no, college_name, hostel_name, dob, phone, google_email, college_email, address,
                 father_name, father_phone, mother_name, mother_phone, blood_group, medical_history,
-                emergency_contact_name, emergency_contact_phone, status, dues, fee_frequency, password, profile_photo
+                emergency_contact_name, emergency_contact_phone, status, dues, fee_frequency, password, profile_photo, total_fee
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
             ) RETURNING id`,
             [
                 userId, rollNo, collegeName, hostelName, dob, phone, googleEmail, collegeEmail, address,
                 fatherName, fatherPhone, motherName, motherPhone, bloodGroup, medicalHistory,
-                emergencyContactName, emergencyContactPhone, status, dues || 0, feeFrequency || 'Monthly', password, profilePhoto
+                emergencyContactName, emergencyContactPhone, status, dues || 0, feeFrequency || 'Monthly', password, profilePhoto, totalFee || 0
             ]
         );
         const studentId = studentRes.rows[0].id;
@@ -286,14 +371,22 @@ export const createStudent = async (req: Request, res: Response) => {
 
             if (roomCheck.rows.length === 0) {
                 // Create room if not exists
+                const capacity = getCapacityFromType(roomType);
                 const roomRes = await client.query(
-                    'INSERT INTO rooms (room_number, status, wifi_ssid, wifi_password) VALUES ($1, $2, $3, $4) RETURNING id',
-                    [roomNo, 'occupied', wifiSSID, wifiPassword]
+                    'INSERT INTO rooms (room_number, status, wifi_ssid, wifi_password, room_type, facilities, capacity) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+                    [roomNo, 'occupied', wifiSSID, wifiPassword, roomType, facilitiesStr || '[]', capacity]
                 );
                 roomId = roomRes.rows[0].id;
             } else {
                 roomId = roomCheck.rows[0].id;
-                // Ideally check capacity
+                // Enforce Capacity Limit
+                const currentCapacity = roomCheck.rows[0].capacity || getCapacityFromType(roomType);
+                const occupancyRes = await client.query('SELECT COUNT(*) FROM room_allocations WHERE room_id = $1 AND is_active = true', [roomId]);
+                const currentOccupancy = parseInt(occupancyRes.rows[0].count, 10);
+
+                if (currentOccupancy >= currentCapacity) {
+                    throw new Error(`Room ${roomNo} is already full (Capacity: ${currentCapacity}, Occupied: ${currentOccupancy})`);
+                }
             }
 
             // Create Allocation
@@ -303,7 +396,8 @@ export const createStudent = async (req: Request, res: Response) => {
             );
 
             // Update Room Status logic (simplified)
-            await client.query("UPDATE rooms SET status = 'occupied' WHERE id = $1", [roomId]);
+            const capacity = getCapacityFromType(roomType);
+            await client.query("UPDATE rooms SET status = 'occupied', room_type = $1, facilities = $2, capacity = $3 WHERE id = $4", [roomType, facilitiesStr || '[]', capacity, roomId]);
         }
 
         await client.query('COMMIT');
@@ -338,7 +432,7 @@ export const deleteStudent = async (req: Request, res: Response) => {
         res.json({ success: true });
     } catch (error) {
         console.error("Error deleting student:", error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error: ' + (error as any).message });
     }
 };
 
@@ -361,79 +455,161 @@ export const updateStudent = async (req: Request, res: Response) => {
             collegeName, hostelName, dob, phone, googleEmail, collegeEmail, address,
             fatherName, fatherPhone, motherName, motherPhone,
             bloodGroup, medicalHistory, emergencyContactName, emergencyContactPhone,
-            email, password, wifiSSID, wifiPassword, feeFrequency
+            email, password, wifiSSID, wifiPassword, feeFrequency, roomType, facilities, totalFee
         } = req.body;
 
         const profilePhoto = req.file ? `/uploads/profiles/${req.file.filename}` : undefined;
         console.log('Profile photo path:', profilePhoto);
 
-        // Build UPDATE query dynamically to include profile_photo only if a new file was uploaded
-        let updateQuery = `UPDATE students SET 
-            roll_no = $1, status = $2, dues = $3, college_name = $4, hostel_name = $5,
-            dob = $6, phone = $7, google_email = $8, college_email = $9, address = $10,
-            father_name = $11, father_phone = $12, mother_name = $13, mother_phone = $14,
-            blood_group = $15, medical_history = $16, emergency_contact_name = $17,
-            emergency_contact_phone = $18, fee_frequency = $19, password = $20`;
+        // Initialize status with existing status if not provided
+        // This is tricky because we don't fetch first. 
+        // Better approach: Dynamically build the query based on what's present.
 
-        const updateParams: any[] = [
-            rollNo, status, dues, collegeName, hostelName,
-            dob, phone, googleEmail, collegeEmail, address,
-            fatherName, fatherPhone, motherName, motherPhone,
-            bloodGroup, medicalHistory, emergencyContactName,
-            emergencyContactPhone, feeFrequency, password
-        ];
+        const updates: any[] = [];
+        const values: any[] = [];
+        let paramIdx = 1;
+
+        // Helper to add field to update
+        const addUpdate = (field: string, value: any) => {
+            if (value !== undefined) {
+                updates.push(`${field} = $${paramIdx}`);
+                values.push(value);
+                paramIdx++;
+            }
+        };
+
+        // Map body fields to DB columns
+        addUpdate('roll_no', rollNo);
+        addUpdate('status', status);
+        addUpdate('dues', dues === '' ? 0 : dues);
+        addUpdate('college_name', collegeName);
+        addUpdate('hostel_name', hostelName);
+        addUpdate('dob', dob);
+        addUpdate('phone', phone);
+        addUpdate('google_email', googleEmail);
+        addUpdate('college_email', collegeEmail);
+        addUpdate('address', address);
+        addUpdate('father_name', fatherName);
+        addUpdate('father_phone', fatherPhone);
+        addUpdate('mother_name', motherName);
+        addUpdate('mother_phone', motherPhone);
+        addUpdate('blood_group', bloodGroup);
+        addUpdate('medical_history', medicalHistory);
+        addUpdate('emergency_contact_name', emergencyContactName);
+        addUpdate('emergency_contact_phone', emergencyContactPhone);
+        addUpdate('fee_frequency', feeFrequency);
+        addUpdate('password', password);
+        addUpdate('total_fee', totalFee === '' ? 0 : totalFee);
 
         if (profilePhoto) {
-            updateQuery += `, profile_photo = $${updateParams.length + 1}`;
-            updateParams.push(profilePhoto);
+            addUpdate('profile_photo', profilePhoto);
         }
 
-        updateQuery += ` WHERE id = $${updateParams.length + 1}`;
-        updateParams.push(id);
+        if (updates.length > 0) {
+            const queryStr = `UPDATE students SET ${updates.join(', ')} WHERE id = $${paramIdx}`;
+            values.push(id);
+            console.log('Updating students table with:', updates.join(', '));
+            await client.query(queryStr, values);
+            console.log('Students table updated');
+        }
 
-        console.log('Updating students table...');
-        await client.query(updateQuery, updateParams);
-        console.log('Students table updated');
+        // 2. Update Users Table (Name, Email, Password) ONLY if provided
+        if (fullName || email || (password && password.length >= 6)) {
+            const sRes = await client.query('SELECT user_id FROM students WHERE id = $1', [id]);
+            if (sRes.rows.length > 0) {
+                const userId = sRes.rows[0].user_id;
 
-        // Get user_id for Account updates
-        const sRes = await client.query('SELECT user_id FROM students WHERE id = $1', [id]);
-        if (sRes.rows.length > 0) {
-            const userId = sRes.rows[0].user_id;
+                const userUpdates: any[] = [];
+                const userValues: any[] = [];
+                let uParamIdx = 1;
 
-            // 2. Update Users Table (Name, Email, Password)
-            let userUpdateQuery = 'UPDATE users SET full_name = $1, email = $2';
-            const userUpdateParams: any[] = [fullName, email];
-            let paramIndex = 3;
+                const addUserUpdate = (field: string, value: any) => {
+                    if (value !== undefined && value !== null && value !== '') {
+                        userUpdates.push(`${field} = $${uParamIdx}`);
+                        userValues.push(value);
+                        uParamIdx++;
+                    }
+                };
 
-            if (password && password.length >= 6) {
-                const hashedPassword = await bcrypt.hash(password, 10);
-                userUpdateQuery += `, password_hash = $${paramIndex}`;
-                userUpdateParams.push(hashedPassword);
-                paramIndex++;
+                addUserUpdate('full_name', fullName);
+                addUserUpdate('email', email);
+
+                if (password && password.length >= 6) {
+                    const hashedPassword = await bcrypt.hash(password, 10);
+                    addUserUpdate('password_hash', hashedPassword);
+                }
+
+                if (userUpdates.length > 0) {
+                    const userQueryStr = `UPDATE users SET ${userUpdates.join(', ')} WHERE id = $${uParamIdx}`;
+                    userValues.push(userId);
+
+                    console.log('Updating users table...');
+                    await client.query(userQueryStr, userValues);
+                    console.log('Users table updated');
+                }
             }
-
-            userUpdateQuery += ` WHERE id = $${paramIndex}`;
-            userUpdateParams.push(userId);
-
-            console.log('Updating users table...');
-            await client.query(userUpdateQuery, userUpdateParams);
-            console.log('Users table updated');
         }
 
-        // 3. Update Rooms Table (WiFi) via Allocation (Assuming Room is consistent/managed separately or we update current room)
-        // Find current room for this student
-        const allocRes = await client.query(
-            'SELECT room_id FROM room_allocations WHERE student_id = $1 AND is_active = true',
+        // Handle Room Re-allotment if roomNo changed
+        const currentAllocRes = await client.query(
+            'SELECT ra.room_id, r.room_number FROM room_allocations ra JOIN rooms r ON ra.room_id = r.id WHERE ra.student_id = $1 AND ra.is_active = true',
             [id]
         );
 
-        if (allocRes.rows.length > 0) {
-            const roomId = allocRes.rows[0].room_id;
-            // Update WiFi for this room
-            console.log('Updating room WiFi...');
+        if (roomNo && (currentAllocRes.rows.length === 0 || currentAllocRes.rows[0].room_number !== roomNo)) {
+            console.log('Room change detected. Re-allotting...');
+
+            // 1. Deactivate old allocation if exists
+            if (currentAllocRes.rows.length > 0) {
+                await client.query(
+                    'UPDATE room_allocations SET is_active = false, deallocated_at = CURRENT_TIMESTAMP WHERE student_id = $1 AND is_active = true',
+                    [id]
+                );
+            }
+
+            // 2. Find or create new room
+            let newRoomId;
+            const roomCheck = await client.query('SELECT id FROM rooms WHERE room_number = $1', [roomNo]);
+            if (roomCheck.rows.length === 0) {
+                const capacity = getCapacityFromType(roomType);
+                const roomRes = await client.query(
+                    'INSERT INTO rooms (room_number, status, wifi_ssid, wifi_password, room_type, facilities, capacity) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+                    [roomNo, 'occupied', wifiSSID, wifiPassword, roomType, facilities || '[]', capacity]
+                );
+                newRoomId = roomRes.rows[0].id;
+            } else {
+                newRoomId = roomCheck.rows[0].id;
+                // Enforce Capacity Limit for Room Change
+                // Note: We already use getCapacityFromType(roomType) below to update the room, so let's use that expected capacity.
+                // Or should we use the EXISTING capacity? If we are updating the room details anyway, we should use the NEW capacity.
+                const expectedCapacity = getCapacityFromType(roomType);
+                const occupancyRes = await client.query('SELECT COUNT(*) FROM room_allocations WHERE room_id = $1 AND is_active = true', [newRoomId]);
+                const currentOccupancy = parseInt(occupancyRes.rows[0].count, 10);
+
+                if (currentOccupancy >= expectedCapacity) {
+                    throw new Error(`Room ${roomNo} is already full (Capacity: ${expectedCapacity}, Occupied: ${currentOccupancy})`);
+                }
+            }
+
+            // 3. Create new allocation
             await client.query(
-                'UPDATE rooms SET wifi_ssid = $1, wifi_password = $2 WHERE id = $3',
-                [wifiSSID, wifiPassword, roomId]
+                'INSERT INTO room_allocations (student_id, room_id) VALUES ($1, $2)',
+                [id, newRoomId]
+            );
+
+            // 4. Update room status/details
+            const capacity = getCapacityFromType(roomType);
+            await client.query("UPDATE rooms SET status = 'occupied', room_type = $1, facilities = $2, wifi_ssid = $3, wifi_password = $4, capacity = $5 WHERE id = $6",
+                [roomType, facilities || '[]', wifiSSID, wifiPassword, capacity, newRoomId]);
+
+        } else if (currentAllocRes.rows.length > 0) {
+            // Update existing room details if no room change but WiFi/facilities updated
+            const roomId = currentAllocRes.rows[0].room_id;
+            console.log('Updating existing room WiFi and facilities...');
+            const capacity = getCapacityFromType(roomType);
+            await client.query(
+                'UPDATE rooms SET wifi_ssid = $1, wifi_password = $2, room_type = $3, facilities = $4, capacity = $5 WHERE id = $6',
+                [wifiSSID, wifiPassword, roomType, facilities || '[]', capacity, roomId]
             );
             console.log('Room updated');
         }
@@ -460,7 +636,7 @@ export const searchStudents = async (req: Request, res: Response) => {
             return res.json([]);
         }
 
-        const term = `%${searchTerm}%`;
+        const term = `% ${searchTerm}% `;
 
         // Search Students
         const studentRes = await query(`
@@ -477,7 +653,7 @@ export const searchStudents = async (req: Request, res: Response) => {
             id: row.id,
             type: 'student',
             title: row.full_name,
-            subtitle: `Roll: ${row.roll_no} • Room: ${row.room_number || 'N/A'}`,
+            subtitle: `Roll: ${row.roll_no} • Room: ${row.room_number || 'N/A'} `,
             data: row
         }));
 
@@ -492,8 +668,8 @@ export const searchStudents = async (req: Request, res: Response) => {
         const rooms = roomRes.rows.map(row => ({
             id: row.id,
             type: 'room',
-            title: `Room ${row.room_number}`,
-            subtitle: `${row.status}`,
+            title: `Room ${row.room_number} `,
+            subtitle: `${row.status} `,
             data: row
         }));
 

@@ -5,6 +5,7 @@ import {
     createStudent,
     deleteStudent,
     getAllStudents,
+    getDashboardCounts,
     getStudentById,
     getStudentProfile,
     searchStudents,
@@ -18,6 +19,8 @@ const router = Router();
 
 // Student Self-View
 router.get('/profile', requireAuth, getStudentProfile);
+// Student Dashboard Counts
+router.get('/dashboard/counts', requireAuth, getDashboardCounts);
 // Student Update Photo
 router.post('/profile/photo', requireAuth, logUpload, upload.single('profilePhoto'), updateStudentProfilePhoto);
 // Student Clear Notifications
@@ -25,7 +28,15 @@ router.post('/profile/notifications/clear', requireAuth, clearNotifications);
 
 // Admin Routes
 router.get('/all', requireAuth, requireAdmin, getAllStudents);
-router.post('/allot', requireAuth, requireAdmin, logUpload, upload.single('profilePhoto'), createStudent);
+router.post('/allot', requireAuth, requireAdmin, logUpload, (req, res, next) => {
+    upload.single('profilePhoto')(req, res, (err: any) => {
+        if (err) {
+            console.error('Multer Error:', err);
+            return res.status(400).json({ error: 'File upload error: ' + err.message });
+        }
+        next();
+    });
+}, createStudent);
 router.get('/:id', requireAuth, requireAdmin, getStudentById);
 router.delete('/:id', requireAuth, requireAdmin, deleteStudent);
 router.put('/:id', requireAuth, requireAdmin, logUpload, upload.single('profilePhoto'), updateStudent);

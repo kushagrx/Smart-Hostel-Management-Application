@@ -4,6 +4,7 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
+    Dimensions,
     Image,
     ScrollView,
     StyleSheet,
@@ -182,9 +183,34 @@ export default function AboutPage() {
                     ) : (
                         facilities.map((item) => (
                             <View key={item.id} style={styles.facilityCard}>
-                                {item.image_url && (
+                                {item.images && item.images.length > 0 ? (
+                                    <View>
+                                        <ScrollView
+                                            horizontal
+                                            pagingEnabled
+                                            showsHorizontalScrollIndicator={false}
+                                            style={{ width: '100%', height: 180 }}
+                                        >
+                                            {item.images.map((img, index) => (
+                                                <Image
+                                                    key={index}
+                                                    source={{ uri: img }}
+                                                    style={{ width: Dimensions.get('window').width - 42, height: 180 }} // width - padding (40) - border (2)
+                                                    resizeMode="cover"
+                                                />
+                                            ))}
+                                        </ScrollView>
+                                        {item.images.length > 1 && (
+                                            <View style={{ position: 'absolute', bottom: 10, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                                                {item.images.map((_, index) => (
+                                                    <View key={index} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.8)' }} />
+                                                ))}
+                                            </View>
+                                        )}
+                                    </View>
+                                ) : item.image_url ? (
                                     <Image source={{ uri: item.image_url }} style={styles.facilityImage} resizeMode="cover" />
-                                )}
+                                ) : null}
                                 <View style={styles.facilityContent}>
                                     <Text style={styles.facilityTitle}>{item.title}</Text>
                                     <Text style={styles.facilityDesc}>{item.description}</Text>

@@ -30,6 +30,7 @@ import {
     getServiceRequests,
     recordPayment,
     updateComplaintStatus,
+    updateLaundryRequestStatus,
     updateLaundrySettings,
     updateLeaveStatus,
     updateServiceRequestStatus,
@@ -75,6 +76,7 @@ router.put('/requests/:id', requireAuth, updateServiceRequestStatus); // Admin
 // Laundry (Student)
 router.get('/laundry', requireAuth, getLaundryRequests);
 router.post('/laundry', requireAuth, createLaundryRequest);
+router.put('/laundry/:id/status', requireAuth, updateLaundryRequestStatus); // Admin
 
 // Laundry (Settings & Admin)
 router.get('/laundry/settings', requireAuth, getLaundrySettings);

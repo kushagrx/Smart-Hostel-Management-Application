@@ -10,7 +10,7 @@ export const globalSearch = async (req: Request, res: Response) => {
         }
 
         const searchTerm = `%${searchText}%`;
-        const results = [];
+        const results: any[] = [];
 
         // Search Students
         const studentRes = await query(`

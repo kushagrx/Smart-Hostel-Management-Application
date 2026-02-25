@@ -75,9 +75,6 @@ const _layout = () => {
             marginTop: -4,
             marginBottom: 2,
           },
-          tabBarIconStyle: {
-            marginTop: 4,
-          },
           swipeEnabled: true,
           animationEnabled: true,
         }}
@@ -86,8 +83,12 @@ const _layout = () => {
           name="index"
           options={{
             title: 'Home',
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedIcon name={focused ? "home" : "home-outline"} focused={focused} color={color} />
+            tabBarIcon: ({ focused, color }) => (
+              <MaterialCommunityIcons
+                name={focused ? 'home' : 'home-outline'}
+                size={24}
+                color={color}
+              />
             )
           }}
         />

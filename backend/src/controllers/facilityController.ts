@@ -12,15 +12,21 @@ export const getAllFacilities = async (req: Request, res: Response) => {
 };
 
 export const addFacility = async (req: Request, res: Response) => {
-    const { title, description, image_url, icon } = req.body;
+    const { title, description, image_url, images, icon } = req.body;
     try {
         // Get max position to append to end
         const maxPosResult = await pool.query('SELECT MAX(position) as max_pos FROM facilities');
         const nextPos = (maxPosResult.rows[0].max_pos || 0) + 1;
 
+        // Ensure images is an array, default to empty or single image_url if provided
+        let imageArray = images || [];
+        if (imageArray.length === 0 && image_url) {
+            imageArray = [image_url];
+        }
+
         const result = await pool.query(
-            'INSERT INTO facilities (title, description, image_url, icon, position) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [title, description, image_url, icon || 'star', nextPos]
+            'INSERT INTO facilities (title, description, image_url, images, icon, position) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [title, description, image_url, imageArray, icon || 'star', nextPos]
         );
         res.json(result.rows[0]);
     } catch (error) {
@@ -31,11 +37,18 @@ export const addFacility = async (req: Request, res: Response) => {
 
 export const updateFacility = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { title, description, image_url, icon } = req.body;
+    const { title, description, image_url, images, icon } = req.body;
     try {
+        // Ensure images is an array
+        let imageArray = images;
+        // If only image_url provided and images is missing, wrap it (backward compatibility mostly)
+        if (!imageArray && image_url) {
+            imageArray = [image_url];
+        }
+
         const result = await pool.query(
-            'UPDATE facilities SET title = $1, description = $2, image_url = $3, icon = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
-            [title, description, image_url, icon, id]
+            'UPDATE facilities SET title = $1, description = $2, image_url = $3, images = $4, icon = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *',
+            [title, description, image_url, imageArray, icon, id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Facility not found' });

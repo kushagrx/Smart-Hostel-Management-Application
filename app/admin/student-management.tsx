@@ -27,6 +27,7 @@ const functionalities = [
     { id: 'finance', label: 'Fees', icon: 'cash-multiple', color: '#10B981', path: '/admin/finance', desc: 'Fees & payments' },
     { id: 'laundry', label: 'Laundry', icon: 'washing-machine', color: '#06B6D4', path: '/admin/laundry', desc: 'Status & requests' },
     { id: 'visitors', label: 'Visitors', icon: 'account-multiple-check', color: '#8B5CF6', path: '/admin/visitors', desc: 'Approve & track visitors' },
+    { id: 'facilities', label: 'About Hostel', icon: 'office-building', color: '#10B981', path: '/admin/facilities', desc: 'Hostel info & facility management' },
     { id: 'emergency', label: 'Emergency', icon: 'phone-alert', color: '#EF4444', path: '/admin/emergency', desc: 'Contacts & SOS' },
 ];
 

@@ -5,18 +5,18 @@ import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
-    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, ScrollView } from 'react-native-gesture-handler';
 import EditFooterModal from '../../components/EditFooterModal';
 import EditHostelInfoModal from '../../components/EditHostelInfoModal';
 import InputField from '../../components/InputField';
@@ -35,10 +35,7 @@ import { getHostelInfo, HostelInfo } from '../../utils/hostelUtils';
 const MemoizedFacilityItem = React.memo(({ item, drag, isActive, handleEdit, handleDelete, colors, isDark, styles }: any) => {
     return (
         <ScaleDecorator activeScale={1.03}>
-            <TouchableOpacity
-                onLongPress={drag}
-                disabled={isActive}
-                activeOpacity={1}
+            <View
                 style={[
                     styles.card,
                     isActive && {
@@ -54,13 +51,46 @@ const MemoizedFacilityItem = React.memo(({ item, drag, isActive, handleEdit, han
                     }
                 ]}
             >
-                {item.image_url && (
+                {(item.images && item.images.length > 0) ? (
+                    <View>
+                        <ScrollView
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            style={{ width: '100%', height: 200 }}
+                        >
+                            {item.images.map((img: string, index: number) => (
+                                <Image
+                                    key={index}
+                                    source={{ uri: img }}
+                                    style={{ width: Dimensions.get('window').width - 42, height: 200 }} // width - padding (40) - border (2)
+                                    resizeMode="cover"
+                                />
+                            ))}
+                        </ScrollView>
+                        {item.images.length > 1 && (
+                            <View style={{ position: 'absolute', bottom: 10, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                                {item.images.map((_: any, index: number) => (
+                                    <View key={index} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.8)' }} />
+                                ))}
+                            </View>
+                        )}
+                    </View>
+                ) : (item.image_url) && (
                     <Image source={{ uri: item.image_url }} style={styles.cardImage} resizeMode="cover" />
                 )}
                 <View style={styles.cardContent}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <Text style={styles.cardTitle}>{item.title}</Text>
-                        <MaterialCommunityIcons name="drag" size={24} color={colors.textSecondary} />
+                        <TouchableOpacity
+                            onLongPress={drag}
+                            disabled={isActive}
+                            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                            style={{ backgroundColor: colors.background, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <MaterialCommunityIcons name="drag" size={24} color={colors.primary} />
+                            <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '600' }}>Drag</Text>
+                        </TouchableOpacity>
                     </View>
                     <Text style={styles.cardDesc} numberOfLines={3}>
                         {item.description}
@@ -74,7 +104,7 @@ const MemoizedFacilityItem = React.memo(({ item, drag, isActive, handleEdit, han
                         <MaterialCommunityIcons name="delete" size={20} color="#EF4444" />
                     </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
+            </View>
         </ScaleDecorator>
     );
 });
@@ -91,7 +121,7 @@ export default function ManageFacilities() {
     const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [image, setImage] = useState<string | null>(null);
+    const [images, setImages] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
 
     // Hostel Info Modal State
@@ -130,7 +160,7 @@ export default function ManageFacilities() {
         setEditingFacility(null);
         setTitle('');
         setDescription('');
-        setImage(null);
+        setImages([]);
         setModalVisible(true);
     }, []);
 
@@ -138,7 +168,7 @@ export default function ManageFacilities() {
         setEditingFacility(facility);
         setTitle(facility.title);
         setDescription(facility.description);
-        setImage(facility.image_url || null);
+        setImages(facility.images && facility.images.length > 0 ? facility.images : facility.image_url ? [facility.image_url] : []);
         setModalVisible(true);
     }, []);
 
@@ -163,7 +193,7 @@ export default function ManageFacilities() {
     const pickImage = React.useCallback(async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
+            allowsEditing: true, // Note: allowsEditing usually limits to 1 image in some older versions, but useful for cropping
             aspect: [4, 3],
             quality: 0.5,
             base64: true,
@@ -171,8 +201,12 @@ export default function ManageFacilities() {
 
         if (!result.canceled) {
             const uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
-            setImage(uri);
+            setImages(prev => [...prev, uri]);
         }
+    }, []);
+
+    const removeImage = React.useCallback((index: number) => {
+        setImages(prev => prev.filter((_, i) => i !== index));
     }, []);
 
     const handleSave = React.useCallback(async () => {
@@ -186,7 +220,8 @@ export default function ManageFacilities() {
             const facilityData = {
                 title,
                 description,
-                image_url: image || undefined,
+                images,
+                image_url: images.length > 0 ? images[0] : undefined, // Keep primary image synced
             };
 
             if (editingFacility) {
@@ -201,7 +236,7 @@ export default function ManageFacilities() {
         } finally {
             setSaving(false);
         }
-    }, [title, description, image, editingFacility, loadData]);
+    }, [title, description, images, editingFacility, loadData]);
 
     const handleEditInfo = React.useCallback(() => {
         setInfoModalVisible(true);
@@ -481,7 +516,7 @@ export default function ManageFacilities() {
             />
             <View style={{ paddingHorizontal: 20, paddingVertical: 8, alignItems: 'center' }}>
                 <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                    <MaterialCommunityIcons name="gesture-tap-hold" size={12} /> Long press a card to reorder
+                    <MaterialCommunityIcons name="gesture-tap-hold" size={12} /> Long press "Drag" to reorder
                 </Text>
             </View>
 
@@ -559,16 +594,27 @@ export default function ManageFacilities() {
                         </View>
 
                         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                            <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-                                {image ? (
-                                    <Image source={{ uri: image }} style={styles.imagePreview} resizeMode="cover" />
-                                ) : (
-                                    <View style={styles.imagePlaceholder}>
-                                        <MaterialCommunityIcons name="camera-plus" size={32} color={colors.textSecondary} />
-                                        <Text style={styles.imagePlaceholderText}>Add Photo</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+                            <View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, marginBottom: 20 }}>
+                                    <TouchableOpacity style={[styles.imagePicker, { width: 120, height: 120, marginBottom: 0 }]} onPress={pickImage}>
+                                        <View style={styles.imagePlaceholder}>
+                                            <MaterialCommunityIcons name="camera-plus" size={32} color={colors.textSecondary} />
+                                            <Text style={[styles.imagePlaceholderText, { fontSize: 12 }]}>Add Photo</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    {images.map((img, index) => (
+                                        <View key={index} style={{ width: 120, height: 120, borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
+                                            <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                            <TouchableOpacity
+                                                style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 }}
+                                                onPress={() => removeImage(index)}
+                                            >
+                                                <MaterialCommunityIcons name="close" size={16} color="#fff" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                            </View>
 
                             <Text style={[styles.label, { marginTop: 0 }]}>Title</Text>
                             <InputField

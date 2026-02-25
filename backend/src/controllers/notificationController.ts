@@ -27,11 +27,13 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
         const userId = req.currentUser?.id;
 
         // 1. Get Student ID
-        const studentRes = await query('SELECT id FROM students WHERE user_id = $1', [userId]);
+        // 1. Get Student ID and Account Creation Date
+        const studentRes = await query('SELECT id, created_at FROM students WHERE user_id = $1', [userId]);
         if (studentRes.rows.length === 0) {
             return res.status(404).json({ error: 'Student profile not found' });
         }
         const studentId = studentRes.rows[0].id;
+        const studentCreatedAt = new Date(studentRes.rows[0].created_at);
 
         // 2. Get Last Cleared Timestamp
         const userRes = await query('SELECT last_notifications_cleared_at FROM users WHERE id = $1', [userId]);
@@ -39,12 +41,16 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
             ? new Date(userRes.rows[0].last_notifications_cleared_at)
             : new Date(0);
 
+        // Effective Start Date for Global Items (Notices, Bus, Contacts)
+        // Show only items created AFTER student joined AND AFTER they last cleared list.
+        const effectiveStartDate = new Date(Math.max(studentCreatedAt.getTime(), lastCleared.getTime()));
+
         // 3. Bus Timing Updates (Global)
         const busRes = await query(`
             SELECT route_name, updated_at, created_at 
             FROM bus_timings 
             WHERE updated_at > $1 OR created_at > $1
-        `, [lastCleared]);
+        `, [effectiveStartDate]);
 
         const busNotifs = busRes.rows.map(row => ({
             id: `bus-${row.route_name}-${row.updated_at}`,
@@ -60,7 +66,7 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
             SELECT name, designation, updated_at, created_at 
             FROM emergency_contacts 
             WHERE updated_at > $1 OR created_at > $1
-        `, [lastCleared]);
+        `, [effectiveStartDate]);
 
         const emergencyNotifs = emergencyRes.rows.map(row => ({
             id: `emergency-${row.name}-${row.updated_at}`,
@@ -78,15 +84,9 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
                 c.student_unread as count,
                 c.last_message_time as latest_at
             FROM conversations c
-            JOIN users u ON u.role = 'admin' -- Assuming admin is sender? Or generic admin user?
-            -- Actually sender_id in messages table would be better but we using conversation summary
+            JOIN users u ON u.role = 'admin' 
             WHERE c.student_id = $1 AND c.student_unread > 0
         `, [studentId]);
-        // Note: For simplicity assuming 1 admin chat per student or aggregared. 
-        // In this schema, conversation is 1-to-1 student-admin? 
-        // messages table has sender_id. conversations table has student_id.
-        // It implies one conversation per student? Or multiple admins?
-        // Schema: conversations has student_id. It doesn't have admin_id. So it's 1 conversation per student (with "The Admin").
 
         const msgNotifs = msgRes.rows.map(row => ({
             id: `msg-${studentId}`,
@@ -120,7 +120,7 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
             SELECT title, status, updated_at 
             FROM complaints 
             WHERE student_id = $1 
-            AND status IN ('resolved', 'in-progress') 
+            AND status IN ('resolved', 'in-progress', 'inProgress') 
             AND updated_at > $2
         `, [studentId, lastCleared]);
 
@@ -138,7 +138,7 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
             SELECT service_type, status, updated_at 
             FROM service_requests 
             WHERE student_id = $1 
-            AND status IN ('approved', 'completed', 'rejected') 
+            AND status IN ('approved', 'in_progress', 'completed', 'rejected') 
             AND updated_at > $2
         `, [studentId, lastCleared]);
 
@@ -156,7 +156,8 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
             SELECT title, content, priority, created_at 
             FROM notices 
             WHERE created_at > $1
-        `, [lastCleared]);
+            ORDER BY created_at DESC
+        `, [effectiveStartDate]);
 
         const noticeNotifs = noticeRes.rows.map(row => ({
             id: `notice-${row.created_at}`,
@@ -168,6 +169,82 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
             priority: row.priority // generic, critical, etc.
         }));
 
+        // 10. Laundry Updates (Personal)
+        const laundryRes = await query(`
+            SELECT status, updated_at 
+            FROM laundry_requests 
+            WHERE student_id = $1 
+            AND status IN ('approved', 'completed', 'rejected') 
+            AND updated_at > $2
+        `, [studentId, lastCleared]);
+
+        const laundryNotifs = laundryRes.rows.map(row => ({
+            id: `laundry-${row.updated_at}`,
+            type: 'laundry',
+            title: `Laundry Update`,
+            subtitle: `Your laundry request is ${row.status}.`,
+            time: row.updated_at,
+            read: false
+        }));
+
+        // 11. Visitor Updates (Personal)
+        const visitorRes = await query(`
+            SELECT visitor_name, status, updated_at 
+            FROM visitors 
+            WHERE student_id = $1 
+            AND status IN ('approved', 'rejected') 
+            AND updated_at > $2
+        `, [studentId, lastCleared]);
+
+        const visitorNotifs = visitorRes.rows.map(row => ({
+            id: `visitor-${row.updated_at}`,
+            type: 'visitor',
+            title: `Visitor Request Update`,
+            subtitle: `Visitor ${row.visitor_name} request is ${row.status}.`,
+            time: row.updated_at,
+            read: false
+        }));
+
+        // 12. Mess Menu Updates (Global - check if menu updated recently)
+        const messRes = await query(`
+            SELECT day_of_week, meal_type, updated_at 
+            FROM mess_schedule 
+            WHERE updated_at > $1
+        `, [effectiveStartDate]);
+
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        const messNotifs = messRes.rows.map(row => {
+            const dayName = days[row.day_of_week];
+            return {
+                id: `mess-${row.day_of_week}-${row.meal_type}-${row.updated_at}`,
+                type: 'mess',
+                title: `Mess Menu Update`,
+                subtitle: `${dayName}'s ${row.meal_type} menu has been updated.`,
+                time: row.updated_at,
+                data: { tab: 'menu', day: dayName, meal: row.meal_type },
+                read: false
+            };
+        });
+
+        // 13. Fee Requests (Personal - pending payments)
+        const feeRes = await query(`
+            SELECT purpose, amount, created_at 
+            FROM payments 
+            WHERE student_id = $1 
+            AND status = 'pending' 
+            AND created_at > $2
+        `, [studentId, lastCleared]);
+
+        const feeNotifs = feeRes.rows.map(row => ({
+            id: `fee-${row.created_at}`,
+            type: 'payment',
+            title: `Fee Payment Request`,
+            subtitle: `Payment request for ${row.purpose} (₹${row.amount}).`,
+            time: row.created_at,
+            read: false
+        }));
+
         // Combine
         const allNotifications = [
             ...busNotifs,
@@ -176,7 +253,11 @@ export const getStudentNotifications = async (req: Request, res: Response) => {
             ...leaveNotifs,
             ...complaintNotifs,
             ...serviceNotifs,
-            ...noticeNotifs
+            ...noticeNotifs,
+            ...laundryNotifs,
+            ...visitorNotifs,
+            ...messNotifs,
+            ...feeNotifs
         ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
         res.json(allNotifications);
@@ -251,7 +332,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
             FROM complaints c
             JOIN students s ON c.student_id = s.id
             JOIN users u ON s.user_id = u.id
-            WHERE c.status = 'pending' AND c.created_at > $1
+            WHERE c.status IN ('pending', 'open') AND c.created_at > $1
             ORDER BY c.created_at DESC
         `, [lastCleared]);
 
@@ -325,13 +406,56 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
             read: false
         }));
 
+        // 6. Pending Visitor Requests
+        const visitorRes = await query(`
+            SELECT v.id, v.visitor_name, v.created_at, u.full_name
+            FROM visitors v
+            JOIN students s ON v.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+            WHERE v.status = 'pending' AND v.created_at > $1
+            ORDER BY v.created_at DESC
+        `, [lastCleared]);
+
+        const visitorNotifs = visitorRes.rows.map(row => ({
+            id: `visitor-${row.id}`,
+            type: 'visitor',
+            title: 'Visitor Request',
+            subtitle: `${row.visitor_name} to see ${row.full_name}`,
+            time: row.created_at,
+            data: { id: row.id },
+            read: false
+        }));
+
+        // 7. Recent Payments (Success)
+        // Show payments made since last clear
+        const paymentRes = await query(`
+            SELECT p.id, p.amount, p.created_at, u.full_name
+            FROM payments p
+            JOIN students s ON p.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+            WHERE p.status = 'success' AND p.created_at > $1
+            ORDER BY p.created_at DESC
+        `, [lastCleared]);
+
+        const paymentNotifs = paymentRes.rows.map(row => ({
+            id: `payment-${row.id}`,
+            type: 'payment',
+            title: 'Payment Received',
+            subtitle: `₹${row.amount} from ${row.full_name}`,
+            time: row.created_at,
+            data: { id: row.id },
+            read: false
+        }));
+
         // Combine and Sort
         const allNotifications = [
             ...messageNotifs,
             ...complaintNotifs,
             ...serviceNotifs,
             ...laundryNotifs,
-            ...leaveNotifs
+            ...leaveNotifs,
+            ...visitorNotifs,
+            ...paymentNotifs
         ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
         res.json(allNotifications);

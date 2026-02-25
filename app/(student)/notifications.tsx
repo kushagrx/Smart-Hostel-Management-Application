@@ -5,50 +5,45 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import api from '../../utils/api';
+import { StudentNotification, clearStudentNotifications, subscribeToStudentNotifications } from '../../utils/notificationUtils';
 import { useTheme } from '../../utils/ThemeContext';
-
-interface Notification {
-    id: string;
-    type: 'bus' | 'emergency' | 'message' | 'leave' | 'complaint' | 'service' | 'notice';
-    title: string;
-    subtitle: string;
-    time: string;
-    read: boolean;
-}
 
 export default function StudentNotifications() {
     const { colors, theme } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
-    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [notifications, setNotifications] = useState<StudentNotification[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    const fetchNotifications = async () => {
-        try {
-            const res = await api.get('/notifications/student');
-            setNotifications(res.data);
-        } catch (error) {
-            console.error('Fetch Notifs Error:', error);
-        } finally {
+    useEffect(() => {
+        setLoading(true);
+        const unsubscribe = subscribeToStudentNotifications((data) => {
+            setNotifications(data);
             setLoading(false);
             setRefreshing(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchNotifications();
+        });
+        return () => { if (unsubscribe) unsubscribe(); };
     }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        // Subscription will update on next poll, but force immediate fetch
+        subscribeToStudentNotifications((data) => {
+            setNotifications(data);
+            setRefreshing(false);
+        });
+    };
 
     const handleClearAll = async () => {
         try {
-            await api.post('/notifications/student/clear');
+            await clearStudentNotifications();
             setNotifications([]);
         } catch (error) {
             console.error('Clear Notifs Error:', error);
         }
     };
+
 
     const getIcon = (type: string) => {
         switch (type) {
@@ -59,6 +54,7 @@ export default function StudentNotifications() {
             case 'complaint': return 'alert-circle-outline';
             case 'service': return 'tools';
             case 'notice': return 'bullhorn-outline';
+            case 'mess': return 'silverware-fork-knife';
             default: return 'bell-outline';
         }
     };
@@ -72,6 +68,7 @@ export default function StudentNotifications() {
             case 'complaint': return '#F97316';
             case 'service': return '#8B5CF6';
             case 'notice': return '#EC4899';
+            case 'mess': return '#F59E0B'; // Amber
             default: return colors.primary;
         }
     };
@@ -98,6 +95,15 @@ export default function StudentNotifications() {
                 break;
             case 'notice':
                 router.push('/alerts');
+                break;
+            case 'mess':
+                // @ts-ignore
+                const p = new URLSearchParams({ tab: 'menu' });
+                // @ts-ignore
+                if (item.data?.day) p.append('day', item.data.day);
+                // @ts-ignore
+                if (item.data?.meal) p.append('target', item.data.meal);
+                router.push(`/mess?${p.toString()}`);
                 break;
             default:
                 break;

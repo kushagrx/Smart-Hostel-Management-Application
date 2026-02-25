@@ -30,7 +30,9 @@ export const getAllRooms = async (req: Request, res: Response) => {
                 })),
                 occupants: occupants.map(o => o.full_name), // Legacy support if needed
                 wifiSSID: room.wifi_ssid,
-                wifiPassword: room.wifi_password
+                wifiPassword: room.wifi_password,
+                roomType: room.room_type,
+                facilities: room.facilities
             };
         });
 

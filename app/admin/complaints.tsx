@@ -270,26 +270,35 @@ export default function ComplaintsPage() {
 
 
   function renderComplaintItem(item: Complaint) {
+    const isDark = theme === 'dark';
+    const statusColor = getStatusColor(item.status);
+
     return (
       <View style={{ marginHorizontal: 20 }}>
         <TouchableOpacity
           style={[
             styles.complaintCard,
             selectedId === item.id && styles.complaintCardActive,
+            { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }
           ]}
-          activeOpacity={0.9} // Improved feedback
+          activeOpacity={0.9}
           onPress={() => {
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setSelectedId(selectedId === item.id ? null : item.id);
           }}
         >
+          <LinearGradient
+            colors={isDark ? ['rgba(255,255,255,0.03)', 'transparent'] : ['rgba(0,0,0,0.01)', 'transparent']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+
           <View style={styles.cardHeader}>
             <View style={styles.studentInfo}>
-              <View
-                style={[
-                  styles.studentAvatar,
-                  { backgroundColor: getStatusColor(item.status), overflow: 'hidden' },
-                ]}
+              <LinearGradient
+                colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#C7D2FE']}
+                style={[styles.studentAvatar, { overflow: 'hidden' }]}
               >
                 {item.studentProfilePhoto ? (
                   <Image
@@ -297,33 +306,25 @@ export default function ComplaintsPage() {
                     style={{ width: '100%', height: '100%' }}
                   />
                 ) : (
-                  <Text style={styles.studentInitial}>
+                  <Text style={[styles.studentInitial, { color: isDark ? '#C7D2FE' : '#4F46E5' }]}>
                     {item.studentName?.charAt(0).toUpperCase() || '?'}
                   </Text>
                 )}
-              </View>
+              </LinearGradient>
               <View style={styles.textInfo}>
-                <Text style={styles.studentName}>{item.studentName || 'Unknown Student'}</Text>
-                <Text style={styles.complaintPreview} numberOfLines={1}>
+                <Text style={[styles.studentName, { color: colors.text }]}>{item.studentName || 'Unknown Student'}</Text>
+                <Text style={[styles.complaintPreview, { color: colors.textSecondary }]} numberOfLines={1}>
                   {item.title}
                 </Text>
               </View>
             </View>
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: getStatusColor(item.status) },
-              ]}
-            >
-              <MaterialIcons name={getStatusIcon(item.status) as any} size={14} color="#fff" />
-              <Text style={styles.statusText}>
-                {item.status === 'inProgress' ? 'In Progress' : item.status}
-              </Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+              <MaterialIcons name={getStatusIcon(item.status) as any} size={16} color={statusColor} />
             </View>
           </View>
 
           {selectedId === item.id && (
-            <View style={styles.expandedContent}>
+            <View style={[styles.expandedContent, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC' }]}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Email:</Text>
                 <Text style={styles.detailValue}>{item.studentEmail}</Text>
@@ -338,17 +339,16 @@ export default function ComplaintsPage() {
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Priority:</Text>
-                <Text style={[styles.detailValue, { color: getStatusColor(item.status) }]}>
+                <Text style={[styles.detailValue, { color: statusColor, fontWeight: '800' }]}>
                   {item.status.toUpperCase()}
                 </Text>
               </View>
 
-              <View style={styles.complaintText}>
-                <Text style={styles.complaintTextLabel}>Complaint Details:</Text>
-                <Text style={styles.complaintTextContent}>{item.description}</Text>
+              <View style={[styles.complaintText, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFF' }]}>
+                <Text style={[styles.complaintTextLabel, { color: colors.text }]}>Complaint Details:</Text>
+                <Text style={[styles.complaintTextContent, { color: colors.text }]}>{item.description}</Text>
               </View>
 
-              {/* Only show action buttons if complaint is not resolved or closed */}
               {item.status !== 'resolved' && item.status !== 'closed' && (
                 <View style={styles.actionButtons}>
                   {item.status === 'open' && (
@@ -370,7 +370,6 @@ export default function ComplaintsPage() {
                 </View>
               )}
 
-              {/* Show resolved message if complaint is resolved or closed */}
               {(item.status === 'resolved' || item.status === 'closed') && (
                 <View style={styles.resolvedMessage}>
                   <MaterialIcons name="check-circle" size={20} color={item.status === 'resolved' ? '#10B981' : '#64748B'} />
@@ -381,11 +380,23 @@ export default function ComplaintsPage() {
               )}
             </View>
           )}
-        </TouchableOpacity>
 
+          {/* Subtle Watermark */}
+          <MaterialIcons
+            name="alert-box-outline"
+            size={64}
+            color={isDark ? '#FFF' : colors.primary}
+            style={{
+              position: 'absolute',
+              right: -10,
+              bottom: -10,
+              opacity: isDark ? 0.03 : 0.02,
+              transform: [{ rotate: '-15deg' }]
+            }}
+          />
+        </TouchableOpacity>
       </View >
     );
-
   }
 
   function EmptyComplaints() {

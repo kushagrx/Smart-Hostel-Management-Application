@@ -21,7 +21,6 @@ import {
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import InputField from '../../components/InputField';
 import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
 import { isAdmin, useUser } from '../../utils/authUtils';
@@ -53,8 +52,13 @@ export default function ManageMessMenuPage() {
 
     // Timings State
     const [timingsModalVisible, setTimingsModalVisible] = useState(false);
-    const [timings, setTimings] = useState<MessTimings>({
-        breakfast: '', lunch: '', snacks: '', dinner: ''
+    const [timings, setTimings] = useState<{
+        [key: string]: { start: string, startPeriod: 'AM' | 'PM', end: string, endPeriod: 'AM' | 'PM' }
+    }>({
+        breakfast: { start: '08:00', startPeriod: 'AM', end: '09:30', endPeriod: 'AM' },
+        lunch: { start: '12:30', startPeriod: 'PM', end: '02:30', endPeriod: 'PM' },
+        snacks: { start: '05:30', startPeriod: 'PM', end: '06:30', endPeriod: 'PM' },
+        dinner: { start: '08:30', startPeriod: 'PM', end: '09:30', endPeriod: 'PM' }
     });
     const [savingTimings, setSavingTimings] = useState(false);
     const dayScrollRef = React.useRef<ScrollView>(null);
@@ -104,28 +108,69 @@ export default function ManageMessMenuPage() {
     }, [user]);
 
     // When selected day changes or fullMenu updates, sync local state
+    const [dirtyMeals, setDirtyMeals] = useState<Set<string>>(new Set());
+
+    // When selected day changes or fullMenu updates, sync local state
     useEffect(() => {
+        setDirtyMeals(new Set()); // Reset dirty state on day change
         if (fullMenu[selectedDay]) {
-            const menu = JSON.parse(JSON.stringify(fullMenu[selectedDay]));
-            setCurrentDayMenu(menu);
-            // Sync timings state with the selected day's timings
-            if (menu.timings) {
-                setTimings(menu.timings);
+            // Deep copy to avoid reference sharing with fullMenu
+            const dayData = JSON.parse(JSON.stringify(fullMenu[selectedDay]));
+            setCurrentDayMenu({
+                day: selectedDay,
+                breakfast: dayData.breakfast || [],
+                lunch: dayData.lunch || [],
+                snacks: dayData.snacks || [],
+                dinner: dayData.dinner || [],
+            });
+
+            // Sync timings state
+            if (dayData.timings) {
+                // Parse the existing "08:00 AM - 09:30 AM" strings into our structured object
+                const parsedTimings: any = {};
+                MEALS.forEach(meal => {
+                    const timeString = dayData.timings[meal] || '';
+                    const parts = timeString.split('-');
+                    if (parts.length === 2) {
+                        const startParts = parts[0].trim().split(' ');
+                        const endParts = parts[1].trim().split(' ');
+                        parsedTimings[meal] = {
+                            start: startParts[0] || '',
+                            startPeriod: (startParts[1] || 'AM') as 'AM' | 'PM',
+                            end: endParts[0] || '',
+                            endPeriod: (endParts[1] || 'PM') as 'AM' | 'PM'
+                        };
+                    } else {
+                        // Fallback defaults if string is malformed
+                        parsedTimings[meal] = { start: '12:00', startPeriod: 'PM', end: '12:00', endPeriod: 'PM' };
+                    }
+                });
+                setTimings(parsedTimings);
             } else {
-                setTimings({ breakfast: '', lunch: '', snacks: '', dinner: '' });
+                setTimings({
+                    breakfast: { start: '08:00', startPeriod: 'AM', end: '09:30', endPeriod: 'AM' },
+                    lunch: { start: '12:30', startPeriod: 'PM', end: '02:30', endPeriod: 'PM' },
+                    snacks: { start: '05:30', startPeriod: 'PM', end: '06:30', endPeriod: 'PM' },
+                    dinner: { start: '08:30', startPeriod: 'PM', end: '09:30', endPeriod: 'PM' }
+                });
             }
         } else {
             // Initialize if missing locally (and trigger DB init)
             initializeDay(selectedDay);
+            // Init empty if not found
             setCurrentDayMenu({
                 day: selectedDay,
                 breakfast: [],
                 lunch: [],
                 snacks: [],
-                dinner: [],
-                timings: { breakfast: '8:00 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:30 - 6:30 PM', dinner: '8:30 - 9:30 PM' }
+                dinner: []
             });
-            setTimings({ breakfast: '8:00 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:30 - 6:30 PM', dinner: '8:30 - 9:30 PM' });
+            setTimings({
+                breakfast: { start: '08:00', startPeriod: 'AM', end: '09:30', endPeriod: 'AM' },
+                lunch: { start: '12:30', startPeriod: 'PM', end: '02:30', endPeriod: 'PM' },
+                snacks: { start: '05:30', startPeriod: 'PM', end: '06:30', endPeriod: 'PM' },
+                dinner: { start: '08:30', startPeriod: 'PM', end: '09:30', endPeriod: 'PM' }
+            });
         }
     }, [selectedDay, fullMenu]);
 
@@ -134,6 +179,7 @@ export default function ManageMessMenuPage() {
         // @ts-ignore
         updatedMenu[mealType].push({ dish: '', type: 'veg', highlight: false });
         setCurrentDayMenu(updatedMenu);
+        setDirtyMeals(prev => new Set(prev).add(mealType));
     };
 
     const handleUpdateItem = (mealType: string, index: number, field: keyof MenuItem, value: any) => {
@@ -142,6 +188,7 @@ export default function ManageMessMenuPage() {
         // @ts-ignore
         updatedMenu[mealType][index][field] = value;
         setCurrentDayMenu(updatedMenu);
+        setDirtyMeals(prev => new Set(prev).add(mealType));
     };
 
     const handleDeleteItem = (mealType: string, index: number) => {
@@ -149,20 +196,131 @@ export default function ManageMessMenuPage() {
         // @ts-ignore
         updatedMenu[mealType].splice(index, 1);
         setCurrentDayMenu(updatedMenu);
+        setDirtyMeals(prev => new Set(prev).add(mealType));
     };
 
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Filter out empty items
-            const cleanData = {
-                breakfast: currentDayMenu.breakfast.filter(i => i.dish.trim()),
-                lunch: currentDayMenu.lunch.filter(i => i.dish.trim()),
-                snacks: currentDayMenu.snacks.filter(i => i.dish.trim()),
-                dinner: currentDayMenu.dinner.filter(i => i.dish.trim()),
+            // 0. Dirty Check - fail fast if user didn't touch anything
+            if (dirtyMeals.size === 0) {
+                showAlert("Info", "No changes made to save.");
+                setSaving(false);
+                return;
+            }
+
+            // 1. Fetch FRESH server data to ignore any local staleness
+            // dynamic import to ensure no circular deps
+            // @ts-ignore
+            const { default: api } = await import('../../utils/api');
+            // @ts-ignore
+            const response = await api.get('/services/mess');
+            const weekData = response.data;
+            let originalDayData = { breakfast: [], lunch: [], snacks: [], dinner: [] };
+
+            // Find the current day in the fresh data
+            if (Array.isArray(weekData)) {
+                const found = weekData.find((d: any) => d.day === selectedDay);
+                if (found) {
+                    // Helper to parse potential stringified fields
+                    const parseMeal = (meal: any) => {
+                        if (typeof meal === 'string') {
+                            try { return JSON.parse(meal); } catch (e) { return []; }
+                        }
+                        return meal || [];
+                    };
+                    originalDayData = {
+                        breakfast: parseMeal(found.breakfast),
+                        lunch: parseMeal(found.lunch),
+                        snacks: parseMeal(found.snacks),
+                        dinner: parseMeal(found.dinner)
+                    };
+                }
+            }
+
+            // 2. Strict Cleaning for Comparison
+            const getCleanMeal = (meal: MenuItem[]) => {
+                if (!meal) return [];
+                return meal
+                    .filter(i => i && i.dish && String(i.dish).trim())
+                    .map(i => ({
+                        // Normalize: Lowercase for comparison (optional, but safer)
+                        // Actually, keep case but trim.
+                        dish: String(i.dish).trim(),
+                        // Force defaults
+                        type: (i.type || 'veg') as 'veg' | 'non-veg',
+                        highlight: !!i.highlight
+                    }));
             };
 
+            const hasChanged = (newMeal: MenuItem[], oldMeal: MenuItem[], label: string) => {
+                const cleanNew = getCleanMeal(newMeal);
+                const cleanOld = getCleanMeal(oldMeal);
+
+                const strNew = JSON.stringify(cleanNew);
+                const strOld = JSON.stringify(cleanOld);
+
+                if (strNew !== strOld) {
+                    console.log(`[MessDiff] ${label} CHANGE DETECTED`);
+                    console.log(`  OLD: ${strOld}`);
+                    console.log(`  NEW: ${strNew}`);
+                    return true;
+                }
+                return false;
+            };
+
+            const cleanData: Partial<DayMenu> = {};
+            let changeCount = 0;
+
+            // 3. Compare ONLY Dirty Meals
+            // If dirtyMeals has 'breakfast', we check it. If confusingly NO diff found, we still trust user intent? 
+            // No, if user changed "A" to "B" then back to "A", dirty=true but hasChanged=false. We should NOT save.
+
+            if (dirtyMeals.has('breakfast')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.breakfast, originalDayData.breakfast, 'Breakfast')) {
+                    cleanData.breakfast = getCleanMeal(currentDayMenu.breakfast);
+                    changeCount++;
+                }
+            }
+
+            if (dirtyMeals.has('lunch')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.lunch, originalDayData.lunch, 'Lunch')) {
+                    cleanData.lunch = getCleanMeal(currentDayMenu.lunch);
+                    changeCount++;
+                }
+            }
+
+            if (dirtyMeals.has('snacks')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.snacks, originalDayData.snacks, 'Snacks')) {
+                    cleanData.snacks = getCleanMeal(currentDayMenu.snacks);
+                    changeCount++;
+                }
+            }
+
+            if (dirtyMeals.has('dinner')) {
+                // @ts-ignore
+                if (hasChanged(currentDayMenu.dinner, originalDayData.dinner, 'Dinner')) {
+                    cleanData.dinner = getCleanMeal(currentDayMenu.dinner);
+                    changeCount++;
+                }
+            }
+
+            if (changeCount === 0) {
+                // Determine message: if dirty but no diff -> "No actual changes"
+                // If not dirty -> handled at top
+                showAlert("Info", "No actual changes detected.");
+                setSaving(false);
+                setDirtyMeals(new Set()); // Clear dirty state since matches server
+                return;
+            }
+
             await updateDayMenu(selectedDay, cleanData);
+
+            // Clear dirty state after successful save
+            setDirtyMeals(new Set());
             showAlert("Success", `${selectedDay}'s menu updated successfully!`);
         } catch (error) {
             console.error(error);
@@ -175,8 +333,16 @@ export default function ManageMessMenuPage() {
     const handleSaveTimings = async () => {
         setSavingTimings(true);
         try {
-            // Update only the timings field for the current day
-            await updateDayMenu(selectedDay, { ...currentDayMenu, timings });
+            // Re-construct the string-based MessTimings from the structured input
+            const stringifiedTimings: MessTimings = {
+                breakfast: `${timings.breakfast.start} ${timings.breakfast.startPeriod} - ${timings.breakfast.end} ${timings.breakfast.endPeriod}`,
+                lunch: `${timings.lunch.start} ${timings.lunch.startPeriod} - ${timings.lunch.end} ${timings.lunch.endPeriod}`,
+                snacks: `${timings.snacks.start} ${timings.snacks.startPeriod} - ${timings.snacks.end} ${timings.snacks.endPeriod}`,
+                dinner: `${timings.dinner.start} ${timings.dinner.startPeriod} - ${timings.dinner.end} ${timings.dinner.endPeriod}`
+            };
+
+            await updateDayMenu(selectedDay, { ...currentDayMenu, timings: stringifiedTimings });
+
             setTimingsModalVisible(false);
             showAlert("Success", `${selectedDay}'s timings updated!`);
         } catch (error) {
@@ -318,7 +484,9 @@ export default function ManageMessMenuPage() {
         },
         saveBtn: {
             backgroundColor: colors.primary,
-            margin: 20,
+            marginHorizontal: 20,
+            marginBottom: insets.bottom > 0 ? insets.bottom : 20,
+            marginTop: 8,
             paddingVertical: 16,
             borderRadius: 16,
             flexDirection: 'row',
@@ -380,6 +548,45 @@ export default function ManageMessMenuPage() {
             color: colors.text,
             marginBottom: 16,
             marginLeft: 4,
+        },
+        timeInputRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 12,
+        },
+        timeInput: {
+            flex: 1,
+            height: 50,
+            backgroundColor: colors.background,
+            borderRadius: 12,
+            paddingHorizontal: 16,
+            color: colors.text,
+            borderWidth: 1,
+            borderColor: colors.border,
+            textAlign: 'center',
+            fontSize: 16,
+            fontWeight: '600'
+        },
+        periodToggleContainer: {
+            flexDirection: 'row',
+            backgroundColor: colors.background,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: 12,
+            height: 50,
+            padding: 4,
+            gap: 4,
+        },
+        periodOption: {
+            paddingHorizontal: 10,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderRadius: 8,
+        },
+        periodText: {
+            fontSize: 13,
+            fontWeight: '700',
         },
     }), [colors, theme]);
 
@@ -535,18 +742,80 @@ export default function ManageMessMenuPage() {
                                 </TouchableOpacity>
                             </View>
 
-                            <ScrollView style={{ maxHeight: 500 }}>
+                            <ScrollView style={{ maxHeight: 550 }} showsVerticalScrollIndicator={false}>
                                 {MEALS.map((meal) => (
-                                    <View key={meal}>
-                                        <Text style={styles.label}>{meal.charAt(0).toUpperCase() + meal.slice(1)} Time</Text>
-                                        <InputField
-                                            icon="clock-time-four-outline"
-                                            placeholder="e.g. 08:00 - 09:30 AM"
-                                            // @ts-ignore
-                                            value={timings[meal]}
-                                            // @ts-ignore
-                                            onChangeText={(text) => setTimings({ ...timings, [meal]: text })}
-                                        />
+                                    <View key={meal} style={{ marginBottom: 20 }}>
+                                        <Text style={styles.label}>{meal.charAt(0).toUpperCase() + meal.slice(1)} Timings</Text>
+
+                                        {/* Start Time Row */}
+                                        <View style={styles.timeInputRow}>
+                                            <Text style={{ width: 40, color: colors.textSecondary, fontWeight: '600' }}>From</Text>
+                                            <TextInput
+                                                style={styles.timeInput}
+                                                placeholder="08:00"
+                                                placeholderTextColor={colors.textSecondary}
+                                                // @ts-ignore
+                                                value={timings[meal].start}
+                                                // @ts-ignore
+                                                onChangeText={(text) => setTimings({ ...timings, [meal]: { ...timings[meal], start: text } })}
+                                                keyboardType="numbers-and-punctuation"
+                                            />
+                                            <View style={styles.periodToggleContainer}>
+                                                <TouchableOpacity
+                                                    // @ts-ignore
+                                                    style={[styles.periodOption, timings[meal].startPeriod === 'AM' && { backgroundColor: colors.primary }]}
+                                                    // @ts-ignore
+                                                    onPress={() => setTimings({ ...timings, [meal]: { ...timings[meal], startPeriod: 'AM' } })}
+                                                >
+                                                    {/* @ts-ignore */}
+                                                    <Text style={[styles.periodText, { color: timings[meal].startPeriod === 'AM' ? '#fff' : colors.textSecondary }]}>AM</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    // @ts-ignore
+                                                    style={[styles.periodOption, timings[meal].startPeriod === 'PM' && { backgroundColor: colors.primary }]}
+                                                    // @ts-ignore
+                                                    onPress={() => setTimings({ ...timings, [meal]: { ...timings[meal], startPeriod: 'PM' } })}
+                                                >
+                                                    {/* @ts-ignore */}
+                                                    <Text style={[styles.periodText, { color: timings[meal].startPeriod === 'PM' ? '#fff' : colors.textSecondary }]}>PM</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+
+                                        {/* End Time Row */}
+                                        <View style={styles.timeInputRow}>
+                                            <Text style={{ width: 40, color: colors.textSecondary, fontWeight: '600' }}>To</Text>
+                                            <TextInput
+                                                style={styles.timeInput}
+                                                placeholder="09:30"
+                                                placeholderTextColor={colors.textSecondary}
+                                                // @ts-ignore
+                                                value={timings[meal].end}
+                                                // @ts-ignore
+                                                onChangeText={(text) => setTimings({ ...timings, [meal]: { ...timings[meal], end: text } })}
+                                                keyboardType="numbers-and-punctuation"
+                                            />
+                                            <View style={styles.periodToggleContainer}>
+                                                <TouchableOpacity
+                                                    // @ts-ignore
+                                                    style={[styles.periodOption, timings[meal].endPeriod === 'AM' && { backgroundColor: colors.primary }]}
+                                                    // @ts-ignore
+                                                    onPress={() => setTimings({ ...timings, [meal]: { ...timings[meal], endPeriod: 'AM' } })}
+                                                >
+                                                    {/* @ts-ignore */}
+                                                    <Text style={[styles.periodText, { color: timings[meal].endPeriod === 'AM' ? '#fff' : colors.textSecondary }]}>AM</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    // @ts-ignore
+                                                    style={[styles.periodOption, timings[meal].endPeriod === 'PM' && { backgroundColor: colors.primary }]}
+                                                    // @ts-ignore
+                                                    onPress={() => setTimings({ ...timings, [meal]: { ...timings[meal], endPeriod: 'PM' } })}
+                                                >
+                                                    {/* @ts-ignore */}
+                                                    <Text style={[styles.periodText, { color: timings[meal].endPeriod === 'PM' ? '#fff' : colors.textSecondary }]}>PM</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
                                     </View>
                                 ))}
                             </ScrollView>
