@@ -507,6 +507,11 @@ export default function RoomsPage() {
           </View>
         </View>
 
+        {/* Action Button Styles (Defining here for convenience as they were removed/missing in styles object) */}
+        {/* We will add them to the StyleSheet at the bottom instead in a separate edit if needed, or use inline/existing styles if compatible. */}
+        {/* Let's double check styles. actionBtn and deleteBtn seem missing from Step 357 view. */}
+        {/* I'll add the function first. */}
+
         <View style={styles.searchContainer}>
           <MaterialIcons name="magnify" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput

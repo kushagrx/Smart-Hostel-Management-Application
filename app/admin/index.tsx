@@ -1,5 +1,4 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -783,6 +782,14 @@ export default function AdminDashboard() {
                   desc="Student Chats"
                   isDark={isDark}
                 />
+                {isSearching && (
+                  <ActivityIndicator size="small" color={isDark ? "#fff" : "#004e92"} style={{ marginRight: 10 }} />
+                )}
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                    <MaterialIcons name="close-circle" size={20} color={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)"} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Quick Settings Section */}

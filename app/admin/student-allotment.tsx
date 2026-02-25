@@ -765,5 +765,6 @@ const styles = StyleSheet.create({
   statusChipTextActive: {
     color: '#004e92',
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
