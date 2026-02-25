@@ -1,32 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-/* ============================================================
-   ❌ OLD AUTO-DETECT LOGIC (COMMENTED — WAS CAUSING NETWORK ERROR)
-   ============================================================
+const getApiUrl = () => {
+    // 1. Try to auto-detect from debuggerHost (works best during development)
+    const debuggerHost = Constants.expoConfig?.hostUri;
+    if (debuggerHost) {
+        const ip = debuggerHost.split(':')[0];
+        return `http://${ip}:5000`;
+    }
+    // 2. Fallback to the last known working IP
+    return "http://10.102.116.195:5000";
+};
 
-// const getApiUrl = () => {
-//     const debuggerHost = Constants.expoConfig?.hostUri;
-//     const localIP = '10.102.116.195';
-//     const localhost = `http://${localIP}:5000`;
-
-//     if (debuggerHost) {
-//         const ip = debuggerHost.split(':')[0];
-//         return `http://${ip}:5000`;
-//     }
-
-//     return localhost;
-// };
-
-// export const API_BASE_URL = getApiUrl();
-
-*/
-
-/* ============================================================
-   ✅ NEW HARD-CODED URL (WORKS WITH REAL PHONE)
-   ============================================================ */
-
-export const API_BASE_URL = "http://10.102.116.195:5000";
+export const API_BASE_URL = getApiUrl();
 export const API_URL = `${API_BASE_URL}/api`;
 
 const api = axios.create({

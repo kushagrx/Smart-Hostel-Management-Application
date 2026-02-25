@@ -82,7 +82,8 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
         try {
             await AsyncStorage.setItem('app_theme', newTheme);
-            await SystemUI.setBackgroundColorAsync(colors.background);
+            // Non-critical: may fail during rapid reloads if activity is not ready
+            SystemUI.setBackgroundColorAsync(colors.background).catch(() => { });
         } catch (e) {
             console.error('Failed to save theme', e);
         }
@@ -104,7 +105,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             const colors = isDark ? darkColors : lightColors;
 
             set({ theme: initialTheme, isDark, colors, isLoaded: true });
-            await SystemUI.setBackgroundColorAsync(colors.background);
+
+            // Non-critical: may fail during rapid reloads if activity is not ready
+            SystemUI.setBackgroundColorAsync(colors.background).catch(() => { });
         } catch (e) {
             console.error('Failed to init theme', e);
             set({ isLoaded: true });
