@@ -7,8 +7,15 @@ export const getHostelInfo = async (req: Request, res: Response, next: NextFunct
         const result = await query('SELECT * FROM hostel_info WHERE id = 1');
 
         if (result.rows.length === 0) {
-            // Should not happen if migration ran correctly, but fallback
-            res.status(404).json({ message: 'Hostel info not found' });
+            res.json({
+                id: 1,
+                name: 'Smart Hostel',
+                description: '',
+                address: '',
+                contact_email: '',
+                contact_phone: '',
+                warden_name: ''
+            });
             return;
         }
 

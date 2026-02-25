@@ -5,6 +5,13 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(255) NOT NULL,
     google_id VARCHAR(255) UNIQUE,
     role VARCHAR(20) DEFAULT 'student', -- 'student', 'admin'
+    push_token VARCHAR(255),
+    last_seen TIMESTAMPTZ DEFAULT NOW(),
+    two_factor_secret VARCHAR(255),
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    two_factor_temp_token VARCHAR(255),
+    password_hash VARCHAR(255),
+    last_notifications_cleared_at TIMESTAMPTZ DEFAULT to_timestamp(0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -34,7 +41,11 @@ CREATE TABLE IF NOT EXISTS students (
     password VARCHAR(255),
     profile_photo VARCHAR(255),
     fee_frequency VARCHAR(50) DEFAULT 'Monthly',
-    last_notifications_cleared_at VARCHAR(50),
+    last_notifications_cleared_at BIGINT DEFAULT 0,
+    google_email VARCHAR(255) UNIQUE,
+    personal_email VARCHAR(255),
+    college_email VARCHAR(255),
+    total_fee DECIMAL(10, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -84,6 +95,7 @@ CREATE TABLE IF NOT EXISTS messages (
     text TEXT NOT NULL,
     sent BOOLEAN DEFAULT TRUE,
     received BOOLEAN DEFAULT FALSE,
+    is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -160,8 +172,12 @@ CREATE TABLE IF NOT EXISTS bus_timings (
     route_name VARCHAR(255) NOT NULL,
     departure_time TIME NOT NULL,
     destination VARCHAR(255),
+    message TEXT,
+    schedule_type VARCHAR(50) DEFAULT 'everyday',
+    valid_date DATE,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Mess Schedule Table
@@ -175,6 +191,71 @@ CREATE TABLE IF NOT EXISTS mess_schedule (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Mess Attendance Table
+CREATE TABLE IF NOT EXISTS mess_attendance (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER NOT NULL,
+    date DATE NOT NULL,
+    meal VARCHAR(20) NOT NULL CHECK (meal IN ('breakfast', 'lunch', 'snacks', 'dinner')),
+    status VARCHAR(20) NOT NULL CHECK (status IN ('going', 'skipping')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(student_id, date, meal)
+);
+
+-- Attendance Table
+CREATE TABLE IF NOT EXISTS attendance (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'present', -- 'present', 'absent', 'late', 'leave'
+    marked_by INTEGER REFERENCES users(id),
+    remarks TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(student_id, date)
+);
+
+-- Hostel Info Table
+CREATE TABLE IF NOT EXISTS hostel_info (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    address TEXT NOT NULL,
+    contact_email VARCHAR(255) NOT NULL,
+    contact_phone VARCHAR(50) NOT NULL,
+    warden_name VARCHAR(255) NOT NULL,
+    total_capacity INTEGER NOT NULL,
+    current_occupancy INTEGER DEFAULT 0,
+    established_year INTEGER,
+    description TEXT,
+    rules TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Facilities Table
+CREATE TABLE IF NOT EXISTS facilities (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    icon VARCHAR(50) NOT NULL,
+    status VARCHAR(50) DEFAULT 'active',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Laundry Settings Table
+CREATE TABLE IF NOT EXISTS laundry_settings (
+    id SERIAL PRIMARY KEY,
+    max_items_per_request INTEGER DEFAULT 10,
+    allowed_days VARCHAR(50)[] DEFAULT '{"Monday", "Wednesday", "Friday"}',
+    pickup_schedule TEXT,
+    delivery_schedule TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Emergency Contacts Table
 CREATE TABLE IF NOT EXISTS emergency_contacts (
     id SERIAL PRIMARY KEY,
@@ -183,7 +264,8 @@ CREATE TABLE IF NOT EXISTS emergency_contacts (
     phone VARCHAR(20) NOT NULL,
     icon VARCHAR(50),
     category VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS service_requests (
@@ -197,3 +279,50 @@ CREATE TABLE IF NOT EXISTS service_requests (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Visitors Table
+CREATE TABLE IF NOT EXISTS visitors (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    visitor_name VARCHAR(255) NOT NULL,
+    visitor_phone VARCHAR(15) NOT NULL,
+    visitor_relation VARCHAR(100),
+    purpose VARCHAR(500) NOT NULL,
+    room_number VARCHAR(10) NOT NULL,
+    expected_date DATE NOT NULL,
+    expected_time_in TIME,
+    expected_time_out TIME,
+    status VARCHAR(20) DEFAULT 'pending',
+    admin_remarks TEXT,
+    approved_by INTEGER REFERENCES users(id),
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ─── Security (Row Level Security) ───────────────────────────────────────────
+-- Enable RLS for all tables to clear Supabase security warnings.
+-- Note: Your Node.js backend uses the 'postgres' superuser role, so it
+-- bypasses these policies and maintains full access automatically.
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE room_allocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE complaints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE laundry_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leave_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bus_timings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mess_schedule ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mess_attendance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hostel_info ENABLE ROW LEVEL SECURITY;
+ALTER TABLE facilities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE laundry_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE emergency_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE visitors ENABLE ROW LEVEL SECURITY;
