@@ -100,7 +100,7 @@ export const createEmergencyContact = async (req: Request, res: Response) => {
         );
 
         // Notify All Students
-        const tokens = await getAllStudentTokens();
+        const tokens = await getAllStudentTokens('notices');
         sendPushNotification(
             tokens,
             '☎️ Emergency Contact Added',
@@ -127,7 +127,7 @@ export const updateEmergencyContact = async (req: Request, res: Response) => {
         );
 
         // Notify All Students
-        const tokens = await getAllStudentTokens();
+        const tokens = await getAllStudentTokens('notices');
         sendPushNotification(
             tokens,
             '☎️ Emergency Contact Updated',
@@ -185,7 +185,7 @@ export const updateMessMenu = async (req: Request, res: Response) => {
         }
 
         // Notify All Students
-        const tokens = await getAllStudentTokens();
+        const tokens = await getAllStudentTokens('mess');
         sendPushNotification(
             tokens,
             '🍱 Mess Menu Update',

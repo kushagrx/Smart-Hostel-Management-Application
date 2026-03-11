@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { changePassword, getCurrentUser, googleLogin, login, updatePushToken } from '../controllers/authController';
+import { changePassword, getCurrentUser, googleLogin, login, removePushToken, updatePushToken } from '../controllers/authController';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
@@ -10,5 +10,6 @@ router.get('/me', requireAuth, getCurrentUser);
 router.post('/change-password', requireAuth, changePassword);
 
 router.post('/push-token', requireAuth, updatePushToken);
+router.post('/push-token/remove', requireAuth, removePushToken);
 
 export default router;

@@ -10,7 +10,8 @@ import {
     getStudentProfile,
     searchStudents,
     updateStudent,
-    updateStudentProfilePhoto
+    updateStudentProfilePhoto,
+    updateStudentSelfProfile
 } from '../controllers/studentController';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { logUpload, upload } from '../middleware/uploadMiddleware';
@@ -25,6 +26,8 @@ router.get('/dashboard/counts', requireAuth, getDashboardCounts);
 router.post('/profile/photo', requireAuth, logUpload, upload.single('profilePhoto'), updateStudentProfilePhoto);
 // Student Clear Notifications
 router.post('/profile/notifications/clear', requireAuth, clearNotifications);
+// Student Update Profile (Self)
+router.put('/profile', requireAuth, updateStudentSelfProfile);
 
 // Admin Routes
 router.get('/all', requireAuth, requireAdmin, getAllStudents);

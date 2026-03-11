@@ -3,8 +3,9 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CustomAlert, { AlertType } from '../components/CustomAlert';
 import { useAuth } from '../context/AuthContext';
 import { setStoredUser } from '../utils/authUtils';
 
@@ -13,10 +14,24 @@ import { setStoredUser } from '../utils/authUtils';
 export default function Login() {
   const router = useRouter();
   const { refreshUser } = useAuth();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Custom Alert State
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<AlertType>('info');
+
+  const showAlert = (title: string, message: string, type: AlertType = 'error') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   useEffect(() => {
     console.log('📡 Google Sign-In Config:', process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ? 'Loaded' : 'MISSING');
@@ -62,22 +77,23 @@ export default function Login() {
           router.replace('/(tabs)');
         }
       } else {
-        Alert.alert('Google Sign-In', 'No account selected');
+        showAlert('Google Sign-In', 'No account selected', 'warning');
       }
     } catch (e: any) {
       if (e.code === statusCodes.SIGN_IN_CANCELLED) {
         // user cancelled the login flow
         console.log('User cancelled login');
+        showAlert('Login Cancelled', 'Google Sign-In was cancelled.', 'warning');
       } else if (e.code === statusCodes.IN_PROGRESS) {
         // operation (e.g. sign in) is in progress already
         console.log('Login in progress');
       } else if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         // play services not available or outdated
-        Alert.alert('Error', 'Google Play Services not available');
+        showAlert('Error', 'Google Play Services not available', 'error');
       } else {
         console.error('Login Error:', e);
         const message = e.response?.data?.error || e.message || 'Login failed';
-        Alert.alert('Error', message);
+        showAlert('Error', message, 'error');
       }
     } finally {
       setIsLoading(false);
@@ -86,7 +102,7 @@ export default function Login() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter both email and password');
+      showAlert('Error', 'Please enter both email and password', 'warning');
       return;
     }
 
@@ -128,257 +144,327 @@ export default function Login() {
     } catch (e: any) {
       console.error('Login Error:', e);
       const message = e.response?.data?.error || e.message || 'Login failed';
-      Alert.alert('Error', message);
+      showAlert('Error', message, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <LinearGradient
-        colors={['#000428', '#004e92']} // Matching Deep Royal Blue Gradient
-        style={styles.background}
+
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+
+      {/* Deep Dark Navy Background */}
+      <View style={styles.bgContainer}>
+        <LinearGradient
+          colors={['#0F172A', '#0B1121']} // Very dark navy matching the image
+          style={StyleSheet.absoluteFillObject}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+
+        {/* Top Left Glow (Cyan) */}
+        <View style={[styles.glowOrb, styles.glowOrbTop]} />
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
-          >
-            <ScrollView
-              contentContainerStyle={{ flexGrow: 1 }}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.container}>
-                <View style={styles.header}>
-                  <View style={styles.iconContainer}>
-                    <Image
-                      source={require('../assets/brand_icon.jpg')}
-                      style={{ width: 60, height: 60 }}
-                      resizeMode="contain"
-                    />
-                  </View>
-                  <Text style={styles.title}>SmartStay</Text>
-                  <Text style={styles.subtitle}>Welcome Back</Text>
-                </View>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo Section */}
+          <View style={styles.header}>
+            <View style={styles.logoIconContainer}>
+              {/* Cyan building icon matching the design */}
+              <MaterialCommunityIcons name="domain" size={32} color="#fff" />
+            </View>
+            <View style={styles.logoTextRow}>
+              <Text style={styles.logoTextWhite}>Smart </Text>
+              <Text style={styles.logoTextCyan}>Hostel</Text>
+            </View>
+            <Text style={styles.logoSubtitle}>PREMIUM LIVING</Text>
+          </View>
 
-                <View style={styles.loginCard}>
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Email Address</Text>
-                    <View style={styles.inputWrapper}>
-                      <MaterialCommunityIcons name="email-outline" size={20} color="#64748b" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder="name@example.com"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                      />
-                    </View>
-                  </View>
+          {/* Login Card */}
+          <View style={styles.glassCard}>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.subtitleText}>Access your premium hostel dashboard</Text>
 
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Password</Text>
-                    <View style={styles.inputWrapper}>
-                      <MaterialCommunityIcons name="lock-outline" size={20} color="#64748b" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="Enter your password"
-                        placeholderTextColor="#94a3b8"
-                        secureTextEntry={!showPassword}
-                        autoCapitalize="none"
-                      />
-                      <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                        <MaterialCommunityIcons
-                          name={showPassword ? 'eye-off' : 'eye'}
-                          size={20}
-                          color="#64748b"
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.loginButton}
-                    onPress={handleLogin}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.loginButtonText}>Sign In</Text>
-                    )}
-                  </TouchableOpacity>
-                  <View style={styles.dividerContainer}>
-                    <View style={styles.divider} />
-                    <Text style={styles.dividerText}>or continue with</Text>
-                    <View style={styles.divider} />
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.googleButton}
-                    onPress={handleGoogleLogin}
-                    disabled={isLoading}
-                  >
-                    <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
-                    <Text style={styles.googleButtonText}>Google</Text>
-                  </TouchableOpacity>
-
-                  <View style={{ marginTop: 20, alignItems: 'center' }}>
-                    {/* API Text Removed */}
-                  </View>
-                </View>
+            {/* Email Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email Address</Text>
+              <View style={styles.inputWrapper}>
+                <MaterialCommunityIcons name="email-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="name@example.com"
+                  placeholderTextColor="#64748B"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </LinearGradient>
+            </View>
+
+            {/* Password Input */}
+            <View style={styles.inputGroup}>
+              <View style={styles.passwordHeader}>
+                <Text style={styles.inputLabel}>Password</Text>
+              </View>
+              <View style={styles.inputWrapper}>
+                <MaterialCommunityIcons name="lock-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="#64748B"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                  <MaterialCommunityIcons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Primary Login Button */}
+            <TouchableOpacity
+              style={styles.loginBtnContainer}
+              onPress={handleLogin}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#2CB4FF', '#2563EB']} // Cyan to Blue gradient
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.loginBtn}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.loginBtnText}>Log In</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Google Sign In logic implemented here directly without separate component to match design perfectly */}
+            <TouchableOpacity
+              style={styles.googleBtn}
+              onPress={handleGoogleLogin}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="google" size={20} color="#EA4335" style={{ marginRight: 12 }} />
+              <Text style={styles.googleBtnText}>Sign in with Google</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    padding: 24,
+    backgroundColor: '#0F172A',
+  },
+  bgContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  glowOrb: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+  },
+  glowOrbTop: {
+    backgroundColor: 'rgba(37, 192, 244, 0.15)', // Neon Cyan glow
+    top: -100,
+    left: '50%',
+    transform: [{ translateX: -150 }],
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+    paddingHorizontal: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
+    marginTop: 20,
   },
-  iconContainer: {
-    width: 72,
-    height: 72,
+  logoIconContainer: {
+    width: 64,
+    height: 64,
     borderRadius: 20,
-    backgroundColor: '#fff',
-    alignItems: 'center',
+    backgroundColor: '#2CB4FF', // Cyan building background
     justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: '#2CB4FF',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
   },
-  title: {
+  logoTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoTextWhite: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 4,
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: -0.5,
   },
-  subtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '400',
+  logoTextCyan: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#2CB4FF', // High-contrast cyan
+    letterSpacing: -0.5,
   },
-  loginCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 32,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 20,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 12,
+  logoSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    letterSpacing: 1.5,
+    marginTop: 6,
+    fontWeight: '600',
   },
-  inputContainer: {
+  glassCard: {
+    backgroundColor: 'rgba(30, 41, 59, 0.5)', // Dark frosted glass
+    borderRadius: 32,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFF',
+    marginBottom: 6,
+  },
+  subtitleText: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginBottom: 32,
+  },
+  inputGroup: {
     marginBottom: 20,
   },
-  label: {
+  passwordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b', // Slate 800
+    color: '#F1F5F9',
     marginBottom: 8,
-    marginLeft: 4,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc', // Slate 50
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0', // Slate 200
-    paddingHorizontal: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)', // Very dark input background
+    borderRadius: 16,
     height: 56,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   inputIcon: {
+    marginLeft: 16,
     marginRight: 12,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#0f172a', // Slate 900
+    color: '#F8FAFC',
+    fontSize: 15,
+    height: '100%',
   },
-  loginButton: {
-    backgroundColor: '#004e92', // Brand Blue
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
+  eyeIcon: {
+    paddingHorizontal: 16,
+    height: '100%',
     justifyContent: 'center',
-    marginTop: 12,
-    shadowColor: '#004e92',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
   },
-  loginButtonText: {
-    color: '#fff',
+  loginBtnContainer: {
+    marginTop: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  loginBtn: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginBtnText: {
+    color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 24,
+    marginVertical: 28,
   },
-  divider: {
+  dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   dividerText: {
-    marginHorizontal: 16,
-    color: '#64748b', // Slate 500
-    fontWeight: '500',
-    fontSize: 14,
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 12,
+    letterSpacing: 0.5,
   },
-  googleButton: {
+  googleBtn: {
     flexDirection: 'row',
-    height: 56,
-    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    height: 56,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  googleButtonText: {
-    color: '#334155', // Slate 700
-    fontSize: 16,
+  googleBtnText: {
+    color: '#F8FAFC',
+    fontSize: 15,
     fontWeight: '600',
-    marginLeft: 12,
   },
 });

@@ -103,12 +103,34 @@ export const getAdminTokens = async (): Promise<string[]> => {
     return res.rows.map(r => r.push_token).filter(Boolean);
 };
 
-export const getUserToken = async (userId: number): Promise<string[]> => {
-    const res = await query(`SELECT push_token FROM users WHERE id = $1 AND push_token IS NOT NULL`, [userId]);
-    return res.rows.map(r => r.push_token).filter(Boolean);
+export const getUserToken = async (userId: number, category?: string): Promise<string[]> => {
+    let sql = `SELECT push_token, notification_preferences FROM users WHERE id = $1 AND push_token IS NOT NULL`;
+    const res = await query(sql, [userId]);
+
+    if (res.rows.length === 0) return [];
+
+    const user = res.rows[0];
+    if (category && user.notification_preferences) {
+        if (user.notification_preferences[category] === false) {
+            console.log(`[Push] 🔇 User ${userId} has disabled "${category}" notifications. Skipping.`);
+            return [];
+        }
+    }
+
+    return [user.push_token].filter(Boolean);
 };
 
-export const getAllStudentTokens = async (): Promise<string[]> => {
-    const res = await query(`SELECT push_token FROM users WHERE role = 'student' AND push_token IS NOT NULL`);
-    return res.rows.map(r => r.push_token).filter(Boolean);
+export const getAllStudentTokens = async (category?: string): Promise<string[]> => {
+    let sql = `SELECT push_token, notification_preferences FROM users WHERE role = 'student' AND push_token IS NOT NULL`;
+    const res = await query(sql);
+
+    return res.rows
+        .filter(row => {
+            if (category && row.notification_preferences) {
+                return row.notification_preferences[category] !== false;
+            }
+            return true;
+        })
+        .map(r => r.push_token)
+        .filter(Boolean);
 };

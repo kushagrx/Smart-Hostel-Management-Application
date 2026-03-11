@@ -227,6 +227,10 @@ export const updatePushToken = async (req: Request, res: Response) => {
     }
 
     try {
+        // First, guarantee no other user owns this physical device token
+        await query('UPDATE users SET push_token = NULL WHERE push_token = $1', [pushToken]);
+
+        // Then, assign it exclusively to the current user
         await query('UPDATE users SET push_token = $1 WHERE id = $2', [pushToken, userId]);
         res.json({ message: 'Push token updated' });
     } catch (err) {
@@ -234,3 +238,25 @@ export const updatePushToken = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Server error' });
     }
 };
+
+export const removePushToken = async (req: Request, res: Response) => {
+    // @ts-ignore
+    const userId = req.currentUser?.id;
+
+    console.log(`[Push] Attempting to remove push token for user ID: ${userId}`);
+
+    if (!userId) {
+        console.warn(`[Push] Unauthorized attempt to remove push token.`);
+        return res.status(401).json({ error: 'Not authorized' });
+    }
+
+    try {
+        const result = await query('UPDATE users SET push_token = NULL WHERE id = $1 RETURNING email', [userId]);
+        console.log(`[Push] Successfully removed push token for user ID: ${userId}, Email: ${result.rows[0]?.email}`);
+        res.json({ message: 'Push token removed successfully' });
+    } catch (err: any) {
+        console.error('[Push] Error removing push token:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+};
+

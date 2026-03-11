@@ -43,7 +43,10 @@ api.interceptors.response.use(
         if (error.code === 'ECONNABORTED') {
             console.error('Request Timed Out:', error.config.url);
         } else if (error.response) {
-            console.error('API Error Response:', error.response.status, error.response.data);
+            // Suppress 401/403 errors as they are handled by auth redirect/logic
+            if (error.response.status !== 401 && error.response.status !== 403) {
+                console.error('API Error Response:', error.response.status, error.response.data);
+            }
         } else if (error.request) {
             console.error('Network Error (No Response):', error.message);
             console.error('Target URL:', error.config.url);

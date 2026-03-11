@@ -101,9 +101,13 @@ export default function Index() {
 
   const {
     complaints: pendingComplaints,
+    totalComplaints,
     visitors: pendingVisitors,
+    totalVisitors,
     roomServices: pendingRoomServices,
+    totalRoomServices,
     leaves: pendingLeaves,
+    totalLeaves,
     facilities: totalFacilities
   } = dashboardCounts;
 
@@ -119,9 +123,13 @@ export default function Index() {
       const data = res.data;
       setDashboardCounts({
         complaints: data.complaints || 0,
+        totalComplaints: data.totalComplaints || 0,
         visitors: data.visitors || 0,
+        totalVisitors: data.totalVisitors || 0,
         roomServices: data.roomServices || 0,
+        totalRoomServices: data.totalRoomServices || 0,
         leaves: data.leaves || 0,
+        totalLeaves: data.totalLeaves || 0,
         facilities: data.facilities || 0,
       });
     } catch (e) {
@@ -313,146 +321,7 @@ export default function Index() {
     );
   }
 
-  const QuickAction = ({ icon, label, route, desc, bg, iconColor, borderColor, count, countLabel = "PENDING", isDiamond = false, style }: any) => {
-    const cardBgColor = isDiamond ? iconColor : (isDark ? colors.card : '#FFFFFF');
-    const gradientColors: [string, string] = isDiamond
-      ? [iconColor, iconColor] // Will be overlaid with a subtle shimmer/gradient
-      : (isDark ? [iconColor + '15', 'transparent'] : [iconColor + '12', 'transparent']);
-
-    // Hyper-tactile extra-large size for massive impact
-    const diamondSize = (width - 40) / 2.8;
-    const size = isDiamond ? diamondSize : (width - 66) / 3;
-
-    // Helper to merge transforms correctly
-    const getTransforms = (additional: any[] = []) => {
-      const base = isDiamond ? [{ rotate: '45deg' }] : [];
-      return [...base, ...additional];
-    };
-
-    const flatStyle = StyleSheet.flatten(style) || {};
-    const externalTransforms = flatStyle.transform || [];
-
-    return (
-      <Pressable
-        style={({ pressed }) => [
-          {
-            width: size,
-            aspectRatio: 1,
-            backgroundColor: cardBgColor,
-            borderRadius: isDiamond ? 32 : 24,
-            borderWidth: isDiamond ? 0 : 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0',
-            overflow: 'hidden',
-            elevation: isDiamond ? 24 : 8,
-            shadowColor: iconColor,
-            shadowOffset: { width: 0, height: 16 },
-            shadowOpacity: isDiamond ? (isDark ? 0.6 : 0.45) : (isDark ? 0.25 : 0.12),
-            shadowRadius: isDiamond ? 32 : 15,
-            ...(isDiamond && { transform: getTransforms(externalTransforms) })
-          },
-          style,
-          isDiamond && { transform: getTransforms(externalTransforms) },
-          pressed && {
-            opacity: 0.9,
-            transform: [
-              ...getTransforms(externalTransforms),
-              { scale: 0.96 }
-            ]
-          }
-        ]}
-        onPress={() => router.push(route)}
-      >
-        <LinearGradient
-          colors={isDiamond ? ['rgba(255,255,255,0.25)', 'transparent'] : gradientColors}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-
-        <MaterialCommunityIcons
-          name={icon}
-          size={isDiamond ? 92 : 84}
-          color={isDiamond ? '#FFF' : iconColor}
-          style={{
-            position: 'absolute',
-            opacity: isDiamond ? 0.12 : (isDark ? 0.08 : 0.05), // Slightly reduced opacity for text clarity
-            right: isDiamond ? -15 : -15,
-            bottom: isDiamond ? -15 : -15
-          }}
-        />
-
-        <View style={{ flex: 1, transform: isDiamond ? [{ rotate: '-45deg' }] : [] }}>
-          <View style={{
-            flex: 1,
-            padding: isDiamond ? 16 : 12,
-            justifyContent: isDiamond ? 'center' : 'space-between',
-            alignItems: isDiamond ? 'center' : 'flex-start'
-          }}>
-            <View style={{
-              width: isDiamond ? 42 : 32,
-              height: isDiamond ? 42 : 32,
-              borderRadius: isDiamond ? 14 : 12,
-              backgroundColor: isDiamond ? 'rgba(255,255,255,0.2)' : iconColor + '15',
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: isDiamond ? 'rgba(255,255,255,0.3)' : iconColor + '25',
-              marginBottom: isDiamond ? 10 : 0,
-              elevation: isDiamond ? 0 : 4,
-            }}>
-              <MaterialCommunityIcons name={icon} size={isDiamond ? 22 : 18} color={isDiamond ? '#FFF' : iconColor} />
-            </View>
-
-            <View style={{ gap: isDiamond ? 2 : 4, alignItems: isDiamond ? 'center' : 'flex-start' }}>
-              <Text style={{
-                color: isDiamond ? '#FFF' : (isDark ? '#F8FAFC' : '#0F172A'),
-                fontSize: isDiamond ? 14 : 12, // Increased size
-                fontWeight: '900',
-                lineHeight: isDiamond ? 16 : 14,
-                letterSpacing: isDiamond ? 0.2 : -0.2, // Increased spacing for scannability
-                textAlign: isDiamond ? 'center' : 'left',
-                textShadowColor: isDiamond ? 'rgba(0,0,0,0.3)' : 'transparent', // Stronger shadow
-                textShadowOffset: { width: 0, height: 1.5 },
-                textShadowRadius: 3,
-              }} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
-
-              {count !== undefined ? (
-                <View style={{
-                  backgroundColor: isDiamond ? 'rgba(255,255,255,0.25)' : (count > 0 ? iconColor + '20' : (isDark ? '#1E293B' : '#F8FAFC')),
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                  borderRadius: 8,
-                  alignSelf: isDiamond ? 'center' : 'flex-start',
-                  borderWidth: 1,
-                  borderColor: isDiamond ? 'rgba(255,255,255,0.15)' : (count > 0 ? iconColor + '35' : (isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0'))
-                }}>
-                  <Text style={{
-                    color: isDiamond ? '#FFF' : (count > 0 ? iconColor : (isDark ? '#94A3B8' : '#64748B')),
-                    fontSize: 11, // Increased size
-                    fontWeight: '900',
-                    letterSpacing: 0.5,
-                    textShadowColor: isDiamond ? 'rgba(0,0,0,0.2)' : 'transparent', // Stronger shadow
-                    textShadowOffset: { width: 0, height: 1 },
-                    textShadowRadius: 2,
-                  }} adjustsFontSizeToFit numberOfLines={1}>
-                    {count > 0 ? `${count} ${countLabel}` : "NONE"}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={{
-                  color: isDark ? colors.textSecondary : '#64748B',
-                  fontSize: 10,
-                  fontWeight: '700',
-                  lineHeight: 12,
-                  textAlign: isDiamond ? 'center' : 'left'
-                }} numberOfLines={1} adjustsFontSizeToFit>{desc}</Text>
-              )}
-            </View>
-          </View>
-        </View>
-      </Pressable>
-    );
-  };
+  // Removed overlapping diamond QuickAction in favor of Bento grid inline blocks.
 
   return (
     <View style={styles.container}>
@@ -841,102 +710,208 @@ export default function Index() {
             }]}>Campus Services</Text>
           </View>
 
-          <View style={{ alignItems: 'center', justifyContent: 'center', height: 420, marginTop: -40, marginBottom: 0 }}>
-            {/* The Bolder Polished "Star" Side-to-Side Cross Container */}
-            <View style={{ width: width, height: 400, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+          <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
+            {/* Ultra-Clean Peak Bento Grid */}
+            <View style={{ flexDirection: 'column', gap: 12 }}>
 
-              {(() => {
-                const s = (width - 40) / 2.8;
-                const gap = 15;
-                const D = s + gap;
+              {/* TOP ROW: Large Hero (Left) + Stacked Cards (Right) */}
+              <View style={{ flexDirection: 'row', gap: 12, height: 180 }}>
+                {/* Hero Block: Complaints */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.premiumServiceCard,
+                    {
+                      flex: 1.2,
+                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      justifyContent: 'space-between',
+                      overflow: 'hidden'
+                    },
+                    pressed && styles.premiumCardPressed
+                  ]}
+                  onPress={() => router.push('/complaints')}
+                >
+                  {/* Background Watermark Icon (like Mess Menu) */}
+                  <MaterialCommunityIcons
+                    name="alert-circle-outline"
+                    size={110}
+                    color={isDark ? '#F43F5E' : '#E11D48'}
+                    style={{ position: 'absolute', right: -25, bottom: -25, opacity: isDark ? 0.08 : 0.06 }}
+                  />
 
-                return (
-                  <>
-                    {/* CENTER: About Hostel */}
-                    <QuickAction
-                      icon="information-variant"
-                      label="About Hostel"
-                      route="/about"
-                      desc="Facilities"
-                      bg={isDark ? colors.card : "#FFFFFF"}
-                      iconColor="#3B82F6"
-                      borderColor={colors.border}
-                      count={totalFacilities}
-                      countLabel="FACILITIES"
-                      isDiamond
-                      style={{ position: 'absolute', zIndex: 10 }}
+                  <View style={{ gap: 4, marginTop: 'auto' }}>
+                    <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 20, marginBottom: 0 }]}>Complaints</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      {pendingComplaints > 0 ? (
+                        <Text style={[styles.modernBadgeText, { color: isDark ? '#F43F5E' : '#E11D48', fontSize: 10, fontWeight: '900' }]}>
+                          {pendingComplaints} ACTION REQ.
+                        </Text>
+                      ) : (
+                        <Text style={[styles.modernBadgeText, { color: isDark ? '#94A3B8' : '#64748B', fontSize: 10, fontWeight: '900' }]}>
+                          ALL CLEAR
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={{ color: isDark ? '#CBD5E1' : '#475569', fontSize: 12, fontWeight: '600', lineHeight: 16 }}>
+                      {totalComplaints} total recorded
+                    </Text>
+                  </View>
+                </Pressable>
+
+                {/* Right Stack: Leaves & Visitors */}
+                <View style={{ flex: 1, gap: 12 }}>
+                  {/* Leaves */}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.premiumServiceCard,
+                      {
+                        flex: 1,
+                        backgroundColor: isDark ? colors.card : '#FFFFFF',
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        justifyContent: 'center',
+                        overflow: 'hidden'
+                      },
+                      pressed && styles.premiumCardPressed
+                    ]}
+                    onPress={() => router.push('/leave-request')}
+                  >
+                    <MaterialCommunityIcons
+                      name="wallet-travel"
+                      size={60}
+                      color={isDark ? '#34D399' : '#10B981'}
+                      style={{ position: 'absolute', right: -10, bottom: -10, opacity: isDark ? 0.08 : 0.06 }}
                     />
+                    <View style={{ gap: 2 }}>
+                      <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 16, marginBottom: 0 }]}>Leaves</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        {pendingLeaves > 0 ? (
+                          <Text style={[styles.modernBadgeText, { color: isDark ? '#34D399' : '#10B981', fontSize: 9, fontWeight: '900' }]}>
+                            {pendingLeaves} PENDING
+                          </Text>
+                        ) : (
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
+                            {totalLeaves} Total
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </Pressable>
 
-                    {/* TOP-LEFT Edge: Complaints */}
-                    <QuickAction
-                      icon="alert-circle-outline"
-                      label="Complaints"
-                      route="/complaints"
-                      desc="Issues"
-                      bg={isDark ? colors.card : "#FFFFFF"}
-                      iconColor="#E11D48"
-                      borderColor={colors.border}
-                      count={pendingComplaints}
-                      isDiamond
-                      style={{
-                        position: 'absolute',
-                        transform: [{ translateY: -D }]
-                      }}
+                  {/* Visitors */}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.premiumServiceCard,
+                      {
+                        flex: 1,
+                        backgroundColor: isDark ? colors.card : '#FFFFFF',
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        justifyContent: 'center',
+                        overflow: 'hidden'
+                      },
+                      pressed && styles.premiumCardPressed
+                    ]}
+                    onPress={() => router.push('/my-visitors')}
+                  >
+                    <MaterialCommunityIcons
+                      name="account-group"
+                      size={60}
+                      color={isDark ? '#A78BFA' : '#8B5CF6'}
+                      style={{ position: 'absolute', right: -10, bottom: -10, opacity: isDark ? 0.08 : 0.06 }}
                     />
+                    <View style={{ gap: 2 }}>
+                      <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 16, marginBottom: 0 }]}>Visitors</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        {pendingVisitors > 0 ? (
+                          <Text style={[styles.modernBadgeText, { color: isDark ? '#A78BFA' : '#8B5CF6', fontSize: 9, fontWeight: '900' }]}>
+                            {pendingVisitors} PENDING
+                          </Text>
+                        ) : (
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
+                            {totalVisitors} Total
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </Pressable>
+                </View>
+              </View>
 
-                    {/* TOP-RIGHT Edge: Visitors */}
-                    <QuickAction
-                      icon="account-group-outline"
-                      label="Visitors"
-                      route="/my-visitors"
-                      desc="Register"
-                      bg={isDark ? colors.card : "#FFFFFF"}
-                      iconColor="#8B5CF6"
-                      borderColor={colors.border}
-                      count={pendingVisitors}
-                      isDiamond
-                      style={{
-                        position: 'absolute',
-                        transform: [{ translateX: D }]
-                      }}
-                    />
+              {/* BOTTOM ROW: Services & About Hostel */}
+              <View style={{ flexDirection: 'row', gap: 12, height: 120 }}>
+                {/* Services */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.premiumServiceCard,
+                    {
+                      flex: 1,
+                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      justifyContent: 'center',
+                      overflow: 'hidden'
+                    },
+                    pressed && styles.premiumCardPressed
+                  ]}
+                  onPress={() => router.push('/roomservice')}
+                >
+                  <MaterialCommunityIcons
+                    name="broom"
+                    size={80}
+                    color={isDark ? '#FBBF24' : '#F59E0B'}
+                    style={{ position: 'absolute', right: -15, bottom: -15, opacity: isDark ? 0.08 : 0.06 }}
+                  />
+                  <View style={{ gap: 4 }}>
+                    <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 17, marginBottom: 0 }]}>Services</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={[styles.modernBadgeText, { color: isDark ? '#FBBF24' : '#F59E0B', fontSize: 10, fontWeight: '900' }]}>
+                        {pendingRoomServices > 0 ? `${pendingRoomServices} PENDING` : 'ACTIVE'}
+                      </Text>
+                    </View>
+                    <Text style={{ color: isDark ? '#CBD5E1' : '#475569', fontSize: 12, fontWeight: '600', lineHeight: 16 }}>
+                      Room cleanup
+                    </Text>
+                  </View>
+                </Pressable>
 
-                    {/* BOTTOM-LEFT Edge: Services */}
-                    <QuickAction
-                      icon="broom"
-                      label="Services"
-                      route="/roomservice"
-                      desc="Cleanup"
-                      bg={isDark ? colors.card : "#FFFFFF"}
-                      iconColor="#D97706"
-                      borderColor={colors.border}
-                      count={pendingRoomServices}
-                      isDiamond
-                      style={{
-                        position: 'absolute',
-                        transform: [{ translateX: -D }]
-                      }}
-                    />
+                {/* About Hostel */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.premiumServiceCard,
+                    {
+                      flex: 1,
+                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      justifyContent: 'center',
+                      overflow: 'hidden'
+                    },
+                    pressed && styles.premiumCardPressed
+                  ]}
+                  onPress={() => router.push('/about')}
+                >
+                  <MaterialCommunityIcons
+                    name="office-building"
+                    size={80}
+                    color={isDark ? '#60A5FA' : '#3B82F6'}
+                    style={{ position: 'absolute', right: -15, bottom: -15, opacity: isDark ? 0.08 : 0.06 }}
+                  />
+                  <View style={{ gap: 4 }}>
+                    <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 17, marginBottom: 0 }]}>About</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={[styles.modernBadgeText, { color: isDark ? '#60A5FA' : '#3B82F6', fontSize: 10, fontWeight: '900' }]}>
+                        {totalFacilities} FACILITIES
+                      </Text>
+                    </View>
+                    <Text style={{ color: isDark ? '#CBD5E1' : '#475569', fontSize: 12, fontWeight: '600', lineHeight: 16 }}>
+                      Info & rules
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
 
-                    {/* BOTTOM-RIGHT Edge: Leave Pass */}
-                    <QuickAction
-                      icon="calendar-account-outline"
-                      label="Leave Pass"
-                      route="/leave-request"
-                      desc="Gate Pass"
-                      bg={isDark ? colors.card : "#FFFFFF"}
-                      iconColor="#7C3AED"
-                      borderColor={colors.border}
-                      count={pendingLeaves}
-                      isDiamond
-                      style={{
-                        position: 'absolute',
-                        transform: [{ translateY: D }]
-                      }}
-                    />
-                  </>
-                );
-              })()}
             </View>
           </View>
         </View>

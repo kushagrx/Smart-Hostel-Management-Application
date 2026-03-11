@@ -2,6 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
+import http from 'http';
 
 dotenv.config();
 
@@ -24,9 +25,15 @@ import searchRoutes from './routes/searchRoutes';
 import serviceRoutes from './routes/serviceRoutes';
 import studentRoutes from './routes/studentRoutes';
 import visitorRoutes from './routes/visitorRoutes';
+import { initSocket } from './socket';
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+// Create HTTP Server and Socket.IO Server
+const server = http.createServer(app);
+
+initSocket(server);
 
 // Middleware
 app.use(cors());
@@ -126,11 +133,42 @@ const startServer = async () => {
             ALTER TABLE rooms 
             ADD COLUMN IF NOT EXISTS room_type VARCHAR(50),
             ADD COLUMN IF NOT EXISTS facilities JSONB DEFAULT '[]'::jsonb;
+
+            -- New migrations for hostel_info and facilities
+            ALTER TABLE hostel_info 
+            ADD COLUMN IF NOT EXISTS name VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS address TEXT,
+            ADD COLUMN IF NOT EXISTS contact_email VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS warden_name VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS total_capacity INTEGER DEFAULT 100,
+            ADD COLUMN IF NOT EXISTS subtitle VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS footer_text TEXT,
+            ADD COLUMN IF NOT EXISTS location VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+            -- Ensure default row for hostel_info
+            INSERT INTO hostel_info (id, name, address, contact_email, contact_phone, warden_name, total_capacity)
+            VALUES (1, 'Smart Hostel', 'Hostel Address', 'admin@example.com', '1234567890', 'Admin', 100)
+            ON CONFLICT (id) DO NOTHING;
+
+            ALTER TABLE facilities
+            ADD COLUMN IF NOT EXISTS name VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS image_url TEXT,
+            ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::jsonb,
+            ADD COLUMN IF NOT EXISTS icon VARCHAR(50) DEFAULT 'star',
+            ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT 0;
+
+            -- Sync name to title if title is null and name exists
+            UPDATE facilities SET title = name WHERE title IS NULL AND name IS NOT NULL;
+            -- Fallback for title if name is also null
+            UPDATE facilities SET title = 'New Facility' WHERE title IS NULL;
         `);
         console.log('✅ Database schema verified');
 
-        app.listen(+port, '0.0.0.0', () => {
-            console.log(`Server is running on http://0.0.0.0:${port}`);
+        server.listen(+port, '0.0.0.0', () => {
+            console.log(`Server & WebSockets running on http://0.0.0.0:${port}`);
         });
     } catch (err) {
         console.error('Failed to start server:', err);

@@ -75,7 +75,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
         // Notify Student
         if (userId) {
-            const tokens = await getUserToken(userId);
+            const tokens = await getUserToken(userId, 'payments');
             sendPushNotification(
                 tokens,
                 '✅ Payment Successful',

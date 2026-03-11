@@ -1,12 +1,13 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  DeviceEventEmitter,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View
@@ -14,8 +15,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
+import { fetchUserData, StudentData } from '../../utils/nameUtils';
 
-const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, accessibilityHint, isLast, danger, themeColors }: any) => {
+const SettingItem = ({ icon, label, onPress, accessibilityHint, isLast, danger, themeColors, value, description }: any) => {
   return (
     <TouchableOpacity
       style={[
@@ -23,26 +25,23 @@ const SettingItem = ({ icon, label, isSwitch, value, onValueChange, onPress, acc
         !isLast && [styles.rowBorder, { borderBottomColor: themeColors.border }]
       ]}
       onPress={onPress}
-      disabled={!onPress && !isSwitch}
+      disabled={!onPress}
       accessible={true}
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
-      accessibilityRole={isSwitch ? 'switch' : (onPress ? 'button' : 'text')}
+      accessibilityRole="button"
     >
       <View style={styles.labelContainer}>
-        <View style={[styles.iconBox, { backgroundColor: danger ? '#FEF2F2' : (themeColors?.isDark ? '#172554' : '#EFF6FF') }]}>
-          <MaterialIcons name={icon} size={20} color={danger ? '#EF4444' : (themeColors?.isDark ? '#60A5FA' : '#004e92')} />
+        <View style={[styles.iconBox, { backgroundColor: danger ? 'rgba(239, 68, 68, 0.1)' : (themeColors?.isDark ? '#1e293b' : '#F1F5F9') }]}>
+          <MaterialCommunityIcons name={icon} size={20} color={danger ? '#EF4444' : (themeColors?.isDark ? '#60A5FA' : '#004e92')} />
         </View>
-        <Text style={[styles.label, { color: danger ? '#EF4444' : themeColors.text }]}>{label}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.label, { color: danger ? '#EF4444' : themeColors.text }]}>{label}</Text>
+          {description && <Text style={[styles.itemDescription, { color: themeColors.textSecondary }]}>{description}</Text>}
+        </View>
       </View>
-      {isSwitch ? (
-        <Switch
-          value={value}
-          onValueChange={onValueChange}
-          trackColor={{ false: themeColors?.border || '#E2E8F0', true: '#004e92' }}
-          thumbColor={'#fff'}
-          ios_backgroundColor={themeColors?.border || "#E2E8F0"}
-        />
+      {value ? (
+        <Text style={[styles.rowValue, { color: themeColors.textSecondary }]}>{value}</Text>
       ) : (
         onPress && <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
       )}
@@ -54,8 +53,26 @@ export default function Settings() {
   const router = useRouter();
   const { theme, toggleTheme, colors, isDark } = useTheme();
   const { showAlert } = useAlert();
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [student, setStudent] = useState<StudentData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    loadUserData();
+    const sub = DeviceEventEmitter.addListener('profileUpdated', loadUserData);
+    return () => sub.remove();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const data = await fetchUserData();
+      setStudent(data);
+    } catch (error) {
+      console.error('Failed to load user data for settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     showAlert(
@@ -69,164 +86,207 @@ export default function Settings() {
           onPress: async () => {
             try {
               const { setStoredUser } = await import('../../utils/authUtils');
+              const { deregisterPushToken } = await import('../../utils/usePushNotifications');
+              const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+              const { useAuthStore } = await import('../../store/useAuthStore');
+
+              await deregisterPushToken();
               await setStoredUser(null);
+              await AsyncStorage.removeItem('userToken');
+              useAuthStore.getState().setUser(null);
+              router.replace('/login');
             } catch (error) {
               console.error("Logout error:", error);
             }
-            router.replace('/login');
           }
         }
       ]
     );
   };
 
+  const clearCache = async () => {
+    setClearing(true);
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      // Define keys to clear - avoiding auth token
+      const keysToKeep = ['userToken', 'user', 'theme'];
+      const allKeys = await AsyncStorage.getAllKeys();
+      const keysToClear = allKeys.filter(key => !keysToKeep.includes(key));
+
+      if (keysToClear.length > 0) {
+        await AsyncStorage.multiRemove(keysToClear);
+      }
+
+      setTimeout(() => {
+        setClearing(false);
+        showAlert('Success', 'App cache cleared successfully! Temporary data has been reset.');
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to clear cache:', error);
+      setClearing(false);
+      showAlert('Error', 'Failed to clear cache.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#004e92" />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      {/* Header */}
-      <LinearGradient
-        colors={['#000428', '#004e92']}
-        style={styles.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <SafeAreaView edges={['top', 'left', 'right']}>
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.headerTitle}>Settings</Text>
-              <Text style={styles.headerSubtitle}>Preferences & Account</Text>
-            </View>
-            <View style={styles.headerIcon}>
-              <MaterialIcons name="settings" size={24} color="#fff" />
-            </View>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header */}
+        <LinearGradient
+          colors={['#000428', '#004e92']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <SafeAreaView edges={['top', 'left', 'right']}>
+            <View style={styles.headerContent}>
+              <View>
+                <Text style={styles.headerTitle}>Settings</Text>
+                <Text style={styles.headerSubtitle}>Manage your account & app</Text>
+              </View>
+              <View style={styles.headerIcon}>
+                <MaterialCommunityIcons name="cog" size={24} color="#fff" />
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+
         <View style={{ padding: 20 }}>
-
-          {/* Account Section */}
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account</Text>
+          {/* Account & Security Section */}
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account & Security</Text>
           <View style={[styles.card, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <SettingItem
-              icon="person"
+              icon="account-circle-outline"
               label="Edit Profile"
-              onPress={() => showAlert('Coming Soon', 'Edit Profile feature is coming soon.', [], 'info')}
-              accessibilityHint="Navigates to the edit profile screen"
-              isLast={false}
+              description="Personal info, parent details"
+              onPress={() => router.push('/edit-profile')}
               themeColors={{ ...colors, isDark }}
             />
             <SettingItem
-              icon="lock"
+              icon="lock-outline"
               label="Change Password"
+              description="Update your account security"
               onPress={() => router.push('/account/change-password')}
-              accessibilityHint="Navigates to the change password screen"
-              isLast={true}
-              themeColors={{ ...colors, isDark }}
-            />
-          </View>
-
-          {/* Notifications Section */}
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Notifications</Text>
-          <View style={[styles.card, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <SettingItem
-              icon="notifications"
-              label="Push Notifications"
-              isSwitch
-              value={pushNotifications}
-              onValueChange={setPushNotifications}
-              accessibilityHint="Toggle push notifications on or off"
-              isLast={false}
               themeColors={{ ...colors, isDark }}
             />
             <SettingItem
-              icon="mail"
-              label="Email Updates"
-              isSwitch
-              value={emailNotifications}
-              onValueChange={setEmailNotifications}
-              accessibilityHint="Toggle email notifications on or off"
-              isLast={true}
+              icon="shield-check-outline"
+              label="Two-Factor Auth"
+              description="Extra layer of protection (Coming soon)"
               themeColors={{ ...colors, isDark }}
+            />
+            <SettingItem
+              icon="devices"
+              label="Manage Devices"
+              description="View and manage where you're logged in"
+              themeColors={{ ...colors, isDark }}
+              isLast={true}
             />
           </View>
 
-          {/* App Preferences Section */}
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>App Preferences</Text>
+          {/* Preferences Section */}
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Preferences</Text>
           <View style={[styles.card, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SettingItem
+              icon="bell-outline"
+              label="Notification Preferences"
+              description="Manage granular push alerts"
+              onPress={() => router.push('/account/notification-settings')}
+              themeColors={{ ...colors, isDark }}
+            />
             <SettingItem
               icon="brightness-6"
-              label="Dark Mode"
-              isSwitch
-              value={theme === 'dark'}
-              onValueChange={toggleTheme}
-              accessibilityHint="Toggle dark mode for the app"
-              isLast={false}
+              label="Theme Mode"
+              description={isDark ? "Dark theme active" : "Light theme active"}
+              onPress={toggleTheme}
+              value={isDark ? "Dark" : "Light"}
               themeColors={{ ...colors, isDark }}
             />
             <SettingItem
-              icon="language"
-              label="Language"
-              onPress={() => { }}
-              accessibilityHint="Opens language selection options"
-              isLast={true}
+              icon="translate"
+              label="App Language"
+              description="Choose your preferred language"
+              value="English"
               themeColors={{ ...colors, isDark }}
+              isLast={true}
+            />
+          </View>
+
+          {/* Storage & Data Section */}
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>App Maintenance</Text>
+          <View style={[styles.card, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SettingItem
+              icon="database-refresh-outline"
+              label="Clear App Cache"
+              description="Resets temporary data & photos"
+              onPress={clearCache}
+              themeColors={{ ...colors, isDark }}
+            />
+            <SettingItem
+              icon="bug-outline"
+              label="Report a Bug"
+              onPress={() => showAlert('Support', 'Bug reporting feature will be available in the next update.')}
+              themeColors={{ ...colors, isDark }}
+              isLast={true}
             />
           </View>
 
           {/* About Section */}
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Support</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>About & Support</Text>
           <View style={[styles.card, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <SettingItem
-              icon="support-agent"
-              label="Contact Support"
+              icon="help-circle-outline"
+              label="Help Center"
               onPress={() => { }}
-              accessibilityHint="Opens the contact support page"
-              isLast={false}
               themeColors={{ ...colors, isDark }}
             />
             <SettingItem
-              icon="help-outline"
-              label="FAQs"
-              onPress={() => { }}
-              accessibilityHint="Navigates to the Frequently Asked Questions page"
-              isLast={false}
-              themeColors={{ ...colors, isDark }}
-            />
-            <SettingItem
-              icon="privacy-tip"
+              icon="information-outline"
               label="Privacy Policy"
               onPress={() => { }}
-              accessibilityHint="Opens the privacy policy"
-              isLast={false}
               themeColors={{ ...colors, isDark }}
             />
-
-            {/* Version Info */}
+            <SettingItem
+              icon="text-box-check-outline"
+              label="Terms of Service"
+              onPress={() => { }}
+              themeColors={{ ...colors, isDark }}
+            />
             <View style={[styles.row, { paddingVertical: 12 }]}>
               <View style={styles.labelContainer}>
                 <View style={[styles.iconBox, { backgroundColor: isDark ? '#1e293b' : '#F1F5F9' }]}>
-                  <MaterialIcons name="info" size={20} color={colors.textSecondary} />
+                  <MaterialCommunityIcons name="tag-outline" size={20} color={colors.textSecondary} />
                 </View>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>App Version</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Version</Text>
               </View>
-              <Text style={styles.version}>{Application.nativeApplicationVersion}</Text>
+              <Text style={styles.version}>{Application.nativeApplicationVersion} (1.02.4)</Text>
             </View>
           </View>
 
-          {/* Logout Button */}
-          <TouchableOpacity style={[styles.logoutButton, styles.shadowProp, { backgroundColor: colors.card, borderColor: '#FEE2E2' }]} onPress={handleLogout}>
-            <MaterialIcons name="logout" size={20} color="#EF4444" />
+          {/* Logout Section */}
+          <TouchableOpacity
+            style={[styles.logoutButton, styles.shadowProp, { backgroundColor: isDark ? '#170a0a' : '#FFF5F5', borderColor: isDark ? '#451a1a' : '#FEE2E2' }]}
+            onPress={handleLogout}
+          >
+            <MaterialCommunityIcons name="logout-variant" size={22} color="#EF4444" />
             <Text style={styles.logoutButtonText}>Log Out Session</Text>
           </TouchableOpacity>
 
-          <Text style={styles.footerText}>SmartStay © 2026</Text>
+          <Text style={[styles.footerText, { color: colors.textSecondary }]}>SmartStay Hostels © 2026 • Premium Experience</Text>
         </View>
       </ScrollView>
     </View>
@@ -238,19 +298,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingBottom: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: "#004e92",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+    paddingBottom: 32,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
   },
   headerContent: {
     paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -268,10 +327,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   headerIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -279,17 +338,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
-    marginTop: 24,
+    marginTop: 28,
     marginBottom: 12,
-    marginLeft: 4,
+    marginLeft: 6,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
   },
@@ -297,7 +355,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: 14,
     paddingRight: 16,
   },
   rowBorder: {
@@ -306,53 +364,64 @@ const styles = StyleSheet.create({
   labelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    flex: 1,
+    gap: 14,
   },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   label: {
     fontSize: 15,
+    fontWeight: '600',
+  },
+  itemDescription: {
+    fontSize: 11,
+    marginTop: 1,
+    fontWeight: '400',
+  },
+  rowValue: {
+    fontSize: 14,
     fontWeight: '500',
   },
   version: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#94A3B8',
     marginRight: 4,
+    fontWeight: '500',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     gap: 10,
-    marginTop: 32,
+    marginTop: 36,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#FEE2E2',
   },
   logoutButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#EF4444',
   },
   footerText: {
     textAlign: 'center',
-    color: '#CBD5E1',
-    fontSize: 12,
+    fontSize: 11,
+    marginTop: 10,
     marginBottom: 20,
+    fontWeight: '500',
+    letterSpacing: 0.5,
   },
   shadowProp: {
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#004e92',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 3,
   },
 });

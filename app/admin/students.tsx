@@ -708,6 +708,8 @@ export default function StudentsPage() {
   React.useEffect(() => {
     if (action === 'allot') {
       setTimeout(() => handleTabChange(1), 100);
+    } else if (action === 'export') {
+      setExportModalVisible(true);
     }
   }, [action]);
 

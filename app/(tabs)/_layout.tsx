@@ -5,10 +5,11 @@ import {
   MaterialTopTabNavigationOptions,
 } from '@react-navigation/material-top-tabs';
 import { ParamListBase, TabNavigationState } from '@react-navigation/native';
-import { withLayoutContext } from 'expo-router';
-import React from 'react';
+import { useRouter, useSegments, withLayoutContext } from 'expo-router';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../utils/ThemeContext';
 
 const { Navigator } = createMaterialTopTabNavigator();
@@ -39,6 +40,23 @@ const AnimatedIcon = ({ name, focused, color }: { name: any, focused: boolean, c
 
 const _layout = () => {
   const { colors, isDark } = useTheme();
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (!isLoading) {
+      // Check if we are trying to access tabs
+      const inTabs = segments[0] === '(tabs)';
+      if (inTabs && (!user || user.role !== 'student')) {
+        router.replace('/login');
+      }
+    }
+  }, [user, isLoading, segments, router]);
+
+  if (isLoading || (!user || user.role !== 'student')) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

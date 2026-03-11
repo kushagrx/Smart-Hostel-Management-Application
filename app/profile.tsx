@@ -25,6 +25,8 @@ export default function ProfilePage() {
 
     useEffect(() => {
         loadUserData();
+        const subscription = DeviceEventEmitter.addListener('profileUpdated', loadUserData);
+        return () => subscription.remove();
     }, []);
 
     const loadUserData = async () => {
@@ -146,7 +148,14 @@ export default function ProfilePage() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
+                            const { deregisterPushToken } = await import('../utils/usePushNotifications');
+                            const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+                            const { useAuthStore } = await import('../store/useAuthStore');
+
+                            await deregisterPushToken();
                             await setStoredUser(null);
+                            await AsyncStorage.removeItem('userToken');
+                            useAuthStore.getState().setUser(null);
                             router.replace('/login');
                         } catch (error: any) {
                             console.error('Error signing out:', error);

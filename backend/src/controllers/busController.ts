@@ -45,7 +45,7 @@ export const createBusTiming = async (req: Request, res: Response) => {
         );
 
         // Notify All Students
-        const tokens = await getAllStudentTokens();
+        const tokens = await getAllStudentTokens('bus');
         const typeLabel = schedule_type === 'tomorrow' ? ' (Tomorrow)' : schedule_type === 'today' ? ' (Today Only)' : '';
         sendPushNotification(
             tokens,
@@ -87,7 +87,7 @@ export const updateBusTiming = async (req: Request, res: Response) => {
         }
 
         // Notify All Students
-        const tokens = await getAllStudentTokens();
+        const tokens = await getAllStudentTokens('bus');
         sendPushNotification(
             tokens,
             '🚌 Bus Schedule Updated',

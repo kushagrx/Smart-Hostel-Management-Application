@@ -1,4 +1,5 @@
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useRef, useState } from 'react';
@@ -58,6 +59,21 @@ async function registerForPushNotificationsAsync() {
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 
+export const deregisterPushToken = async () => {
+    try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+            console.log("🔄 Deregistering Push Token for logout");
+            await api.post('/auth/push-token/remove', {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            console.log("✅ Push Token deregistered successfully");
+        }
+    } catch (error) {
+        console.error("❌ Failed to deregister push token:", error);
+    }
+};
+
 export const usePushNotifications = () => {
     const [expoPushToken, setExpoPushToken] = useState<string | undefined>('');
     const [notification, setNotification] = useState<Notifications.Notification | undefined>(undefined);
@@ -87,7 +103,7 @@ export const usePushNotifications = () => {
             return;
         }
 
-        const { type, id, studentId } = data;
+        const { type, id, studentId, studentName } = data;
         const currentUser = userRef.current;
         const userRole = currentUser?.role;
 
@@ -105,7 +121,7 @@ export const usePushNotifications = () => {
                 console.log(`📍 [Push] Admin navigating to: ${type}`);
                 switch (type) {
                     case 'message':
-                        router.push({ pathname: '/chat/[id]', params: { id: studentId } as any });
+                        router.push({ pathname: '/chat/[id]', params: { id: studentId, name: studentName } as any });
                         break;
                     case 'visitor':
                         router.push('/admin/visitors');
@@ -219,14 +235,15 @@ export const usePushNotifications = () => {
     // Sync token with backend when User is authenticated
     useEffect(() => {
         if (expoPushToken && user) {
-            console.log("🔄 Syncing Push Token for user:", user.name || 'User');
+            console.log(`🔄 [Push] Syncing Token for ${user.role}: ${user.name || 'User'}`);
             api.post('/auth/push-token', { pushToken: expoPushToken })
-                .then(() => console.log('✅ Push Token saved to backend'))
+                .then(() => console.log('✅ [Push] Token successfully saved/synced to backend'))
                 .catch(err => {
-                    // Start of Selection
                     const status = err.response ? err.response.status : 'Network Error';
-                    console.error(`❌ Failed to save push token (${status}):`, err.message);
+                    console.error(`❌ [Push] Failed to sync token (${status}):`, err.message);
                 });
+        } else if (expoPushToken && !user) {
+            console.log("ℹ️ [Push] Token available but no user logged in. Skipping sync.");
         }
     }, [expoPushToken, user]);
 

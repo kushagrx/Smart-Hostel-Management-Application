@@ -150,7 +150,7 @@ export default function AboutPage() {
                         style={styles.heroOverlay}
                     >
                         <Text style={styles.heroTitle}>{hostelInfo?.name || 'Smart Hostel'}</Text>
-                        <Text style={styles.heroSubtitle}>{hostelInfo?.subtitle || 'Home Away From Home'}</Text>
+                        <Text style={styles.heroSubtitle}>{hostelInfo?.subtitle || 'no detail added right now'}</Text>
                     </LinearGradient>
 
                     {/* Back Button Overlay */}
@@ -167,13 +167,13 @@ export default function AboutPage() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, padding: 12, backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
                             <MaterialCommunityIcons name="map-marker" size={20} color={colors.primary} style={{ marginRight: 8 }} />
                             <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500', flex: 1 }}>
-                                {hostelInfo.location}
+                                {hostelInfo.location || 'no detail added right now'}
                             </Text>
                         </View>
                     )}
 
                     <Text style={styles.introText}>
-                        {hostelInfo?.description || 'Welcome to Smart Hostel, a premium living space designed for comfort, community, and convenience. We offer state-of-the-art facilities to ensure a productive and enjoyable stay.'}
+                        {hostelInfo?.description || 'no detail added right now'}
                     </Text>
 
                     <Text style={styles.sectionTitle}>Our Facilities</Text>
@@ -221,7 +221,7 @@ export default function AboutPage() {
 
                     {!loading && facilities.length === 0 && (
                         <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 20 }}>
-                            No facilities listed yet.
+                            no detail added right now
                         </Text>
                     )}
 

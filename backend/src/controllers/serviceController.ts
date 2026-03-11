@@ -110,7 +110,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
             );
             if (studentUserRes.rows.length > 0) {
                 const { id: userId, amount } = studentUserRes.rows[0];
-                const tokens = await getUserToken(userId);
+                const tokens = await getUserToken(userId, 'payments');
                 const emoji = newStatus === 'verified' ? '✅' : '⏳';
                 sendPushNotification(
                     tokens,
@@ -144,7 +144,7 @@ export const createPaymentRequest = async (req: Request, res: Response) => {
             'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [studentId]
         );
         if (studentUserRes.rows.length > 0) {
-            const tokens = await getUserToken(studentUserRes.rows[0].id);
+            const tokens = await getUserToken(studentUserRes.rows[0].id, 'payments');
             sendPushNotification(
                 tokens,
                 '💳 New Fee Request',
@@ -592,7 +592,7 @@ export const updateServiceRequestStatus = async (req: Request, res: Response) =>
                 'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
             );
             if (studentUserRes.rows.length > 0) {
-                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const tokens = await getUserToken(studentUserRes.rows[0].id, 'services');
                 const emoji = status === 'completed' ? '✅' : status === 'in-progress' ? '🔧' : '❌';
                 sendPushNotification(
                     tokens,
@@ -665,7 +665,7 @@ export const updateLeaveStatus = async (req: Request, res: Response) => {
                 'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
             );
             if (studentUserRes.rows.length > 0) {
-                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const tokens = await getUserToken(studentUserRes.rows[0].id, 'leaves');
                 const emoji = status === 'approved' ? '✅' : '❌';
                 sendPushNotification(
                     tokens,
@@ -686,10 +686,12 @@ export const updateLeaveStatus = async (req: Request, res: Response) => {
 export const getAllComplaints = async (req: Request, res: Response) => {
     try {
         const result = await query(`
-            SELECT c.*, u.full_name, u.email, s.profile_photo 
+            SELECT c.*, u.full_name, u.email, s.profile_photo, r.room_number 
             FROM complaints c
             JOIN students s ON c.student_id = s.id
             JOIN users u ON s.user_id = u.id
+            LEFT JOIN room_allocations ra ON s.id = ra.student_id AND ra.is_active = true
+            LEFT JOIN rooms r ON ra.room_id = r.id
             ORDER BY c.created_at DESC
         `);
         res.json(result.rows.map(row => ({
@@ -701,6 +703,7 @@ export const getAllComplaints = async (req: Request, res: Response) => {
             category: row.category,
             studentName: row.full_name,
             studentEmail: row.email,
+            studentRoom: row.room_number || 'N/A',
             studentProfilePhoto: row.profile_photo,
             createdAt: row.created_at
         })));
@@ -725,7 +728,7 @@ export const updateComplaintStatus = async (req: Request, res: Response) => {
                 'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
             );
             if (studentUserRes.rows.length > 0) {
-                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const tokens = await getUserToken(studentUserRes.rows[0].id, 'complaints');
                 const emoji = status === 'resolved' ? '✅' : status === 'in-progress' ? '🔧' : '📋';
                 sendPushNotification(
                     tokens,
@@ -757,7 +760,7 @@ export const updateLaundryRequestStatus = async (req: Request, res: Response) =>
                 'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [student_id]
             );
             if (studentUserRes.rows.length > 0) {
-                const tokens = await getUserToken(studentUserRes.rows[0].id);
+                const tokens = await getUserToken(studentUserRes.rows[0].id, 'laundry');
                 const emoji = status === 'completed' ? '✅' : status === 'approved' ? '🧺' : '❌';
                 sendPushNotification(
                     tokens,

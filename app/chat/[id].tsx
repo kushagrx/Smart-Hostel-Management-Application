@@ -20,7 +20,7 @@ import { useAlert } from '../../context/AlertContext';
 import { API_BASE_URL } from '../../utils/api';
 
 import { isAdmin, useUser } from '../../utils/authUtils';
-import { ChatMessage, sendMessage, subscribeToMessages } from '../../utils/chatUtils';
+import { ChatMessage, emitStopTyping, emitTyping, sendMessage, subscribeToMessages } from '../../utils/chatUtils';
 import { deleteStudent } from '../../utils/studentUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
@@ -48,23 +48,54 @@ export default function ChatScreen() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
+    const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+    const [realConversationId, setRealConversationId] = useState<string | null>(null);
     const flatListRef = React.useRef<FlatList>(null);
+    const typingTimeoutRef = React.useRef<any>(null);
 
     useEffect(() => {
         if (!id) return;
-        const unsubscribe = subscribeToMessages(id, (newMessages, status, details) => {
-            setMessages(newMessages);
-            if (status) setPartnerStatus(status);
-            if (details) setPartnerDetails(details);
-            setLoading(false);
-        });
+        const unsubscribe = subscribeToMessages(
+            id,
+            (newMessages, status, details, realConvId) => {
+                setMessages(newMessages);
+                if (status) setPartnerStatus(status);
+                if (details) setPartnerDetails(details);
+                if (realConvId) setRealConversationId(realConvId);
+                setLoading(false);
+            },
+            (msg) => {
+                // Handle new incoming message in real-time
+                setMessages(prev => {
+                    if (prev.some(m => m._id === msg._id)) return prev;
+                    return [msg, ...prev];
+                });
+            },
+            (isTyping) => setIsPartnerTyping(isTyping)
+        );
         return () => unsubscribe();
     }, [id]);
+
+    const handleTyping = (text: string) => {
+        setInputText(text);
+        const targetId = realConversationId || id;
+        if (targetId) {
+            emitTyping(targetId, { _id: currentUserId, name: currentUserName });
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+                emitStopTyping(targetId);
+            }, 1500);
+        }
+    };
 
     const handleSend = async () => {
         if (!inputText.trim() || !id) return;
         const textToSend = inputText.trim();
+        const targetId = realConversationId || id;
+
         setInputText(''); // Clear immediately for responsiveness
+        if (targetId) emitStopTyping(targetId);
+
         await sendMessage(id, textToSend, {
             _id: currentUserId,
             name: currentUserName
@@ -215,33 +246,37 @@ export default function ChatScreen() {
                     styles.bubble,
                     isMe ? styles.myBubble : styles.otherBubble,
                     {
-                        backgroundColor: isMe ? '#2563EB' : (theme === 'dark' ? '#1E293B' : '#FFFFFF'), // Modern Blue for me
+                        backgroundColor: isMe ? '#2CB4FF' : (theme === 'dark' ? '#1E293B' : '#FFFFFF'), // Vibrant Cyan-Blue for me
                         borderBottomRightRadius: isMe && !isContinuous ? 4 : 20,
                         borderTopRightRadius: isMe && isContinuous ? 4 : 20,
                         borderBottomLeftRadius: !isMe && !isContinuous ? 4 : 20,
                         borderTopLeftRadius: !isMe && isContinuous ? 4 : 20,
+                        borderWidth: isMe ? 0 : (theme === 'dark' ? 1 : 0),
+                        borderColor: theme === 'dark' ? '#334155' : 'transparent',
                     }
                 ]}>
                     <Text style={[
                         styles.messageText,
-                        { color: isMe ? '#fff' : (theme === 'dark' ? '#F1F5F9' : '#1E293B') }
+                        { color: isMe ? '#ffffff' : (theme === 'dark' ? '#F8FAFC' : '#0F172A') }
                     ]}>
                         {item.text}
                     </Text>
-                    <Text style={[
-                        styles.timeText,
-                        { color: isMe ? 'rgba(255,255,255,0.7)' : '#94A3B8', marginTop: 4, alignSelf: 'flex-end', fontSize: 10 }
-                    ]}>
-                        {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    <View style={styles.timeContainer}>
+                        <Text style={[
+                            styles.timeText,
+                            { color: isMe ? 'rgba(255,255,255,0.85)' : (theme === 'dark' ? '#94A3B8' : '#64748B') }
+                        ]}>
+                            {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                        </Text>
                         {isMe && (
                             <MaterialCommunityIcons
                                 name={item.read ? "check-all" : "check"}
                                 size={14}
-                                color={item.read ? "#60A5FA" : "rgba(255,255,255,0.7)"}
+                                color={item.read ? "#E0F2FE" : "rgba(255,255,255,0.7)"}
                                 style={{ marginLeft: 4 }}
                             />
                         )}
-                    </Text>
+                    </View>
                 </View>
             </View>
         );
@@ -301,47 +336,62 @@ export default function ChatScreen() {
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 {/* Chat Area */}
-                {loading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                    </View>
-                ) : (
-                    <FlatList
-                        ref={flatListRef}
-                        data={processedMessages}
-                        renderItem={renderMessage}
-                        keyExtractor={item => item._id}
-                        inverted
-                        style={{ flex: 1 }}
-                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, paddingTop: 24 }}
-                        showsVerticalScrollIndicator={false}
-                    />
-                )}
-
-                {/* Floating Input Area */}
-                <View style={[styles.inputWrapper, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-                    <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1E293B' : '#fff' }]}>
-                        <TextInput
-                            style={[styles.input, { color: colors.text }]}
-                            placeholder="Type a message..."
-                            placeholderTextColor={colors.textSecondary}
-                            value={inputText}
-                            onChangeText={setInputText}
-                            multiline
-                            maxLength={500}
+                <LinearGradient
+                    colors={theme === 'dark' ? ['#0B1121', '#0F172A'] : ['#F8FAFC', '#F1F5F9']}
+                    style={{ flex: 1 }}
+                >
+                    {loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color="#2CB4FF" />
+                        </View>
+                    ) : (
+                        <FlatList
+                            ref={flatListRef}
+                            data={processedMessages}
+                            renderItem={renderMessage}
+                            keyExtractor={item => item._id}
+                            inverted
+                            style={{ flex: 1 }}
+                            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, paddingTop: 24 }}
+                            showsVerticalScrollIndicator={false}
                         />
-                        <TouchableOpacity
-                            style={[styles.sendBtn, { backgroundColor: inputText.trim().length > 0 ? '#2563EB' : '#CBD5E1' }]}
-                            onPress={handleSend}
-                            disabled={inputText.trim().length === 0}
-                        >
-                            <MaterialCommunityIcons name="send" size={20} color="#fff" />
-                        </TouchableOpacity>
+                    )}
+
+                    {isPartnerTyping && (
+                        <View style={styles.typingIndicatorContainer}>
+                            <View style={[styles.typingBubble, { backgroundColor: theme === 'dark' ? '#1E293B' : '#E2E8F0' }]}>
+                                <Text style={[styles.typingIndicatorText, { color: theme === 'dark' ? '#94A3B8' : '#64748B' }]}>
+                                    {chatTitle} is typing...
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Floating Input Area with Glassmorphism */}
+                    <View style={[styles.inputWrapper, { paddingBottom: Math.max(insets.bottom, 12), paddingTop: 8, backgroundColor: theme === 'dark' ? 'rgba(15, 23, 42, 0.8)' : 'rgba(255, 255, 255, 0.8)' }]}>
+                        <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1E293B' : '#F1F5F9', borderColor: theme === 'dark' ? '#334155' : '#E2E8F0', borderWidth: 1 }]}>
+                            <TextInput
+                                style={[styles.input, { color: colors.text }]}
+                                placeholder="Message..."
+                                placeholderTextColor={theme === 'dark' ? '#64748B' : '#94A3B8'}
+                                value={inputText}
+                                onChangeText={handleTyping}
+                                multiline
+                                maxLength={500}
+                            />
+                            <TouchableOpacity
+                                style={[styles.sendBtn, { backgroundColor: inputText.trim().length > 0 ? '#2CB4FF' : (theme === 'dark' ? '#334155' : '#E2E8F0') }]}
+                                onPress={handleSend}
+                                disabled={inputText.trim().length === 0}
+                            >
+                                <MaterialCommunityIcons name="send" size={18} color={inputText.trim().length > 0 ? "#fff" : (theme === 'dark' ? '#64748B' : '#94A3B8')} />
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
+                </LinearGradient>
             </KeyboardAvoidingView>
 
             <StudentDetailsModal
@@ -474,15 +524,15 @@ const styles = StyleSheet.create({
     },
     bubble: {
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingVertical: 10,
         borderRadius: 20,
-        maxWidth: '75%',
+        maxWidth: '78%',
         minWidth: 80,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     myBubble: {
         // Handled in inline style for theme dynamic
@@ -493,6 +543,13 @@ const styles = StyleSheet.create({
     messageText: {
         fontSize: 15,
         lineHeight: 22,
+        letterSpacing: 0.2,
+    },
+    timeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        marginTop: 4,
     },
     timeText: {
         fontSize: 10,
@@ -529,5 +586,21 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    typingIndicatorContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 4,
+        flexDirection: 'row',
+    },
+    typingBubble: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 15,
+        borderBottomLeftRadius: 4,
+    },
+    typingIndicatorText: {
+        fontSize: 12,
+        fontWeight: '600',
+        fontStyle: 'italic',
     },
 });

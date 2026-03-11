@@ -342,7 +342,7 @@ export const approveVisitor = async (req: Request, res: Response) => {
             'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
         );
         if (studentUserRes.rows.length > 0) {
-            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id, 'visitors');
             sendPushNotification(
                 studentTokens,
                 '✅ Visitor Approved',
@@ -396,7 +396,7 @@ export const rejectVisitor = async (req: Request, res: Response) => {
             'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
         );
         if (studentUserRes.rows.length > 0) {
-            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id, 'visitors');
             sendPushNotification(
                 studentTokens,
                 '❌ Visitor Rejected',
@@ -436,7 +436,7 @@ export const checkInVisitor = async (req: Request, res: Response) => {
             'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
         );
         if (studentUserRes.rows.length > 0) {
-            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id, 'visitors');
             sendPushNotification(
                 studentTokens,
                 '👥 Visitor Checked In',
@@ -476,7 +476,7 @@ export const checkOutVisitor = async (req: Request, res: Response) => {
             'SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.id = $1', [visitor.student_id]
         );
         if (studentUserRes.rows.length > 0) {
-            const studentTokens = await getUserToken(studentUserRes.rows[0].id);
+            const studentTokens = await getUserToken(studentUserRes.rows[0].id, 'visitors');
             sendPushNotification(
                 studentTokens,
                 '👥 Visitor Checked Out',
