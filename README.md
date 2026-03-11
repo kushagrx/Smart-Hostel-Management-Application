@@ -79,9 +79,15 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 *   **Google Auth Bypass**: Implemented manual decode parsing to tolerate time-sync clock skews between the issuer and server, preventing incorrect `Token used too early` crash scenarios.
 *   **Enhanced Error Logging**: Added transparent detail-oriented backend error payloads for swift debugging.
 
-### 7. Bento-Style Dashboard Mastery
-*   **Hyper-Tactile Glass UI**: Integrated deep shadowing, custom shimmers, and semi-transparent gradients to emulate frosted glass `Neo-Bento` modules on the Student Dashboard.
-*   **Intelligent Overlays**: Transformed standard notification components into premium overlays with dynamic routing logic.
+### 7. Granular Notification Control (V3.1)
+*   **Selective Toggles**: Students can now selectively opt-in/opt-out of 10+ specific notification categories (Mess, Laundry, Payments, etc.).
+*   **Instant Auto-Save**: Preferences are saved immediately upon toggling, removing the need for a manual "Save" button and ensuring high responsiveness.
+*   **Bulk Actions**: Added "Enable All" and "Disable All" master controls for rapid preference management.
+
+### 8. Premium Settings Overhaul
+*   **Modernized Layout**: Replaced the legacy toggle-heavy settings with a clean, card-based organizational structure.
+*   **Functional Maintenance**: Integrated a real-world **Clear App Cache** tool and **Room WiFi** visibility (profile-derived) directly into the settings hub.
+*   **Structural Sections**: Logical grouping (Account & Security, Preferences, App Maintenance) for a smoother navigation experience.
 
 ## 🌟 Legacy Enhancements (V2)
 *   **Optimal Display**: Fully optimized for Android 8.0+ adaptive icons using foreground/background layers to prevent stretching or cropping.

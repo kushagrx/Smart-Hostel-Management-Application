@@ -318,7 +318,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
             title: `New messages from ${row.sender_name}`,
             subtitle: `${row.count} unread message${row.count > 1 ? 's' : ''}`,
             time: row.latest_at,
-            data: { studentId: row.student_id, photo: row.profile_photo },
+            data: { studentId: row.student_id, photo: row.profile_photo, studentName: row.sender_name },
             read: false
         })).filter(n => new Date(n.time) > lastCleared); // Apply filter if user wants to hide even unread msg notifications? 
         // Logic: specific requirement "don't show the old ones... only the unread ones".
@@ -475,3 +475,46 @@ export const clearAdminNotifications = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Server error', details: error.message });
     }
 };
+
+export const getPreferences = async (req: Request, res: Response) => {
+    const userId = req.currentUser?.id;
+
+    try {
+        const result = await query(
+            'SELECT notification_preferences FROM users WHERE id = $1',
+            [userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const prefs = result.rows[0].notification_preferences || {};
+        res.json(prefs);
+    } catch (error) {
+        console.error('Error fetching notification preferences:', error);
+        res.status(500).json({ error: 'Server error fetching preferences' });
+    }
+};
+
+export const updatePreferences = async (req: Request, res: Response) => {
+    const userId = req.currentUser?.id;
+    const { preferences } = req.body;
+
+    if (!preferences || typeof preferences !== 'object') {
+        return res.status(400).json({ error: 'Invalid preferences payload' });
+    }
+
+    try {
+        await query(
+            'UPDATE users SET notification_preferences = $1 WHERE id = $2',
+            [JSON.stringify(preferences), userId]
+        );
+
+        res.json({ message: 'Preferences updated successfully', preferences });
+    } catch (error) {
+        console.error('Error updating notification preferences:', error);
+        res.status(500).json({ error: 'Server error updating preferences' });
+    }
+};
+

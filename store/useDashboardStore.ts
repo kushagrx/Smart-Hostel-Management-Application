@@ -8,9 +8,13 @@ import { StudentData } from '../utils/nameUtils';
 
 interface DashboardCounts {
     complaints: number;
+    totalComplaints: number;
     visitors: number;
+    totalVisitors: number;
     roomServices: number;
+    totalRoomServices: number;
     leaves: number;
+    totalLeaves: number;
     facilities: number;
 }
 
@@ -41,9 +45,13 @@ export const useDashboardStore = create<DashboardState>()(
             busRoutes: [],
             dashboardCounts: {
                 complaints: 0,
+                totalComplaints: 0,
                 visitors: 0,
+                totalVisitors: 0,
                 roomServices: 0,
+                totalRoomServices: 0,
                 leaves: 0,
+                totalLeaves: 0,
                 facilities: 0,
             },
             lastSynced: null,
@@ -63,9 +71,13 @@ export const useDashboardStore = create<DashboardState>()(
                 busRoutes: [],
                 dashboardCounts: {
                     complaints: 0,
+                    totalComplaints: 0,
                     visitors: 0,
+                    totalVisitors: 0,
                     roomServices: 0,
+                    totalRoomServices: 0,
                     leaves: 0,
+                    totalLeaves: 0,
                     facilities: 0,
                 },
                 lastSynced: null,

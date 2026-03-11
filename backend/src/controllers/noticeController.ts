@@ -21,7 +21,7 @@ export const createNotice = async (req: Request, res: Response) => {
         );
 
         // Notify All Students
-        const tokens = await getAllStudentTokens();
+        const tokens = await getAllStudentTokens('notices');
         sendPushNotification(
             tokens,
             '📢 New Notice',

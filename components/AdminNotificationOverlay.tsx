@@ -98,7 +98,7 @@ export default function AdminNotificationOverlay({ visible, onClose }: AdminNoti
         setTimeout(() => {
             switch (item.type) {
                 case 'message':
-                    router.push({ pathname: '/chat/[id]', params: { id: item.data.studentId } });
+                    router.push({ pathname: '/chat/[id]', params: { id: item.data.studentId, name: item.data.studentName } as any });
                     break;
                 case 'complaint':
                     router.push({ pathname: '/admin/complaints', params: { openId: item.data.id } });

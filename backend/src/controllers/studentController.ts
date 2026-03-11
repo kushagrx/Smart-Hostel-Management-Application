@@ -115,19 +115,27 @@ export const getDashboardCounts = async (req: Request, res: Response) => {
         const studentId = studentRes.rows[0].id;
 
         // Perform parallel queries to get counts for different services
-        const [complaints, visitors, roomServices, leaves, facilities] = await Promise.all([
+        const [complaints, totalComplaints, visitors, totalVisitors, roomServices, totalRoomServices, leaves, totalLeaves, facilities] = await Promise.all([
             query(`SELECT COUNT(*) FROM complaints WHERE student_id = $1 AND status IN ('pending', 'open', 'inProgress')`, [studentId]),
+            query(`SELECT COUNT(*) FROM complaints WHERE student_id = $1`, [studentId]),
             query(`SELECT COUNT(*) FROM visitors WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM visitors WHERE student_id = $1`, [studentId]),
             query(`SELECT COUNT(*) FROM service_requests WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM service_requests WHERE student_id = $1`, [studentId]),
             query(`SELECT COUNT(*) FROM leave_requests WHERE student_id = $1 AND status = 'pending'`, [studentId]),
+            query(`SELECT COUNT(*) FROM leave_requests WHERE student_id = $1`, [studentId]),
             query(`SELECT COUNT(*) FROM facilities`)
         ]);
 
         res.json({
             complaints: parseInt(complaints.rows[0].count, 10),
+            totalComplaints: parseInt(totalComplaints.rows[0].count, 10),
             visitors: parseInt(visitors.rows[0].count, 10),
+            totalVisitors: parseInt(totalVisitors.rows[0].count, 10),
             roomServices: parseInt(roomServices.rows[0].count, 10),
+            totalRoomServices: parseInt(totalRoomServices.rows[0].count, 10),
             leaves: parseInt(leaves.rows[0].count, 10),
+            totalLeaves: parseInt(totalLeaves.rows[0].count, 10),
             facilities: parseInt(facilities.rows[0].count, 10)
         });
     } catch (error) {
@@ -175,6 +183,70 @@ export const clearNotifications = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error clearing notifications:', error);
         res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// --- Student: Update Profile (Self) ---
+export const updateStudentSelfProfile = async (req: Request, res: Response) => {
+    const userId = req.currentUser?.id;
+    const client = await import('../config/db').then(m => m.pool.connect());
+
+    try {
+        await client.query('BEGIN');
+
+        const {
+            phone, dob, bloodGroup, address, medicalHistory,
+            fatherName, fatherPhone, motherName, motherPhone,
+            emergencyContactName, emergencyContactPhone
+        } = req.body;
+
+        const updates: any[] = [];
+        const values: any[] = [];
+        let paramIdx = 1;
+
+        const addUpdate = (field: string, value: any) => {
+            if (value !== undefined) {
+                updates.push(`${field} = $${paramIdx}`);
+                values.push(value);
+                paramIdx++;
+            }
+        };
+
+        // Student-editable fields ONLY
+        addUpdate('phone', phone);
+        addUpdate('dob', dob);
+        addUpdate('blood_group', bloodGroup);
+        addUpdate('address', address);
+        addUpdate('medical_history', medicalHistory);
+        addUpdate('father_name', fatherName);
+        addUpdate('father_phone', fatherPhone);
+        addUpdate('mother_name', motherName);
+        addUpdate('mother_phone', motherPhone);
+        addUpdate('emergency_contact_name', emergencyContactName);
+        addUpdate('emergency_contact_phone', emergencyContactPhone);
+
+        if (updates.length > 0) {
+            values.push(userId);
+            const queryStr = `UPDATE students SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE user_id = $${paramIdx}`;
+
+            const result = await client.query(queryStr, values);
+            if (result.rowCount === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Student profile not found' });
+            }
+
+            // Sync phone/email changes if we want to reflect them in the UI directly or if the frontend expects it.
+            // Currently, 'phone' is only in `students`, but if we allow 'personal_email' we just update students table.
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Profile updated successfully' });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        console.error('Error updating self profile:', error);
+        res.status(500).json({ error: 'Server error: ' + error.message });
+    } finally {
+        client.release();
     }
 };
 

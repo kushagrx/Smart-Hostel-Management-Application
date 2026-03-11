@@ -106,16 +106,15 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
           style: "destructive",
           onPress: async () => {
             try {
-              // const { getAuthSafe } = await import('../utils/firebase');
-              // const { signOut } = await import('firebase/auth');
-              // const auth = getAuthSafe();
-              // if (auth) await signOut(auth);
+              const { deregisterPushToken } = await import('../utils/usePushNotifications');
+              const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+              const { useAuthStore } = await import('../store/useAuthStore');
 
+              await deregisterPushToken();
               await setStoredUser(null);
-              onClose();
-              router.replace('/login');
+              await AsyncStorage.removeItem('userToken');
+              useAuthStore.getState().setUser(null);
 
-              await setStoredUser(null);
               onClose();
               router.replace('/login');
             } catch (e) {

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
 import { getAdminTokens, getUserToken, sendPushNotification } from '../services/pushService';
+import { getIO } from '../socket'; // Import WebSockets via helper
 
 // Helper to get conversation ID (Find or Create)
 const getConversationId = async (studentId: number) => {
@@ -89,7 +90,8 @@ export const getMessages = async (req: Request, res: Response) => {
             // Fetch Full Student Details for Admin View
             const detailsRes = await query(`
                 SELECT s.*, u.email, u.full_name as name, 
-                r.room_number, r.wifi_ssid as room_wifi_ssid, r.wifi_password as room_wifi_password
+                r.room_number, r.wifi_ssid as room_wifi_ssid, r.wifi_password as room_wifi_password,
+                r.room_type, r.facilities
                 FROM students s
                 JOIN users u ON s.user_id = u.id
                 LEFT JOIN room_allocations ra ON s.id = ra.student_id AND ra.is_active = true
@@ -108,6 +110,10 @@ export const getMessages = async (req: Request, res: Response) => {
                     room: r.room_number || 'N/A', // Use joined room_number
                     collegeName: r.college_name,
                     hostelName: r.hostel_name,
+                    googleEmail: r.google_email,
+                    collegeEmail: r.college_email,
+                    roomType: r.room_type,
+                    facilities: r.facilities,
                     phone: r.phone, // match studentController (was phone_no)
                     profilePhoto: r.profile_photo,
                     fatherName: r.father_name,
@@ -161,6 +167,7 @@ export const getMessages = async (req: Request, res: Response) => {
 
         res.json({
             messages,
+            conversationId,
             partnerStatus: {
                 online: partnerOnline,
                 lastSeen: partnerLastSeen,
@@ -219,14 +226,22 @@ export const sendMessage = async (req: Request, res: Response) => {
             );
         }
 
+        const newMessage = {
+            _id: insertRes.rows[0].id.toString(),
+            text,
+            createdAt: insertRes.rows[0].created_at,
+            user: { _id: role === 'admin' ? 'admin' : 'student' }
+        };
+
+        // --- Broadcast via WebSockets ---
+        getIO().to(conversationId.toString()).emit('newMessage', newMessage);
+
+        // Also notify admins to refresh their conversation list
+        getIO().to('admin:conversations').emit('updateChatList');
+
         res.json({
             success: true,
-            message: {
-                _id: insertRes.rows[0].id.toString(),
-                text,
-                createdAt: insertRes.rows[0].created_at,
-                user: { _id: role === 'admin' ? 'admin' : 'student' }
-            }
+            message: newMessage
         });
 
         // --- Push Notification ---
@@ -238,7 +253,7 @@ export const sendMessage = async (req: Request, res: Response) => {
                     [targetStudentId]
                 );
                 if (studentUserRes.rows.length > 0) {
-                    const tokens = await getUserToken(studentUserRes.rows[0].id);
+                    const tokens = await getUserToken(studentUserRes.rows[0].id, 'messages');
                     sendPushNotification(
                         tokens,
                         '💬 New Message from Admin',
@@ -256,7 +271,7 @@ export const sendMessage = async (req: Request, res: Response) => {
                     adminTokens,
                     `💬 Message from ${studentName}`,
                     text.length > 50 ? text.substring(0, 47) + '...' : text,
-                    { type: 'message', sender: 'student', studentId: targetStudentId.toString() }
+                    { type: 'message', sender: 'student', studentId: targetStudentId.toString(), studentName }
                 );
             }
         } catch (pushError) {

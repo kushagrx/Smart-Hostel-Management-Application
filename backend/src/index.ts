@@ -2,6 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
+import http from 'http';
 
 dotenv.config();
 
@@ -24,9 +25,15 @@ import searchRoutes from './routes/searchRoutes';
 import serviceRoutes from './routes/serviceRoutes';
 import studentRoutes from './routes/studentRoutes';
 import visitorRoutes from './routes/visitorRoutes';
+import { initSocket } from './socket';
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+// Create HTTP Server and Socket.IO Server
+const server = http.createServer(app);
+
+initSocket(server);
 
 // Middleware
 app.use(cors());
@@ -160,8 +167,8 @@ const startServer = async () => {
         `);
         console.log('✅ Database schema verified');
 
-        app.listen(+port, '0.0.0.0', () => {
-            console.log(`Server is running on http://0.0.0.0:${port}`);
+        server.listen(+port, '0.0.0.0', () => {
+            console.log(`Server & WebSockets running on http://0.0.0.0:${port}`);
         });
     } catch (err) {
         console.error('Failed to start server:', err);

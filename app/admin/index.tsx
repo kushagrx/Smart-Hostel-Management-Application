@@ -1,8 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolate,
@@ -21,9 +22,10 @@ import MessStatsBanner from '../../components/MessStatsBanner';
 import AnimatedGradientHeader from '../../components/AnimatedGradientHeader';
 import { useRefresh } from '../../hooks/useRefresh';
 import { performGlobalSearch, SearchResult } from '../../utils/adminSearchUtils';
+import { API_BASE_URL } from '../../utils/api';
 import { isAdmin, useUser } from '../../utils/authUtils';
-import { Complaint, subscribeToAllComplaints } from '../../utils/complaintsSyncUtils';
-import { LeaveRequest, subscribeToPendingLeaves } from '../../utils/leavesUtils';
+import { Complaint, subscribeToAllComplaints, updateComplaintStatus } from '../../utils/complaintsSyncUtils';
+import { LeaveRequest, subscribeToPendingLeaves, updateLeaveStatus } from '../../utils/leavesUtils';
 import { subscribeToNotifications } from '../../utils/notificationUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
@@ -35,15 +37,13 @@ const DRAWER_WIDTH = SCREEN_WIDTH * 0.8;
 
 const toggleStyles = StyleSheet.create({
   toggleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   }
 });
 
@@ -69,7 +69,7 @@ const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleT
     <TouchableOpacity
       style={[
         toggleStyles.toggleBtn,
-        { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.9)' }
+        { backgroundColor: 'rgba(255,255,255,0.12)' }
       ]}
       onPress={toggleTheme}
       activeOpacity={0.8}
@@ -78,100 +78,63 @@ const AnimatedThemeToggle = ({ isDark, toggleTheme }: { isDark: boolean, toggleT
         <MaterialIcons
           name={isDark ? "weather-sunny" : "weather-night"}
           size={24}
-          color={isDark ? "#fbbf24" : "#004e92"}
+          color={isDark ? "#fbbf24" : "#fff"}
         />
       </Animated.View>
     </TouchableOpacity>
   );
 };
 
-interface QuickActionProps {
+interface GridActionProps {
   icon: any;
   label: string;
   route: any;
-  desc: string;
-  colors: [string, string];
   iconColor: string;
   isDark: boolean;
+  onPress?: () => void;
 }
 
-const QuickAction = ({ icon, label, route, desc, colors, iconColor, isDark }: QuickActionProps) => {
+const GridAction = ({ icon, label, route, iconColor, isDark, onPress }: GridActionProps) => {
   const router = useRouter();
+
+  const handlePress = () => {
+    if (onPress) {
+      onPress();
+    } else if (route) {
+      router.push(route);
+    }
+  };
+
   return (
-    <Pressable
-      style={({ pressed }) => [
-        {
-          flex: 1,
-          aspectRatio: 1,
-          borderRadius: 24,
-          overflow: 'hidden',
-          backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-          borderWidth: 1,
-          borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-          elevation: 8,
-          shadowColor: iconColor,
-          shadowOffset: { width: 0, height: 12 },
-          shadowOpacity: isDark ? 0.3 : 0.15,
-          shadowRadius: 16,
-        },
-        pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }
-      ]}
-      onPress={() => router.push(route)}
-    >
-      <LinearGradient
-        colors={colors}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-
-      {/* Large Watermark Icon */}
-      <MaterialIcons
-        name={icon}
-        size={72}
-        color={iconColor}
-        style={{
-          position: 'absolute',
-          right: -10,
-          bottom: -10,
-          opacity: isDark ? 0.12 : 0.08,
-          transform: [{ rotate: '-15deg' }]
-        }}
-      />
-
-      <View style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
+    <View style={{ width: '25%', alignItems: 'center', marginBottom: 20 }}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={handlePress}
+        style={{ alignItems: 'center', gap: 8 }}
+      >
         <View style={{
-          width: 36,
-          height: 36,
-          borderRadius: 12,
-          backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9', // Soft background
           justifyContent: 'center',
           alignItems: 'center',
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.2)',
+          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)',
         }}>
-          <MaterialIcons name={icon} size={20} color={iconColor} />
+          <MaterialIcons name={icon} size={28} color={iconColor} />
         </View>
-
-        <View>
-          <Text style={{
-            color: isDark ? '#FFF' : '#1E293B',
-            fontSize: 13,
-            fontWeight: '900',
-            letterSpacing: -0.2,
-          }} numberOfLines={1}>
-            {label}
-          </Text>
-          <Text style={{
-            color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(30,41,59,0.7)',
-            fontSize: 10,
-            fontWeight: '700',
-          }} numberOfLines={1}>
-            {desc}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
+        <Text style={{
+          color: isDark ? 'rgba(255,255,255,0.9)' : '#334155',
+          fontSize: 11,
+          fontWeight: '700',
+          textAlign: 'center',
+          marginTop: 2,
+        }} numberOfLines={2}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 
@@ -186,71 +149,56 @@ export default function AdminDashboard() {
       backgroundColor: colors.background,
       position: 'relative',
     },
-    blob: {
-      position: 'absolute',
-      width: 300,
-      height: 300,
-      borderRadius: 150,
-    },
     headerBar: {
       paddingTop: 20,
-      paddingBottom: 30,
-      paddingHorizontal: 24,
-      borderBottomLeftRadius: 40,
-      borderBottomRightRadius: 40,
-      shadowColor: colors.primary,
-      shadowOpacity: 0.3,
-      shadowOffset: { width: 0, height: 12 },
-      shadowRadius: 24,
-      elevation: 12,
+      paddingBottom: 28,
+      paddingHorizontal: 20,
+      borderBottomLeftRadius: 32,
+      borderBottomRightRadius: 32,
     },
     headerContentInner: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      marginBottom: 20,
     },
     hamburgerBtn: {
-      width: 44,
-      height: 44,
+      width: 46,
+      height: 46,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: 22,
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      borderRadius: 16,
+      backgroundColor: 'rgba(255, 255, 255, 0.12)',
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.25)',
+      borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     headerTextContainer: {
       flex: 1,
-      alignItems: 'center',
-      paddingHorizontal: 12,
+      paddingHorizontal: 14,
     },
     headerBarTitle: {
-      fontSize: 12,
-      fontWeight: '800',
-      color: 'rgba(255,255,255,0.8)',
-      letterSpacing: 2,
+      fontSize: 11,
+      fontWeight: '700',
+      color: 'rgba(255,255,255,0.55)',
+      letterSpacing: 3,
       textTransform: 'uppercase',
-      marginBottom: 6,
-      textAlign: 'center',
+      marginBottom: 4,
     },
     headerBarSubtitle: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: '800',
       color: '#fff',
-      letterSpacing: 0.5,
-      textAlign: 'center',
+      letterSpacing: -0.3,
     },
     headerIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 16,
-      backgroundColor: 'rgba(255,255,255,0.9)',
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255,255,255,0.12)',
       justifyContent: 'center',
       alignItems: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 4 },
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.2)',
     },
 
     container: {
@@ -295,67 +243,125 @@ export default function AdminDashboard() {
       fontWeight: '600',
     },
     cardItem: {
+      width: SCREEN_WIDTH * 0.85,
+      marginRight: 16,
+      backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : colors.card,
+      borderRadius: 20,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 10,
+    },
+    studentInfoRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.card,
-      borderRadius: 24, // Slightly rounder
-      marginBottom: 12,
-      padding: 18, // More padding
-      gap: 16,
-      shadowColor: colors.primary,
-      shadowOpacity: 0.1,
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 16,
-      elevation: 4,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
-    },
-    cardIcon: {
-      width: 52,
-      height: 52,
-      borderRadius: 18,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    cardContent: {
       flex: 1,
-      justifyContent: 'center',
-      gap: 4,
+      gap: 12,
     },
-    cardTitle: {
-      fontSize: 17,
-      fontWeight: '800',
+    studentAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: isDark ? '#334155' : '#F1F5F9',
+      marginRight: 10,
+    },
+    studentName: {
+      fontSize: 14,
+      fontWeight: '700',
       color: colors.text,
-      letterSpacing: -0.4,
+      marginBottom: 1,
     },
-    cardSubtitle: {
+    studentRoomText: {
       fontSize: 13,
       fontWeight: '600',
       color: colors.textSecondary,
     },
+    cardContentDetailed: {
+      marginBottom: 10,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: colors.text,
+      marginBottom: 4,
+      letterSpacing: -0.3,
+    },
+    cardSubtitle: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
+    cardFooterRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      borderTopWidth: 1,
+      borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+      paddingTop: 16,
+    },
     statusBadge: {
       paddingHorizontal: 12,
       paddingVertical: 6,
-      borderRadius: 12,
-      minWidth: 80,
-      alignItems: 'center',
+      borderRadius: 16,
     },
     statusText: {
       fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 0.8,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+    },
+    leaveCardItem: {
+      width: SCREEN_WIDTH * 0.85,
+      marginRight: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 16,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+      shadowColor: '#000',
+      shadowOpacity: isDark ? 0.2 : 0.05,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    leaveCardIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    leaveCardContent: {
+      flex: 1,
+      justifyContent: 'center',
+      gap: 2,
+    },
+    leaveCardTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    leaveCardSubtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
     },
     searchBarContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.2)',
-      marginHorizontal: 20,
-      marginTop: 20,
-      borderRadius: 20,
-      paddingHorizontal: 18,
-      height: 56,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      height: 48,
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.2)',
+      borderColor: 'rgba(255,255,255,0.15)',
     },
     searchIcon: {
       marginRight: 10,
@@ -363,27 +369,19 @@ export default function AdminDashboard() {
     searchInput: {
       flex: 1,
       height: '100%',
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '600',
       color: '#fff',
     },
     resultsDropdown: {
-      position: 'absolute',
-      top: 160,
-      left: 20,
-      right: 20,
-      backgroundColor: colors.card,
-      borderRadius: 24,
-      paddingVertical: 12,
-      shadowColor: '#000',
-      shadowOpacity: 0.25,
-      shadowOffset: { width: 0, height: 20 },
-      shadowRadius: 40,
-      elevation: 20,
+      marginTop: 12,
+      backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(0, 40, 80, 0.92)',
+      borderRadius: 20,
+      paddingVertical: 8,
       zIndex: 1000,
       maxHeight: 400,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: 'rgba(255,255,255,0.1)',
     },
     resultItem: {
       flexDirection: 'row',
@@ -423,10 +421,9 @@ export default function AdminDashboard() {
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [recentComplaints, setRecentComplaints] = useState<Complaint[]>([]);
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([]);
+  const [activePagingIndex, setActivePagingIndex] = useState(0);
+  const [loadingActions, setLoadingActions] = useState<Record<string, string>>({});
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isQuickSettingsOpen, setIsQuickSettingsOpen] = useState(false);
-
-  const toggleQuickSettings = () => setIsQuickSettingsOpen(!isQuickSettingsOpen);
 
   // Drawer Animation (Shared Value)
   const drawerProgress = useSharedValue(0);
@@ -589,6 +586,51 @@ export default function AdminDashboard() {
     }
   };
 
+  // Action Handlers with loading states
+
+  // Action Handlers with loading states
+  const handleComplaintAction = async (id: string, status: 'inProgress' | 'resolved') => {
+    const actionKey = `complaint-${id}`;
+    console.log(`[DEBUG] Starting complaint action: ${actionKey} -> ${status}`);
+    setLoadingActions(prev => ({ ...prev, [actionKey]: status }));
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      await updateComplaintStatus(id, status);
+      console.log(`[DEBUG] Complaint action success: ${actionKey}`);
+      Alert.alert('Success', `Complaint marked as ${status}`);
+    } catch (e) {
+      console.error(`[DEBUG] Complaint action failed: ${actionKey}`, e);
+      Alert.alert('Error', 'Failed to update complaint.');
+    } finally {
+      setLoadingActions(prev => {
+        const next = { ...prev };
+        delete next[actionKey];
+        return next;
+      });
+    }
+  };
+
+  const handleLeaveAction = async (id: string, status: 'approved' | 'rejected') => {
+    const actionKey = `leave-${id}`;
+    console.log(`[DEBUG] Starting leave action: ${actionKey} -> ${status}`);
+    setLoadingActions(prev => ({ ...prev, [actionKey]: status }));
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      await updateLeaveStatus(id, status);
+      console.log(`[DEBUG] Leave action success: ${actionKey}`);
+      Alert.alert('Success', `Leave ${status}`);
+    } catch (e) {
+      console.error(`[DEBUG] Leave action failed: ${actionKey}`, e);
+      Alert.alert('Error', 'Failed to update leave.');
+    } finally {
+      setLoadingActions(prev => {
+        const next = { ...prev };
+        delete next[actionKey];
+        return next;
+      });
+    }
+  };
+
   useEffect(() => {
     // Wait for user to be loaded and verified as admin before subscribing
     if (!isAdmin(user)) return;
@@ -651,306 +693,463 @@ export default function AdminDashboard() {
           onClose={() => setNotificationVisible(false)}
         />
 
-        <Animated.View style={[contentStyle, { backgroundColor: colors.background }]}>
-          {/* ... blobs ... */}
+        <Animated.View style={[contentStyle, { flex: 1 }]}>
+          <LinearGradient
+            colors={isDark ? ['#020617', '#0f172a'] : [colors.background, colors.background]}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {isDark && (
+            <View style={StyleSheet.absoluteFill}>
+              <View style={{
+                position: 'absolute',
+                top: -100,
+                left: -50,
+                width: 300,
+                height: 300,
+                borderRadius: 150,
+                backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                filter: [{ blur: 80 }]
+              }} />
+              <View style={{
+                position: 'absolute',
+                bottom: 100,
+                right: -100,
+                width: 400,
+                height: 400,
+                borderRadius: 200,
+                backgroundColor: 'rgba(139, 92, 246, 0.12)',
+                filter: [{ blur: 100 }]
+              }} />
+            </View>
+          )}
 
           <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
-            {/* Animated Header */}
-            <AnimatedGradientHeader style={[styles.headerBar, { paddingTop: insets.top + 20 }]}>
-              <View style={styles.headerContentInner}>
-                <TouchableOpacity
-                  style={styles.hamburgerBtn}
-                  onPress={() => setSidebarOpen(!sidebarOpen)}
-                >
-                  <MaterialIcons name="menu" size={28} color="#fff" />
-                </TouchableOpacity>
-                <View style={styles.headerTextContainer}>
-                  <Text style={styles.headerBarTitle}>Admin Portal</Text>
-                  <Text style={styles.headerBarSubtitle}>Welcome back, Admin</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
-                  <TouchableOpacity onPress={() => setNotificationVisible(true)}>
-                    <View style={styles.headerIcon}>
-                      <MaterialIcons name="bell-outline" size={24} color="#004e92" />
-                      {unreadCount > 0 && (
-                        <View style={{
-                          position: 'absolute',
-                          top: -2, right: -2,
-                          backgroundColor: '#EF4444',
-                          width: 16, height: 16,
-                          borderRadius: 8,
-                          justifyContent: 'center', alignItems: 'center',
-                          borderWidth: 2, borderColor: '#fff'
-                        }}>
-                          <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#fff' }}>
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
 
-              {/* Search Bar */}
-              <View style={styles.searchBarContainer}>
-                <MaterialIcons name="magnify" size={20} color={isDark ? "rgba(255,255,255,0.7)" : "#004e92"} style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search students, rooms..."
-                  placeholderTextColor={isDark ? "rgba(255,255,255,0.5)" : "rgba(0, 78, 146, 0.6)"}
-                  value={searchQuery}
-                  onChangeText={handleSearch}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                {isSearching && (
-                  <ActivityIndicator size="small" color={isDark ? "#fff" : "#004e92"} style={{ marginRight: 10 }} />
-                )}
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
-                    <MaterialIcons name="close-circle" size={20} color={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)"} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Search Results Dropdown */}
-              {searchResults.length > 0 && (
-                <View style={styles.resultsDropdown}>
-                  {searchResults.map((result) => (
-                    <TouchableOpacity
-                      key={`${result.type}-${result.id}`}
-                      style={styles.resultItem}
-                      onPress={() => handleSearchResultPress(result)}
-                    >
-                      <View style={[styles.resultIcon, { backgroundColor: result.type === 'student' ? '#E0E7FF' : '#F3E8FF' }]}>
-                        <MaterialIcons
-                          name={result.type === 'student' ? 'account' : 'door-closed'}
-                          size={20}
-                          color={result.type === 'student' ? '#4F46E5' : '#9333EA'}
-                        />
-                      </View>
-                      <View style={styles.resultInfo}>
-                        <Text style={styles.resultTitle}>{result.title}</Text>
-                        <Text style={styles.resultSubtitle}>{result.subtitle}</Text>
-                      </View>
-                      <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </AnimatedGradientHeader>
-
-            {/* Side Sidebar Panel - Moved outside content wrapper */}
-
-
-            {/* Main Content */}
+            {/* Main Content - Header scrolls with page */}
             <ScrollView
-              contentContainerStyle={styles.container}
+              contentContainerStyle={{ paddingBottom: 60 }}
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
             >
-
-              {/* Hero Actions Row (Prominent Premium Redesign) */}
-              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20, marginHorizontal: -4 }}>
-                <QuickAction
-                  icon="account-plus"
-                  label="Add Student"
-                  route={{ pathname: '/admin/students', params: { action: 'allot' } } as any}
-                  colors={isDark ? ['#1E1B4B', '#312E81'] : ['#EEF2FF', '#E0E7FF']}
-                  iconColor="#4F46E5"
-                  desc="New Allotment"
-                  isDark={isDark}
-                />
-
-                <QuickAction
-                  icon="calendar-check"
-                  label="Attendance"
-                  route="/admin/attendance"
-                  colors={isDark ? ['#1E3A8A', '#1E40AF'] : ['#DBEAFE', '#BFDBFE']}
-                  iconColor="#2563EB"
-                  desc="Daily Check"
-                  isDark={isDark}
-                />
-
-                <QuickAction
-                  icon="message-text"
-                  label="Messages"
-                  route="/chat"
-                  colors={isDark ? ['#312E81', '#3730A3'] : ['#F5F3FF', '#EDE9FE']}
-                  iconColor="#7C3AED"
-                  desc="Student Chats"
-                  isDark={isDark}
-                />
-                {isSearching && (
-                  <ActivityIndicator size="small" color={isDark ? "#fff" : "#004e92"} style={{ marginRight: 10 }} />
-                )}
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
-                    <MaterialIcons name="close-circle" size={20} color={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)"} />
+              {/* Animated Header (scrolls with content) */}
+              <AnimatedGradientHeader style={[styles.headerBar, { paddingTop: insets.top + 16 }]}>
+                <View style={styles.headerContentInner}>
+                  <TouchableOpacity
+                    style={styles.hamburgerBtn}
+                    onPress={() => setSidebarOpen(!sidebarOpen)}
+                  >
+                    <MaterialIcons name="menu" size={24} color="#fff" />
                   </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Quick Settings Section */}
-              <View style={[styles.section, { marginBottom: 4, marginTop: 0 }]}>
-                {/* Quick Settings Grid */}
-                {isQuickSettingsOpen && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 10, marginBottom: 12 }}>
-                    {[
-                      { label: 'Analytics', icon: 'google-analytics', route: '/admin/analytics' },
-                      { label: 'Notice', icon: 'bullhorn-outline', route: '/admin/notices' },
-                      { label: 'Menu', icon: 'silverware-fork-knife', route: '/admin/messMenu' },
-                      { label: 'Bus Timing', icon: 'bus', route: '/admin/busTimings' },
-                      { label: 'Request Fees', icon: 'cash-multiple', route: '/admin/finance' },
-                      { label: 'Laundry', icon: 'tshirt-crew', route: '/admin/laundry' },
-                      { label: 'Emergency', icon: 'alert-circle-outline', route: '/admin/emergency' },
-                    ].map((item, index) => (
-                      <Pressable
-                        key={index}
-                        style={{ flexGrow: 1, minWidth: '30%' }}
-                        onPress={() => router.push(item.route as any)}
-                      >
-                        {({ pressed }) => (
-                          <LinearGradient
-                            colors={[colors.card, colors.background]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={{
-                              height: 60,
-                              paddingHorizontal: 10,
-                              borderRadius: 16,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 4,
-                              borderWidth: 1,
-                              borderColor: pressed ? 'rgba(255,255,255,0.5)' : colors.border,
-                              elevation: pressed ? 4 : 2,
-                              shadowColor: '#000',
-                              shadowOpacity: pressed ? 0.4 : 0.2,
-                              shadowRadius: 4,
-                              shadowOffset: { width: 0, height: 2 },
-                              overflow: 'hidden',
-                              position: 'relative',
-                              transform: [{ scale: pressed ? 0.98 : 1 }],
-                            }}
-                          >
-                            <MaterialIcons name={item.icon as any} size={22} color={colors.primary} />
-                            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'uppercase', textAlign: 'center', maxWidth: 80 }} numberOfLines={1}>
-                              {item.label}
+                  <View style={styles.headerTextContainer}>
+                    <Text style={styles.headerBarTitle}>Admin Portal</Text>
+                    <Text style={styles.headerBarSubtitle}>
+                      {user?.name ? `Hi, ${user.name.split(' ')[0]}` : 'Welcome back'}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
+                    <TouchableOpacity onPress={() => setNotificationVisible(true)}>
+                      <View style={styles.headerIcon}>
+                        <MaterialIcons name="bell-outline" size={22} color="#fff" />
+                        {unreadCount > 0 && (
+                          <View style={{
+                            position: 'absolute',
+                            top: -4, right: -4,
+                            backgroundColor: '#EF4444',
+                            minWidth: 18, height: 18,
+                            borderRadius: 9,
+                            justifyContent: 'center', alignItems: 'center',
+                            borderWidth: 2, borderColor: '#004e92',
+                            paddingHorizontal: 4,
+                          }}>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#fff' }}>
+                              {unreadCount > 9 ? '9+' : unreadCount}
                             </Text>
-
-                            {/* Watermark Icon - Subtle */}
-                            <View style={{ position: 'absolute', right: -8, bottom: -8, opacity: 0.05, transform: [{ rotate: '-15deg' }] }}>
-                              <MaterialIcons name={item.icon as any} size={40} color={colors.text} />
-                            </View>
-                          </LinearGradient>
+                          </View>
                         )}
-                      </Pressable>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Search Bar */}
+                <View style={styles.searchBarContainer}>
+                  <MaterialIcons name="magnify" size={20} color="rgba(255,255,255,0.6)" style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search students, rooms..."
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    value={searchQuery}
+                    onChangeText={handleSearch}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {isSearching && (
+                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 10 }} />
+                  )}
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                      <MaterialIcons name="close-circle" size={20} color="rgba(255,255,255,0.5)" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Search Results Dropdown */}
+                {searchResults.length > 0 && (
+                  <View style={styles.resultsDropdown}>
+                    {searchResults.map((result) => (
+                      <TouchableOpacity
+                        key={`${result.type}-${result.id}`}
+                        style={styles.resultItem}
+                        onPress={() => handleSearchResultPress(result)}
+                      >
+                        <View style={[styles.resultIcon, { backgroundColor: result.type === 'student' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(147, 51, 234, 0.15)' }]}>
+                          <MaterialIcons
+                            name={result.type === 'student' ? 'account' : 'door-closed'}
+                            size={20}
+                            color={result.type === 'student' ? '#818CF8' : '#A855F7'}
+                          />
+                        </View>
+                        <View style={styles.resultInfo}>
+                          <Text style={styles.resultTitle}>{result.title}</Text>
+                          <Text style={styles.resultSubtitle}>{result.subtitle}</Text>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.3)" />
+                      </TouchableOpacity>
                     ))}
                   </View>
                 )}
+              </AnimatedGradientHeader>
 
-                {/* Toggle Arrow (Drawer Handle) - Moved Below */}
-                <TouchableOpacity
-                  style={{
-                    alignSelf: 'center',
-                    padding: 4,
-                  }}
-                  onPress={toggleQuickSettings}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons
-                    name={isQuickSettingsOpen ? "chevron-up" : "chevron-down"}
-                    size={28}
-                    color={colors.primary}
-                  />
-                </TouchableOpacity>
+              {/* Dashboard Content */}
+              <View style={{ paddingHorizontal: 24 }}>
 
-              </View>
+                {/* Quick Actions */}
+                <View style={[styles.section, { marginBottom: 16, marginTop: 0, marginHorizontal: -24 }]}>
+                  <View style={[styles.sectionHeader, { paddingHorizontal: 28, marginTop: 22, marginBottom: 22 }]}>
+                    <Text style={styles.sectionTitle}>Quick Actions</Text>
+                  </View>
+                  <View style={{
+                    paddingVertical: 12,
+                    paddingTop: 0,
+                  }}>
+                    <ScrollView
+                      horizontal
+                      pagingEnabled
+                      showsHorizontalScrollIndicator={false}
+                      decelerationRate="fast"
+                      contentContainerStyle={{ alignItems: 'flex-start' }}
+                      onScroll={(e) => {
+                        const offset = e.nativeEvent.contentOffset.x;
+                        const index = Math.round(offset / SCREEN_WIDTH);
+                        if (index !== activePagingIndex) setActivePagingIndex(index);
+                      }}
+                      scrollEventThrottle={16}
+                    >
+                      {/* Page 1 (Primary Tools) */}
+                      <View style={{ width: SCREEN_WIDTH, flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12 }}>
+                        <GridAction icon="account-plus-outline" label="Admissions" route={{ pathname: '/admin/students', params: { action: 'allot' } }} iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="calendar-check-outline" label="Attendance" route="/admin/attendance" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="message-text-outline" label="Messages" route="/chat" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="silverware-fork-knife" label="Menu" route="/admin/messMenu" iconColor={colors.primary} isDark={isDark} />
 
-              {/* Mess Headcount */}
-              <MessStatsBanner compact />
+                        <GridAction icon="bus" label="Bus Timing" route="/admin/busTimings" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="cash-multiple" label="Finance" route="/admin/finance" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="google-analytics" label="Analytics" route="/admin/analytics" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="calendar-clock" label="Leaves" route="/admin/leaveRequests" iconColor={colors.primary} isDark={isDark} />
+                      </View>
 
-              {/* Recent Complaints */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Recent Complaints</Text>
-                  <TouchableOpacity onPress={() => handleNavPress('complaints')}>
-                    <Text style={styles.seeAllLink}>See All</Text>
-                  </TouchableOpacity>
+                      {/* Page 2 (Secondary Tools) */}
+                      <View style={{ width: SCREEN_WIDTH, flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12 }}>
+                        <GridAction icon="bullhorn-outline" label="Notice" route="/admin/notices" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="door-closed" label="Rooms" route="/admin/rooms" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="alert-circle-outline" label="Complaints" route="/admin/complaints" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="tshirt-crew" label="Laundry" route="/admin/laundry" iconColor={colors.primary} isDark={isDark} />
+
+                        <GridAction icon="bell-ring-outline" label="Emergency" route="/admin/emergency" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="account-clock" label="Visitors" route="/admin/visitors" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="office-building" label="About Hostel" route="/admin/facilities" iconColor={colors.primary} isDark={isDark} />
+                        <GridAction icon="file-document-outline" label="Reports" route={{ pathname: '/admin/students', params: { action: 'export' } }} iconColor={colors.primary} isDark={isDark} />
+                      </View>
+                    </ScrollView>
+
+                    {/* Tiny Pagination Dots */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 4 }}>
+                      <View style={{
+                        width: activePagingIndex === 0 ? 12 : 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: activePagingIndex === 0
+                          ? colors.primary
+                          : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'),
+                        opacity: activePagingIndex === 0 ? 1 : 0.5
+                      }} />
+                      <View style={{
+                        width: activePagingIndex === 1 ? 12 : 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: activePagingIndex === 1
+                          ? colors.primary
+                          : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'),
+                        opacity: activePagingIndex === 1 ? 1 : 0.5
+                      }} />
+                    </View>
+                  </View>
                 </View>
 
-                {recentComplaints.length > 0 ? (
-                  recentComplaints.map((c) => (
-                    <TouchableOpacity
-                      key={c.id}
-                      style={styles.cardItem}
-                      onPress={() => router.push(`/admin/complaints?openId=${c.id}`)}
-                    >
-                      <View style={[styles.cardIcon, { backgroundColor: c.priority === 'high' ? '#FEF2F2' : '#FFF7ED' }]}>
-                        <MaterialIcons
-                          name={c.priority === 'high' ? 'alert' : 'information'}
-                          size={24}
-                          color={c.priority === 'high' ? '#EF4444' : '#F97316'}
-                        />
-                      </View>
-                      <View style={styles.cardContent}>
-                        <Text style={styles.cardTitle} numberOfLines={1}>{c.title}</Text>
-                        <Text style={styles.cardSubtitle}>by {c.studentName || 'Student'}</Text>
-                      </View>
-                      <View style={[styles.statusBadge, {
-                        backgroundColor: c.status === 'resolved' ? '#DCFCE7' : c.status === 'inProgress' ? '#DBEAFE' : '#F1F5F9'
-                      }]}>
-                        <Text style={[styles.statusText, {
-                          color: c.status === 'resolved' ? '#166534' : c.status === 'inProgress' ? '#1E40AF' : '#475569'
-                        }]}>
-                          {c.status.toUpperCase()}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))
-                ) : (
-                  <View style={styles.emptyStateContainer}>
-                    <Text style={styles.emptyStateText}>No recent complaints.</Text>
-                  </View>
-                )}
-              </View>
+                {/* Mess Headcount */}
+                <MessStatsBanner compact />
 
-              {/* Pending Leaves */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Pending Leaves</Text>
-                  <TouchableOpacity onPress={() => handleNavPress('leaves')}>
-                    <Text style={styles.seeAllLink}>See All</Text>
-                  </TouchableOpacity>
+                {/* Recent Complaints */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Recent Complaints</Text>
+                    <TouchableOpacity onPress={() => handleNavPress('complaints')}>
+                      <Text style={styles.seeAllLink}>See All</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {recentComplaints.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      snapToInterval={(SCREEN_WIDTH * 0.85) + 16}
+                      decelerationRate="fast"
+                      style={{ marginHorizontal: -24 }}
+                      contentContainerStyle={{ paddingLeft: 24, paddingBottom: 8, paddingRight: 24 }}
+                    >
+                      {recentComplaints.map((c) => (
+                        <View
+                          key={c.id}
+                          style={[styles.cardItem, { width: SCREEN_WIDTH * 0.85 }]}
+                        >
+                          <TouchableOpacity
+                            onPress={() => router.push(`/admin/complaints?openId=${c.id}`)}
+                            activeOpacity={0.7}
+                          >
+                            {/* Student Info Header */}
+                            <View style={styles.cardHeader}>
+                              <View style={styles.studentInfoRow}>
+                                <Image
+                                  source={{ uri: c.studentProfilePhoto ? `${API_BASE_URL}${c.studentProfilePhoto}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.studentName || 'S')}&background=E2E8F0&color=64748B` }}
+                                  style={styles.studentAvatar}
+                                  contentFit="cover"
+                                />
+                                <View>
+                                  <Text style={styles.studentName} numberOfLines={1}>{c.studentName || 'Unknown Student'}</Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Text style={styles.studentRoomText}>Room {c.studentRoom || (c as any).roomNo || (c as any).room_number || (c as any).room || 'N/A'}</Text>
+                                    {c.priority && (
+                                      <View style={[styles.statusBadge, {
+                                        backgroundColor: c.priority === 'high' || c.priority === 'emergency' ? '#FEF2F2' : (c.priority === 'medium' ? '#FFF7ED' : isDark ? 'rgba(56, 189, 248, 0.1)' : '#E0F2FE'),
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2
+                                      }]}>
+                                        <Text style={[styles.statusText, {
+                                          fontSize: 10,
+                                          color: c.priority === 'high' || c.priority === 'emergency' ? '#EF4444' : (c.priority === 'medium' ? '#F97316' : isDark ? '#38BDF8' : '#0284C7')
+                                        }]}>
+                                          Priority: {c.priority.toUpperCase()}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                </View>
+                              </View>
+                              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                                {/* Status in top right */}
+                                <View style={[styles.statusBadge, {
+                                  backgroundColor: c.status === 'resolved' ? '#DCFCE7' : c.status === 'inProgress' ? '#DBEAFE' : c.status === 'open' ? '#FEF9C3' : (isDark ? 'rgba(255,255,255,0.1)' : '#F1F5F9')
+                                }]}>
+                                  <Text style={[styles.statusText, {
+                                    color: c.status === 'resolved' ? '#166534' : c.status === 'inProgress' ? '#1E40AF' : c.status === 'open' ? '#854D0E' : (isDark ? '#E2E8F0' : '#475569')
+                                  }]}>
+                                    {c.status?.toUpperCase() || 'OPEN'}
+                                  </Text>
+                                </View>
+                                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
+                                  {c.createdAt ? new Date(c.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Massive Details Block */}
+                            <View style={styles.cardContentDetailed}>
+                              <Text style={styles.cardTitle} numberOfLines={2}>
+                                {c.status === 'resolved' ? <Text style={{ textDecorationLine: 'line-through' }}>{c.title}</Text> : c.title}
+                              </Text>
+                              <Text style={styles.cardSubtitle} numberOfLines={3}>{c.description || 'No additional details provided.'}</Text>
+                            </View>
+                          </TouchableOpacity>
+
+                          {/* Action Buttons Row */}
+                          {c.status !== 'resolved' && (
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                              {c.status === 'open' && (
+                                <TouchableOpacity
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+                                    borderRadius: 12,
+                                    paddingVertical: 10,
+                                    alignItems: 'center',
+                                    opacity: loadingActions[`complaint-${c.id}`] ? 0.6 : 1
+                                  }}
+                                  disabled={!!loadingActions[`complaint-${c.id}`]}
+                                  onPress={() => handleComplaintAction(c.id, 'inProgress')}
+                                >
+                                  <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 13 }}>
+                                    {loadingActions[`complaint-${c.id}`] === 'inProgress' ? 'Marking...' : 'Mark In-Progress'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                              <TouchableOpacity
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : '#F0FDF4',
+                                  borderRadius: 12,
+                                  paddingVertical: 10,
+                                  alignItems: 'center',
+                                  opacity: loadingActions[`complaint-${c.id}`] ? 0.6 : 1
+                                }}
+                                disabled={!!loadingActions[`complaint-${c.id}`]}
+                                onPress={() => handleComplaintAction(c.id, 'resolved')}
+                              >
+                                <Text style={{ color: '#22C55E', fontWeight: '700', fontSize: 13 }}>
+                                  {loadingActions[`complaint-${c.id}`] === 'resolved' ? 'Resolving...' : 'Resolve Issue'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.emptyStateContainer}>
+                      <Text style={styles.emptyStateText}>No recent complaints.</Text>
+                    </View>
+                  )}
                 </View>
 
-                {pendingLeaves.length > 0 ? (
-                  pendingLeaves.map((l) => (
-                    <TouchableOpacity
-                      key={l.id}
-                      style={styles.cardItem}
-                      onPress={() => router.push(`/admin/leaveRequests?openId=${l.id}`)}
-                    >
-                      <View style={[styles.cardIcon, { backgroundColor: '#ECFEFF' }]}>
-                        <MaterialIcons name="calendar-clock" size={24} color="#06B6D4" />
-                      </View>
-                      <View style={styles.cardContent}>
-                        <Text style={styles.cardTitle} numberOfLines={1}>{l.studentName || 'Student'}</Text>
-                        <Text style={styles.cardSubtitle}>{l.days} days • Room {l.studentRoom}</Text>
-                      </View>
+                {/* Pending Leaves */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Recent Leaves</Text>
+                    <TouchableOpacity onPress={() => handleNavPress('leaves')}>
+                      <Text style={styles.seeAllLink}>See All</Text>
                     </TouchableOpacity>
-                  ))
-                ) : (
-                  <View style={styles.emptyStateContainer}>
-                    <Text style={styles.emptyStateText}>No pending leaves.</Text>
                   </View>
-                )}
-              </View>
+
+                  {pendingLeaves.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      snapToInterval={(SCREEN_WIDTH * 0.85) + 16}
+                      decelerationRate="fast"
+                      style={{ marginHorizontal: -24 }}
+                      contentContainerStyle={{ paddingLeft: 24, paddingBottom: 8, paddingRight: 24 }}
+                    >
+                      {pendingLeaves.map((l) => (
+                        <View
+                          key={l.id}
+                          style={[styles.cardItem, { width: SCREEN_WIDTH * 0.85 }]}
+                        >
+                          <TouchableOpacity
+                            onPress={() => router.push(`/admin/leaveRequests?openId=${l.id}`)}
+                            activeOpacity={0.7}
+                          >
+                            {/* Student Info Header */}
+                            <View style={styles.cardHeader}>
+                              <View style={styles.studentInfoRow}>
+                                <Image
+                                  source={{ uri: l.studentProfilePhoto ? `${API_BASE_URL}${l.studentProfilePhoto}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(l.studentName || 'S')}&background=E2E8F0&color=64748B` }}
+                                  style={styles.studentAvatar}
+                                  contentFit="cover"
+                                />
+                                <View>
+                                  <Text style={styles.studentName} numberOfLines={1}>{l.studentName || 'Student'}</Text>
+                                  <Text style={styles.studentRoomText}>Room {l.studentRoom || (l as any).roomNo || (l as any).room_number || 'N/A'}</Text>
+                                </View>
+                              </View>
+                              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                                <View style={[styles.statusBadge, {
+                                  backgroundColor: l.status === 'approved' ? '#DCFCE7' : l.status === 'rejected' ? '#FEF2F2' : '#FEF9C3'
+                                }]}>
+                                  <Text style={[styles.statusText, {
+                                    color: l.status === 'approved' ? '#166534' : l.status === 'rejected' ? '#DC2626' : '#854D0E'
+                                  }]}>
+                                    {l.status?.toUpperCase() || 'PENDING'}
+                                  </Text>
+                                </View>
+                                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
+                                  {l.createdAt ? new Date(l.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Leave Details */}
+                            <View style={styles.cardContentDetailed}>
+                              <Text style={styles.cardTitle} numberOfLines={1}>{l.reason || 'Leave Request'}</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                <MaterialIcons name="calendar-range" size={14} color={colors.textSecondary} />
+                                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>
+                                  {l.startDate ? new Date(l.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'} → {l.endDate ? new Date(l.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}  •  {l.days} day{l.days !== 1 ? 's' : ''}
+                                </Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+
+                          {/* Action Buttons Row */}
+                          {l.status === 'pending' && (
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                              <TouchableOpacity
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2',
+                                  borderRadius: 12,
+                                  paddingVertical: 10,
+                                  alignItems: 'center',
+                                  opacity: loadingActions[`leave-${l.id}`] ? 0.6 : 1
+                                }}
+                                disabled={!!loadingActions[`leave-${l.id}`]}
+                                onPress={() => handleLeaveAction(l.id, 'rejected')}
+                              >
+                                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>
+                                  {loadingActions[`leave-${l.id}`] === 'rejected' ? 'Rejecting...' : 'Reject'}
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : '#F0FDF4',
+                                  borderRadius: 12,
+                                  paddingVertical: 10,
+                                  alignItems: 'center',
+                                  opacity: loadingActions[`leave-${l.id}`] ? 0.6 : 1
+                                }}
+                                disabled={!!loadingActions[`leave-${l.id}`]}
+                                onPress={() => handleLeaveAction(l.id, 'approved')}
+                              >
+                                <Text style={{ color: '#22C55E', fontWeight: '700', fontSize: 13 }}>
+                                  {loadingActions[`leave-${l.id}`] === 'approved' ? 'Approving...' : 'Approve'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.emptyStateContainer}>
+                      <Text style={styles.emptyStateText}>No pending leaves.</Text>
+                    </View>
+                  )}
+                </View>
 
 
+
+              </View>{/* End Dashboard Content */}
             </ScrollView>
           </SafeAreaView>
         </Animated.View>

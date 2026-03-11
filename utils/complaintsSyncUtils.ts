@@ -12,6 +12,7 @@ export type Complaint = {
   category: string;
   studentEmail: string;
   studentName: string;
+  studentRoom?: string;
   studentProfilePhoto?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -59,6 +60,9 @@ export const getAllComplaints = async (): Promise<Complaint[]> => {
     const response = await api.get('/services/complaints/all');
     return response.data.map((c: any) => ({
       ...c,
+      studentRoom: c.studentRoom || c.student_room || c.roomNo || c.room_number || c.room || '',
+      studentName: c.studentName || c.student_name || '',
+      studentProfilePhoto: c.studentProfilePhoto || c.student_profile_photo || c.profilePhoto || '',
       createdAt: new Date(c.created_at || c.createdAt),
       updatedAt: new Date(c.updated_at || c.updatedAt)
     }));

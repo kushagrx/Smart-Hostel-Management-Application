@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     two_factor_enabled BOOLEAN DEFAULT FALSE,
     two_factor_temp_token VARCHAR(255),
     password_hash VARCHAR(255),
+    notification_preferences JSONB DEFAULT '{"notices": true, "complaints": true, "leaves": true, "services": true, "payments": true, "mess": true, "laundry": true, "bus": true, "visitors": true}'::jsonb,
     last_notifications_cleared_at TIMESTAMPTZ DEFAULT to_timestamp(0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

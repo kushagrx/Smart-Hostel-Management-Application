@@ -21,6 +21,9 @@ export const useNotificationStore = create<NotificationState>((set) => ({
         const user = useAuthStore.getState().user;
         if (!user) return;
 
+        const token = await import('@react-native-async-storage/async-storage').then(m => m.default.getItem('userToken'));
+        if (!token) return;
+
         const endpoint = isAdmin(user)
             ? '/notifications/admin'
             : '/notifications/student';
