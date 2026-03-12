@@ -428,7 +428,7 @@ export const createStudent = async (req: Request, res: Response) => {
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
             ) RETURNING id`,
             [
-                userId, rollNo, collegeName, hostelName, dob, phone, googleEmail, collegeEmail, address,
+                userId, rollNo, collegeName, hostelName, dob, phone, googleEmail || null, collegeEmail || null, address,
                 fatherName, fatherPhone, motherName, motherPhone, bloodGroup, medicalHistory,
                 emergencyContactName, emergencyContactPhone, status, dues || 0, feeFrequency || 'Monthly', password, profilePhoto, totalFee || 0
             ]
@@ -469,7 +469,7 @@ export const createStudent = async (req: Request, res: Response) => {
 
             // Update Room Status logic (simplified)
             const capacity = getCapacityFromType(roomType);
-            await client.query("UPDATE rooms SET status = 'occupied', room_type = $1, facilities = $2, capacity = $3 WHERE id = $4", [roomType, facilitiesStr || '[]', capacity, roomId]);
+            await client.query("UPDATE rooms SET status = 'occupied', room_type = $1, facilities = $2, wifi_ssid = $3, wifi_password = $4, capacity = $5 WHERE id = $6", [roomType, facilitiesStr || '[]', wifiSSID, wifiPassword, capacity, roomId]);
         }
 
         await client.query('COMMIT');
@@ -477,6 +477,21 @@ export const createStudent = async (req: Request, res: Response) => {
     } catch (error: any) {
         await client.query('ROLLBACK');
         console.error("Error creating student:", error);
+        
+        // Handle postgres unique constraint errors gracefully
+        if (error.code === '23505') {
+            if (error.constraint === 'students_google_email_key') {
+                return res.status(400).json({ error: 'A student with this Google Email already exists.' });
+            } else if (error.constraint === 'users_email_key' || error.constraint === 'users_email_key1') {
+                return res.status(400).json({ error: 'A user with this Official Email already exists.' });
+            } else if (error.constraint === 'students_roll_no_key') {
+                return res.status(400).json({ error: 'A student with this Roll No already exists.' });
+            } else if (error.constraint === 'rooms_room_number_key') {
+                return res.status(400).json({ error: 'This Room Number already exists.' });
+            }
+            return res.status(400).json({ error: 'A record with this information already exists.' });
+        }
+        
         res.status(400).json({ error: error.message });
     } finally {
         client.release();
@@ -488,17 +503,25 @@ export const deleteStudent = async (req: Request, res: Response) => {
     try {
         const { id } = req.params; // Student ID
 
-        // Use a transaction to delete user as well? 
-        // Schema has ON DELETE CASCADE on students.user_id? No, students references users.
-        // So deleting USERS deletes students (CASCADE).
-        // But we likely get student ID here.
-
         // Find user_id first
         const sRes = await query('SELECT user_id FROM students WHERE id = $1', [id]);
         if (sRes.rows.length === 0) return res.status(404).json({ error: 'Student not found' });
         const userId = sRes.rows[0].user_id;
 
-        // Delete User (cascades to student, allocations, etc.)
+        // Nullify non-cascading foreign key references to users(id) before deletion.
+        // Each wrapped in try-catch so a missing column doesn't block the entire operation.
+        const cleanups = [
+            'UPDATE messages SET sender_id = NULL WHERE sender_id = $1',
+            'UPDATE visitors SET approved_by = NULL WHERE approved_by = $1',
+            'UPDATE notices SET created_by = NULL WHERE created_by = $1',
+        ];
+        for (const sql of cleanups) {
+            try { await query(sql, [userId]); } catch (e: any) {
+                console.warn(`[deleteStudent] Cleanup skipped: ${e.message}`);
+            }
+        }
+
+        // Delete User (cascades to student, allocations, conversations, etc.)
         await query('DELETE FROM users WHERE id = $1', [userId]);
 
         res.json({ success: true });
@@ -675,15 +698,30 @@ export const updateStudent = async (req: Request, res: Response) => {
                 [roomType, facilities || '[]', wifiSSID, wifiPassword, capacity, newRoomId]);
 
         } else if (currentAllocRes.rows.length > 0) {
-            // Update existing room details if no room change but WiFi/facilities updated
-            const roomId = currentAllocRes.rows[0].room_id;
-            console.log('Updating existing room WiFi and facilities...');
-            const capacity = getCapacityFromType(roomType);
-            await client.query(
-                'UPDATE rooms SET wifi_ssid = $1, wifi_password = $2, room_type = $3, facilities = $4, capacity = $5 WHERE id = $6',
-                [wifiSSID, wifiPassword, roomType, facilities || '[]', capacity, roomId]
-            );
-            console.log('Room updated');
+            // Update existing room details ONLY if at least one room detail is provided
+            // This prevents overwriting with NULL during photo-only updates
+            if (wifiSSID !== undefined || wifiPassword !== undefined || roomType !== undefined || facilities !== undefined) {
+                const roomId = currentAllocRes.rows[0].room_id;
+                console.log('Updating existing room WiFi and facilities...');
+                
+                // We need the existing room data to avoid overwriting with null if only one field is provided
+                const roomRes = await client.query('SELECT wifi_ssid, wifi_password, room_type, facilities, capacity FROM rooms WHERE id = $1', [roomId]);
+                const existingRoom = roomRes.rows[0];
+
+                const finalWifiSSID = wifiSSID !== undefined ? wifiSSID : existingRoom.wifi_ssid;
+                const finalWifiPassword = wifiPassword !== undefined ? wifiPassword : existingRoom.wifi_password;
+                const finalRoomType = roomType !== undefined ? roomType : existingRoom.room_type;
+                const finalFacilities = facilities !== undefined ? (typeof facilities === 'object' ? JSON.stringify(facilities) : facilities) : existingRoom.facilities;
+                const finalCapacity = roomType !== undefined ? getCapacityFromType(roomType) : existingRoom.capacity;
+
+                await client.query(
+                    'UPDATE rooms SET wifi_ssid = $1, wifi_password = $2, room_type = $3, facilities = $4, capacity = $5 WHERE id = $6',
+                    [finalWifiSSID, finalWifiPassword, finalRoomType, finalFacilities || '[]', finalCapacity, roomId]
+                );
+                console.log('Room updated with provided details');
+            } else {
+                console.log('No room details to update, skipping room table update');
+            }
         }
 
         await client.query('COMMIT');

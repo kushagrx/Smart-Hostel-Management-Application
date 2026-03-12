@@ -9,6 +9,7 @@ import { useRefresh } from '../hooks/useRefresh';
 import { fetchLaundrySettings, LaundryRequestDisplay, LaundrySettings, subscribeToLaundry, subscribeToMyLaundryRequests } from '../utils/laundrySyncUtils';
 import { fetchUserData, StudentData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
+import { formatUniversalTime } from '../utils/timeUtils';
 
 export default function LaundryRequest() {
     const router = useRouter();
@@ -113,7 +114,7 @@ export default function LaundryRequest() {
                     </LinearGradient>
                     <ScrollView
                         style={{ flex: 1 }}
-                        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+                        contentContainerStyle={{ flexGrow: 1, paddingBottom: 80 }}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
                         keyboardShouldPersistTaps="handled"
                         keyboardDismissMode="on-drag"
@@ -254,7 +255,7 @@ export default function LaundryRequest() {
                                     <View key={index} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                                             <Text style={[styles.historyDate, { color: colors.text }]}>
-                                                {new Date(req.createdAt).toLocaleDateString()}
+                                                {formatUniversalTime(req.createdAt, { day: 'numeric', month: 'short', year: 'numeric' })}
                                             </Text>
                                             {/* Dynamic Status Badge */}
                                             {(() => {

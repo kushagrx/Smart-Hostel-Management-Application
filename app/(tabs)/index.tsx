@@ -25,6 +25,7 @@ import { useDashboardStore } from '../../store/useDashboardStore';
 import { subscribeToBusTimings } from '../../utils/busTimingsSyncUtils';
 import { fetchUserData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import { getCurrentTimeInCountry } from '../../utils/timeUtils';
 
 const toggleStyles = StyleSheet.create({
   toggleBtn: {
@@ -203,7 +204,7 @@ export default function Index() {
   };
 
   const getGreeting = () => {
-    const hour = new Date().getHours();
+    const hour = getCurrentTimeInCountry().getHours();
     if (hour < 5) return 'Good Night';
     if (hour < 12) return 'Good Morning';
     if (hour < 18) return 'Good Afternoon';
@@ -211,13 +212,13 @@ export default function Index() {
   };
 
   const getUpcomingMeal = () => {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const nowCountry = getCurrentTimeInCountry();
+    const today = nowCountry.toLocaleDateString('en-US', { weekday: 'long' });
     const dayMenu = fullMenu?.[today];
 
     if (!dayMenu) return { type: 'Menu', foodItems: [], soon: false, time: '' };
 
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentMinutes = nowCountry.getHours() * 60 + nowCountry.getMinutes();
 
     const defaultTimings: Record<string, string> = {
       breakfast: '8:00 AM - 9:30 AM',

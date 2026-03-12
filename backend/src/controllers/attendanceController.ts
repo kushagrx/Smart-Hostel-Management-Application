@@ -48,6 +48,11 @@ export const getDailyAttendance = async (req: Request, res: Response) => {
                 u.full_name as "name", 
                 r.room_number as "room", 
                 s.profile_photo as "profilePhoto",
+                s.roll_no as "rollNo",
+                r.room_type as "roomType",
+                r.wifi_ssid as "wifiSSID",
+                r.wifi_password as "wifiPassword",
+                r.facilities,
                 a.status 
              FROM students s
              JOIN users u ON s.user_id = u.id

@@ -26,6 +26,10 @@ export interface Student {
     emergencyContactPhone?: string;
     createdAt?: any;
     profilePhoto?: string;
+    roomType?: string;
+    wifiSSID?: string;
+    wifiPassword?: string;
+    facilities?: any;
 }
 
 
@@ -97,7 +101,8 @@ export const createStudent = async (studentData: any) => {
 /// ================= DELETE =================
 export const deleteStudent = async (id: string) => {
     try {
-        await api.delete(`/students/${id}`);
+        const response = await api.delete(`/students/${id}`);
+        return response.data;
     } catch (error) {
         console.error("Error deleting student:", error);
         throw error;

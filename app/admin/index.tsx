@@ -28,6 +28,7 @@ import { Complaint, subscribeToAllComplaints, updateComplaintStatus } from '../.
 import { LeaveRequest, subscribeToPendingLeaves, updateLeaveStatus } from '../../utils/leavesUtils';
 import { subscribeToNotifications } from '../../utils/notificationUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import { formatUniversalTime } from '../../utils/timeUtils';
 
 // debounce import moved to require to avoid type issues if needed, or keep as is.
 const debounce = require('lodash.debounce');
@@ -969,7 +970,7 @@ export default function AdminDashboard() {
                                   </Text>
                                 </View>
                                 <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
-                                  {c.createdAt ? new Date(c.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
+                                  {c.createdAt ? formatUniversalTime(c.createdAt, { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
                                 </Text>
                               </View>
                             </View>
@@ -1083,7 +1084,7 @@ export default function AdminDashboard() {
                                   </Text>
                                 </View>
                                 <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
-                                  {l.createdAt ? new Date(l.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
+                                  {l.createdAt ? formatUniversalTime(l.createdAt, { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
                                 </Text>
                               </View>
                             </View>
@@ -1094,7 +1095,7 @@ export default function AdminDashboard() {
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                                 <MaterialIcons name="calendar-range" size={14} color={colors.textSecondary} />
                                 <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>
-                                  {l.startDate ? new Date(l.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'} → {l.endDate ? new Date(l.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}  •  {l.days} day{l.days !== 1 ? 's' : ''}
+                                  {l.startDate ? formatUniversalTime(l.startDate, { month: 'short', day: 'numeric' }) : '—'} → {l.endDate ? formatUniversalTime(l.endDate, { month: 'short', day: 'numeric' }) : '—'}  •  {l.days} day{l.days !== 1 ? 's' : ''}
                                 </Text>
                               </View>
                             </View>

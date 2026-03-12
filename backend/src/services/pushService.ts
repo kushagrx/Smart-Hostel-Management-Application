@@ -110,8 +110,13 @@ export const getUserToken = async (userId: number, category?: string): Promise<s
     if (res.rows.length === 0) return [];
 
     const user = res.rows[0];
-    if (category && user.notification_preferences) {
-        if (user.notification_preferences[category] === false) {
+    if (user.notification_preferences) {
+        if (user.notification_preferences.master === false) {
+            console.log(`[Push] 🔇 User ${userId} has disabled ALL notifications (master toggle). Skipping.`);
+            return [];
+        }
+
+        if (category && user.notification_preferences[category] === false) {
             console.log(`[Push] 🔇 User ${userId} has disabled "${category}" notifications. Skipping.`);
             return [];
         }
@@ -126,8 +131,9 @@ export const getAllStudentTokens = async (category?: string): Promise<string[]> 
 
     return res.rows
         .filter(row => {
-            if (category && row.notification_preferences) {
-                return row.notification_preferences[category] !== false;
+            if (row.notification_preferences) {
+                if (row.notification_preferences.master === false) return false;
+                if (category && row.notification_preferences[category] === false) return false;
             }
             return true;
         })

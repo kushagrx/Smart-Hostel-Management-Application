@@ -25,7 +25,7 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 
 ## ✨ Features
 
-###For Students
+### For Students
 - 📱 **Dashboard** - Overview of hostel activities and personal information
 - 📅 **Attendance** - View attendance records and history with calendar visualization
 - 🎫 **Leave Requests** - Submit and track leave applications with approval workflow
@@ -84,6 +84,10 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 ### 7. Codebase Optimization & Cleanup
 *   **Legacy Purge**: Removed 30+ redundant files, stale SQL migrations, and deprecated components to streamline the developer experience.
 *   **Team Setup Kit**: Consolidated environment templates and documentation for a "One-Minute Onboarding" process.
+
+### 8. Student Profile Persistence (V3.2)
+*   **Conflict-Free Allotments**: Fixed a race condition where room details (WiFi, Room Type) were being overwritten by `null` values during the subsequent profile photo upload.
+*   **Resilient Updates**: The `updateStudent` API now preserves existing database fields if new values aren't provided, ensuring data integrity across partial updates.
 
 ## 🌟 Legacy Enhancements (V2)
 *   **Optimal Display**: Fully optimized for Android 8.0+ adaptive icons using foreground/background layers to prevent stretching or cropping.

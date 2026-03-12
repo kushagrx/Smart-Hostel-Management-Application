@@ -10,6 +10,7 @@ import { useRefresh } from '../hooks/useRefresh';
 import { Complaint, subscribeToStudentComplaints } from '../utils/complaintsSyncUtils';
 import { Notice, subscribeToNotices } from '../utils/noticesSyncUtils';
 import { useTheme } from '../utils/ThemeContext';
+import { formatUniversalTime } from '../utils/timeUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -148,7 +149,7 @@ export default function Alerts() {
         if (diffDays === 0) return 'Today';
         if (diffDays === 1) return 'Yesterday';
         if (diffDays <= 7) return `${diffDays} days ago`;
-        return date.toLocaleDateString();
+        return formatUniversalTime(date, { day: '2-digit', month: 'short', year: 'numeric' });
     };
 
     return (
@@ -234,7 +235,7 @@ export default function Alerts() {
                                                 </View>
                                                 <View style={{ flex: 1 }}>
                                                     <Text style={[styles.cardTitle, { color: colors.text }]}>{notice.title}</Text>
-                                                    <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{notice.date.toLocaleDateString()}</Text>
+                                                    <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{formatUniversalTime(notice.date)}</Text>
                                                 </View>
                                                 {notice.priority === 'emergency' && <MaterialIcons name="warning" size={20} color="#EF4444" />}
                                             </View>

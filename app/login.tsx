@@ -70,6 +70,16 @@ export default function Login() {
 
         await refreshUser();
 
+        // Check Onboarding
+        const { useSettingsStore } = await import('../store/useSettingsStore');
+        await useSettingsStore.getState().loadSettings();
+        const { onboardingCompleted } = useSettingsStore.getState();
+
+        if (!onboardingCompleted) {
+          router.replace('/onboarding');
+          return;
+        }
+
         // Navigate based on role
         if (user.role === 'admin') {
           router.replace('/admin');
@@ -133,6 +143,16 @@ export default function Login() {
       });
 
       await refreshUser();
+
+      // Check Onboarding
+      const { useSettingsStore } = await import('../store/useSettingsStore');
+      await useSettingsStore.getState().loadSettings();
+      const { onboardingCompleted } = useSettingsStore.getState();
+
+      if (!onboardingCompleted) {
+        router.replace('/onboarding');
+        return;
+      }
 
       // Navigate
       if (user.role === 'admin') {

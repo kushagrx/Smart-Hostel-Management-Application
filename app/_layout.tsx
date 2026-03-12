@@ -69,6 +69,7 @@ function AppNavigator() {
         }}
       >
         <Stack.Screen name="index" options={{ animation: 'fade' }} />
+        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
         <Stack.Screen name="login" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />

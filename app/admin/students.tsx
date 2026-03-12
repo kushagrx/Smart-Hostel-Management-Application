@@ -664,12 +664,10 @@ export default function StudentsPage() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const res: any = await deleteStudent(id);
-              if (res.success) {
-                showAlert('Success', 'Student deleted successfully.', [], 'success');
-                setDetailsModalVisible(false);
-                fetchStudents();
-              }
+              await deleteStudent(id);
+              showAlert('Success', 'Student deleted successfully.', [], 'success');
+              setDetailsModalVisible(false);
+              fetchStudents();
             } catch (error: any) {
               showAlert('Error', error.message || 'Failed to delete student', [], 'error');
             }

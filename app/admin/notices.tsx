@@ -10,6 +10,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { createNotice, deleteNotice, Notice, subscribeToNotices } from '../../utils/noticesSyncUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import { formatUniversalTime } from '../../utils/timeUtils';
 
 export default function NoticesPage() {
   const { colors, theme } = useTheme();
@@ -418,7 +419,7 @@ export default function NoticesPage() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 <MaterialIcons name="calendar-range" size={14} color={colors.textSecondary} />
                 <Text style={[styles.noticeDate, { color: colors.textSecondary, marginBottom: 0 }]}>
-                  {item.date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {formatUniversalTime(item.date, { day: 'numeric', month: 'short', year: 'numeric' })}
                 </Text>
               </View>
 

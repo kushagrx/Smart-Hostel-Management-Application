@@ -68,6 +68,8 @@ export default function StudentAllotmentPage() {
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [sharingType, setSharingType] = useState('Single Sharing');
   const [apartmentType, setApartmentType] = useState<string | null>(null);
+  const [wifiSSID, setWifiSSID] = useState('Hostel_WiFi');
+  const [wifiPassword, setWifiPassword] = useState('');
   const [facilities, setFacilities] = useState<any[]>([
     { name: 'WiFi', icon: 'wifi', status: 'Included' },
     { name: 'Laundry', icon: 'washing-machine', status: 'Not Included' },
@@ -118,7 +120,7 @@ export default function StudentAllotmentPage() {
         roomNo: room,
         phone,
         status,
-        wifiSSID: 'Hostel_WiFi',
+        wifiSSID: wifiSSID,
         feeFrequency,
         roomType: apartmentType ? `${apartmentType} ${sharingType}` : sharingType,
         facilities, // Send as array/object directly
@@ -135,7 +137,7 @@ export default function StudentAllotmentPage() {
         medicalHistory: '',
         emergencyContactName: '',
         emergencyContactPhone: '',
-        wifiPassword: '',
+        wifiPassword: wifiPassword,
         profilePhoto: null
       };
 
@@ -314,6 +316,15 @@ export default function StudentAllotmentPage() {
           {/* Room Configuration Card */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Room Configuration</Text>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                 <InputField label="WiFi SSID" icon="wifi" value={wifiSSID} onChangeText={setWifiSSID} placeholder="e.g. Hostel_WiFi" hasSubmitted={hasSubmitted} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                 <InputField label="WiFi Password" icon="lock" value={wifiPassword} onChangeText={setWifiPassword} placeholder="Password" hasSubmitted={hasSubmitted} />
+              </View>
+            </View>
 
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { fontSize: 13, marginBottom: 8 }]}>Sharing Options</Text>
