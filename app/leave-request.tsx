@@ -10,6 +10,7 @@ import { useRefresh } from '../hooks/useRefresh';
 import { createLeaveRequest, getStudentLeaves, LeaveRequest } from '../utils/leavesUtils';
 import { fetchUserData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
+import { formatUniversalTime } from '../utils/timeUtils';
 
 export default function LeaveRequestPage() {
     const router = useRouter();
@@ -160,7 +161,7 @@ export default function LeaveRequestPage() {
                                 <Text style={[styles.label, { color: colors.textSecondary }]}>From Date</Text>
                                 <Pressable onPress={() => setShowStartPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
                                     <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
-                                    <Text style={[styles.dateText, { color: colors.text }]}>{startDate.toLocaleDateString()}</Text>
+                                    <Text style={[styles.dateText, { color: colors.text }]}>{formatUniversalTime(startDate, { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
                                 </Pressable>
                                 {showStartPicker && (
                                     <DateTimePicker
@@ -177,7 +178,7 @@ export default function LeaveRequestPage() {
                                 <Text style={[styles.label, { color: colors.textSecondary }]}>To Date</Text>
                                 <Pressable onPress={() => setShowEndPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
                                     <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
-                                    <Text style={[styles.dateText, { color: colors.text }]}>{endDate.toLocaleDateString()}</Text>
+                                    <Text style={[styles.dateText, { color: colors.text }]}>{formatUniversalTime(endDate, { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
                                 </Pressable>
                                 {showEndPicker && (
                                     <DateTimePicker
@@ -235,11 +236,11 @@ export default function LeaveRequestPage() {
                                     <View style={styles.historyHeader}>
                                         <View style={styles.dateInfo}>
                                             <Text style={[styles.historyDate, { color: colors.text }]}>
-                                                {new Date(item.startDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                {formatUniversalTime(item.startDate, { day: 'numeric', month: 'short', year: 'numeric' })}
                                             </Text>
                                             <MaterialCommunityIcons name="arrow-right" size={16} color={colors.textSecondary} />
                                             <Text style={[styles.historyDate, { color: colors.text }]}>
-                                                {new Date(item.endDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                {formatUniversalTime(item.endDate, { day: 'numeric', month: 'short', year: 'numeric' })}
                                             </Text>
                                         </View>
                                         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>

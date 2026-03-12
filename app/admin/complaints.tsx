@@ -11,6 +11,7 @@ import { API_BASE_URL } from '../../utils/api';
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { Complaint, getAllComplaints, updateComplaintStatus } from '../../utils/complaintsSyncUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import { formatUniversalTime } from '../../utils/timeUtils';
 
 export default function ComplaintsPage() {
   const { colors, theme } = useTheme();
@@ -333,7 +334,7 @@ export default function ComplaintsPage() {
                 <Text style={styles.detailLabel}>Date:</Text>
                 <Text style={styles.detailValue}>
                   {item.createdAt instanceof Date
-                    ? item.createdAt.toLocaleDateString() + ', ' + item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    ? formatUniversalTime(item.createdAt)
                     : 'N/A'}
                 </Text>
               </View>

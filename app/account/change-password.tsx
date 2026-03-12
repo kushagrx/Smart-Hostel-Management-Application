@@ -110,7 +110,8 @@ export default function ChangePassword() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 60 }}
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingBottom: 80 }}
       >
         {/* Premium Banner Header */}
         <View style={styles.headerContainer}>

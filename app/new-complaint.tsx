@@ -2,7 +2,7 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
 import { useRefresh } from '../hooks/useRefresh';
@@ -102,107 +102,113 @@ export default function NewComplaintPage() {
         </SafeAreaView>
       </LinearGradient>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
-        <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {/* Title Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Title</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <MaterialIcons name="edit" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.input, { color: colors.text }]}
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Briefly summarize the issue"
-                placeholderTextColor={colors.textSecondary}
-              />
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: 80 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : colors.primary} colors={[colors.primary]} />}
+        >
+          <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Title Input */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Title</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <MaterialIcons name="edit" size={20} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Briefly summarize the issue"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
             </View>
-          </View>
 
-          {/* Priority Selector */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Priority Level</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.priorityContainer}
-            >
-              {(['low', 'medium', 'high', 'emergency'] as const).map((level) => (
-                <Pressable
-                  key={level}
-                  style={[
-                    styles.priorityButton,
-                    { backgroundColor: colors.background, borderColor: colors.border },
-                    priority === level && styles.prioritySelected,
-                    priority === level && (styles as any)[`bg${capitalize(level)}`],
-                  ]}
-                  onPress={() => setPriority(level)}
-                >
-                  <MaterialCommunityIcons
-                    name={getPriorityIcon(level)}
-                    size={18}
-                    color={priority === level ? '#fff' : colors.textSecondary}
-                  />
-                  <Text style={[
-                    styles.priorityText,
-                    {
-                      color: priority === level
-                        ? '#fff'
-                        : (isDark ? '#E2E8F0' : '#64748B')
-                    }
-                  ]}>
-                    {capitalize(level)}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Description Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Description</Text>
-            <View style={[styles.inputWrapper, styles.textAreaWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <TextInput
-                style={[styles.input, styles.textArea, { color: colors.text }]}
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Provide details about the problem..."
-                placeholderTextColor={colors.textSecondary}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
+            {/* Priority Selector */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Priority Level</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.priorityContainer}
+              >
+                {(['low', 'medium', 'high', 'emergency'] as const).map((level) => (
+                  <Pressable
+                    key={level}
+                    style={[
+                      styles.priorityButton,
+                      { backgroundColor: colors.background, borderColor: colors.border },
+                      priority === level && styles.prioritySelected,
+                      priority === level && (styles as any)[`bg${capitalize(level)}`],
+                    ]}
+                    onPress={() => setPriority(level)}
+                  >
+                    <MaterialCommunityIcons
+                      name={getPriorityIcon(level)}
+                      size={18}
+                      color={priority === level ? '#fff' : colors.textSecondary}
+                    />
+                    <Text style={[
+                      styles.priorityText,
+                      {
+                        color: priority === level
+                          ? '#fff'
+                          : (isDark ? '#E2E8F0' : '#64748B')
+                      }
+                    ]}>
+                      {capitalize(level)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
-          </View>
 
-          {/* Submit Button */}
-          <Pressable
-            style={[styles.submitContainer, (!title || !description) && { opacity: 0.7 }]}
-            onPress={handleSubmit}
-            disabled={!title || !description || loading}
-          >
-            <LinearGradient
-              colors={['#000428', '#004e92']}
-              style={styles.submitButton}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+            {/* Description Input */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Description</Text>
+              <View style={[styles.inputWrapper, styles.textAreaWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <TextInput
+                  style={[styles.input, styles.textArea, { color: colors.text }]}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Provide details about the problem..."
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            {/* Submit Button */}
+            <Pressable
+              style={[styles.submitContainer, (!title || !description) && { opacity: 0.7 }]}
+              onPress={handleSubmit}
+              disabled={!title || !description || loading}
             >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <View style={styles.btnContent}>
-                  <Text style={styles.submitButtonText}>Submit Complaint</Text>
-                  <MaterialIcons name="send" size={18} color="white" />
-                </View>
-              )}
-            </LinearGradient>
-          </Pressable>
-        </View>
-      </ScrollView>
+              <LinearGradient
+                colors={['#000428', '#004e92']}
+                style={styles.submitButton}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <View style={styles.btnContent}>
+                    <Text style={styles.submitButtonText}>Submit Complaint</Text>
+                    <MaterialIcons name="send" size={18} color="white" />
+                  </View>
+                )}
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

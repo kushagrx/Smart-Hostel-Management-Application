@@ -22,10 +22,11 @@ export default function Index() {
       try {
         const { setStoredUser } = await import('../utils/authUtils');
         await setStoredUser(null);
+        router.replace('/login');
       } catch (error) {
-        console.log("Error clearing session:", error);
+        console.log("Error in splash navigation:", error);
+        router.replace('/login');
       }
-      router.replace('/login');
     };
 
     navigate();

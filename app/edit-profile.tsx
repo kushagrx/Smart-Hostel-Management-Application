@@ -282,9 +282,10 @@ export default function EditProfile() {
             <Stack.Screen options={{ headerShown: false }} />
 
             <ScrollView
-                contentContainerStyle={{ paddingBottom: 60 }}
+                contentContainerStyle={{ paddingBottom: 80 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
             >
                 {/* Premium Banner Header */}
                 <View style={styles.headerContainer}>

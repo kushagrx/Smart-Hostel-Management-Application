@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
 import { useTheme } from '../utils/ThemeContext';
+import { formatUniversalTime } from '../utils/timeUtils';
 import { registerVisitor } from '../utils/visitorUtils';
 
 export default function VisitorRequest() {
@@ -110,7 +111,7 @@ export default function VisitorRequest() {
     };
 
     const formatDate = (date: Date) => {
-        return date.toLocaleDateString('en-IN', {
+        return formatUniversalTime(date, {
             day: '2-digit',
             month: 'short',
             year: 'numeric'
@@ -118,7 +119,7 @@ export default function VisitorRequest() {
     };
 
     const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('en-IN', {
+        return formatUniversalTime(date, {
             hour: '2-digit',
             minute: '2-digit',
             hour12: true
@@ -252,13 +253,15 @@ export default function VisitorRequest() {
             </LinearGradient>
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
             >
                 <ScrollView
                     style={styles.content}
                     contentContainerStyle={{ paddingBottom: 40 }}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
                 >
                     <View style={styles.formContainer}>
                         {/* Visitor Name */}

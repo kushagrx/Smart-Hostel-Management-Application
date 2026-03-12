@@ -177,10 +177,11 @@ export const getStatusIcon = (status: Visitor['status']): string => {
 };
 
 
+import { formatUniversalTime } from './timeUtils';
+
 export const formatDate = (date: string | Date): string => {
     if (!date) return '';
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return dateObj.toLocaleDateString('en-IN', {
+    return formatUniversalTime(date, {
         day: '2-digit',
         month: 'short',
         year: 'numeric'
@@ -191,16 +192,22 @@ export const formatTime = (time: string | Date): string => {
     if (!time) return '';
 
     if (time instanceof Date) {
-        return time.toLocaleTimeString('en-IN', {
+        return formatUniversalTime(time, {
             hour: '2-digit',
             minute: '2-digit',
             hour12: true
         });
     }
 
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
+    // If it's a string like "HH:mm", we try to format it nicely
+    // but keep it relative to the intended time
+    try {
+        const [hours, minutes] = time.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;
+        return `${displayHour}:${minutes} ${ampm}`;
+    } catch (e) {
+        return time.toString();
+    }
 };

@@ -16,11 +16,15 @@ import { useAlert } from '../../context/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
 import api from '../../utils/api';
 
-const PreferenceItem = ({ icon, label, description, value, onValueChange, colors, isDark }: any) => {
+const PreferenceItem = ({ icon, label, description, value, onValueChange, colors, isDark, isLast }: any) => {
     return (
-        <View style={[styles.preferenceRow, { borderBottomColor: colors.border }]}>
+        <View style={[
+            styles.preferenceRow,
+            { borderBottomColor: colors.border },
+            isLast && { borderBottomWidth: 0 }
+        ]}>
             <View style={styles.labelContainer}>
-                <View style={[styles.iconBox, { backgroundColor: isDark ? '#1e293b' : '#F1F5F9' }]}>
+                <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(96, 165, 250, 0.1)' : '#F1F5F9' }]}>
                     <MaterialIcons name={icon} size={22} color={isDark ? '#60A5FA' : '#004e92'} />
                 </View>
                 <View style={styles.textContainer}>
@@ -46,6 +50,7 @@ export default function NotificationSettings() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [prefs, setPrefs] = useState<any>({
+        master: true,
         notices: true,
         complaints: true,
         leaves: true,
@@ -141,117 +146,120 @@ export default function NotificationSettings() {
                 contentContainerStyle={{ paddingBottom: 40 }}
                 showsVerticalScrollIndicator={false}
             >
-                <View style={styles.masterToggles}>
-                    <TouchableOpacity
-                        style={[styles.masterButton, { backgroundColor: isDark ? '#1e293b' : '#F1F5F9' }]}
-                        onPress={() => bulkUpdate(true)}
-                    >
-                        <MaterialIcons name="done-all" size={20} color="#004e92" />
-                        <Text style={[styles.masterButtonText, { color: colors.text }]}>Enable All</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.masterButton, { backgroundColor: isDark ? '#1e293b' : '#F1F5F9' }]}
-                        onPress={() => bulkUpdate(false)}
-                    >
-                        <MaterialIcons name="notifications-off" size={20} color="#EF4444" />
-                        <Text style={[styles.masterButtonText, { color: colors.text }]}>Disable All</Text>
-                    </TouchableOpacity>
-                </View>
-
                 <View style={styles.section}>
-                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    {/* Master Toggle Card */}
+                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 24 }]}>
                         <PreferenceItem
-                            icon="announcement"
-                            label="Hostel Notices"
-                            description="New announcements, events, and important news"
-                            value={prefs.notices}
-                            onValueChange={() => togglePreference('notices')}
+                            icon="notifications-active"
+                            label="Allow Notifications"
+                            description="Toggle all push alerts on or off"
+                            value={prefs.master !== false}
+                            onValueChange={() => togglePreference('master')}
                             colors={colors}
                             isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="assignment"
-                            label="Complaints"
-                            description="Updates on status changes of your filed complaints"
-                            value={prefs.complaints}
-                            onValueChange={() => togglePreference('complaints')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="home"
-                            label="Leave Requests"
-                            description="Approval or rejection updates for your leave applications"
-                            value={prefs.leaves}
-                            onValueChange={() => togglePreference('leaves')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="build"
-                            label="Service Requests"
-                            description="Technician assignment and completion updates"
-                            value={prefs.services}
-                            onValueChange={() => togglePreference('services')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="payment"
-                            label="Payments & Fees"
-                            description="New fee requests and successful payment confirmations"
-                            value={prefs.payments}
-                            onValueChange={() => togglePreference('payments')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="restaurant"
-                            label="Mess Menu"
-                            description="Notifications when the mess menu is updated"
-                            value={prefs.mess}
-                            onValueChange={() => togglePreference('mess')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="local-laundry-service"
-                            label="Laundry"
-                            description="Status updates for your laundry pickup and dropoff"
-                            value={prefs.laundry}
-                            onValueChange={() => togglePreference('laundry')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="directions-bus"
-                            label="Bus Schedule"
-                            description="Alerts for new bus routes or timing changes"
-                            value={prefs.bus}
-                            onValueChange={() => togglePreference('bus')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="people"
-                            label="Visitor Requests"
-                            description="Status updates for your registered visitors"
-                            value={prefs.visitors}
-                            onValueChange={() => togglePreference('visitors')}
-                            colors={colors}
-                            isDark={isDark}
-                        />
-                        <PreferenceItem
-                            icon="chat"
-                            label="Direct Messages"
-                            description="Instant alerts when an admin sends you a message"
-                            value={prefs.messages}
-                            onValueChange={() => togglePreference('messages')}
                             isLast={true}
-                            colors={colors}
-                            isDark={isDark}
                         />
                     </View>
+
+                    {/* Granular Preferences - Only shown if master is ON */}
+                    {prefs.master !== false && (
+                        <>
+                            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Granular Preferences</Text>
+                            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <PreferenceItem
+                                    icon="announcement"
+                                    label="Hostel Notices"
+                                    description="New announcements, events, and important news"
+                                    value={prefs.notices}
+                                    onValueChange={() => togglePreference('notices')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="assignment"
+                                    label="Complaints"
+                                    description="Updates on status changes of your filed complaints"
+                                    value={prefs.complaints}
+                                    onValueChange={() => togglePreference('complaints')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="home"
+                                    label="Leave Requests"
+                                    description="Approval or rejection updates for your leave applications"
+                                    value={prefs.leaves}
+                                    onValueChange={() => togglePreference('leaves')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="build"
+                                    label="Service Requests"
+                                    description="Technician assignment and completion updates"
+                                    value={prefs.services}
+                                    onValueChange={() => togglePreference('services')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="payment"
+                                    label="Payments & Fees"
+                                    description="New fee requests and successful payment confirmations"
+                                    value={prefs.payments}
+                                    onValueChange={() => togglePreference('payments')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="restaurant"
+                                    label="Mess Menu"
+                                    description="Notifications when the mess menu is updated"
+                                    value={prefs.mess}
+                                    onValueChange={() => togglePreference('mess')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="local-laundry-service"
+                                    label="Laundry"
+                                    description="Status updates for your laundry pickup and dropoff"
+                                    value={prefs.laundry}
+                                    onValueChange={() => togglePreference('laundry')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="directions-bus"
+                                    label="Bus Schedule"
+                                    description="Alerts for new bus routes or timing changes"
+                                    value={prefs.bus}
+                                    onValueChange={() => togglePreference('bus')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="people"
+                                    label="Visitor Requests"
+                                    description="Status updates for your registered visitors"
+                                    value={prefs.visitors}
+                                    onValueChange={() => togglePreference('visitors')}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                                <PreferenceItem
+                                    icon="chat"
+                                    label="Direct Messages"
+                                    description="Instant alerts when an admin sends you a message"
+                                    value={prefs.messages}
+                                    onValueChange={() => togglePreference('messages')}
+                                    isLast={true}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                            </View>
+                        </>
+                    )}
                 </View>
             </ScrollView>
         </View>
@@ -340,26 +348,13 @@ const styles = StyleSheet.create({
         marginTop: 2,
         lineHeight: 16,
     },
-    masterToggles: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        paddingHorizontal: 20,
-        marginTop: 20,
-        gap: 12,
-    },
-    masterButton: {
-        flex: 1,
-        height: 48,
-        borderRadius: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-    },
-    masterButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
+    sectionTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#94A3B8',
+        marginBottom: 12,
+        marginLeft: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    }
 });

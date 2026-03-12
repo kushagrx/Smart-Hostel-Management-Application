@@ -11,6 +11,7 @@ import { useAlert } from '../../context/AlertContext';
 import { useRefresh } from '../../hooks/useRefresh';
 import api, { API_BASE_URL } from '../../utils/api';
 import { useTheme } from '../../utils/ThemeContext';
+import { formatUniversalTime, getCurrentTimeInCountry } from '../../utils/timeUtils';
 
 const AttendancePage = () => {
     const { colors, theme } = useTheme();
@@ -415,13 +416,13 @@ const AttendancePage = () => {
                                     <Text style={styles.dateText}>
                                         {(() => {
                                             const d = new Date(date);
-                                            const today = new Date();
-                                            const yesterday = new Date();
-                                            yesterday.setDate(today.getDate() - 1);
+                                            const nowCountry = getCurrentTimeInCountry();
+                                            const yesterdayCountry = new Date(nowCountry);
+                                            yesterdayCountry.setDate(nowCountry.getDate() - 1);
 
-                                            if (d.toDateString() === today.toDateString()) return 'Today';
-                                            if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-                                            return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'long' });
+                                            if (d.toDateString() === nowCountry.toDateString()) return 'Today';
+                                            if (d.toDateString() === yesterdayCountry.toDateString()) return 'Yesterday';
+                                            return formatUniversalTime(d, { weekday: 'short', day: 'numeric', month: 'long' });
                                         })()}
                                     </Text>
                                 </TouchableOpacity>
