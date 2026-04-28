@@ -89,6 +89,20 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 *   **Conflict-Free Allotments**: Fixed a race condition where room details (WiFi, Room Type) were being overwritten by `null` values during the subsequent profile photo upload.
 *   **Resilient Updates**: The `updateStudent` API now preserves existing database fields if new values aren't provided, ensuring data integrity across partial updates.
 
+## 🌟 Latest Major Enhancements (V3.5) - AI & Security
+
+### 1. AI Assistant Integration (`ai-service/`)
+*   **Dedicated Python AI**: Introduced a dedicated Python-based AI service using LangChain for handling chatbot queries and mutations.
+*   **Seamless App Integration**: Created `backend/src/routes/aiRoutes.ts` to proxy requests between the mobile app and the Python AI service. The AI can handle student queries, check complaint statuses, and process contextual requests.
+
+### 2. Advanced Settings & Accessibility
+*   **Accessibility Engine**: Implemented global accessibility state management (`store/useAccessibilityStore.ts`), supporting high contrast, reduced motion, dynamic font sizing, and haptic feedback.
+*   **New Settings Architecture**: Completely redesigned the settings UI (`app/(tabs)/settings.tsx`) to look professional, adding modular sub-pages for Account, Privacy, Data & Storage, and Linked Accounts.
+
+### 3. Security Enhancements (Two-Factor Auth & Hardening)
+*   **2FA Backend Infrastructure**: Added backend support for Two-Factor Authentication (`backend/src/controllers/twoFactorController.ts`).
+*   **GitIgnore Fortification**: Massively updated `.gitignore` to rigorously exclude all sensitive files. Removed local databases, legacy service accounts, and hardcoded secrets from the Git tracking history to guarantee repository security.
+
 ## 🌟 Legacy Enhancements (V2)
 *   **Optimal Display**: Fully optimized for Android 8.0+ adaptive icons using foreground/background layers to prevent stretching or cropping.
 *   **Brand Consistency**: Uses a high-resolution centered brand icon with appropriate safe-zone padding.
