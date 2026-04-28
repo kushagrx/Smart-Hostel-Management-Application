@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { View } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import CustomAlert from "../components/CustomAlert";
 import { useAlertStore } from "../store/useAlertStore";
@@ -9,8 +9,33 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useNotificationStore } from "../store/useNotificationStore";
 import { useOfflineStore } from "../store/useOfflineStore";
 import { useThemeStore } from "../store/useThemeStore";
+import { useAccessibilityStore } from "../store/useAccessibilityStore";
 import { useNetworkStatus } from "../utils/useNetworkStatus";
 import { usePushNotifications } from "../utils/usePushNotifications";
+
+// --- GLOBAL TEXT OVERRIDE HACK ---
+// Overriding Text render to apply global accessibility settings (font size & bold)
+const oldTextRender = (Text as any).render;
+if (oldTextRender) {
+  (Text as any).render = function (...args: any[]) {
+    const origin = oldTextRender.call(this, ...args);
+    const { fontScale, boldText } = useAccessibilityStore.getState();
+    
+    if (fontScale !== 1.0 || boldText) {
+      const flatStyle = StyleSheet.flatten(origin.props.style) || {};
+      const baseFontSize = flatStyle.fontSize || 14;
+      
+      const newStyle = [
+        origin.props.style,
+        fontScale !== 1.0 && { fontSize: baseFontSize * fontScale },
+        boldText && { fontWeight: 'bold' }
+      ];
+      return React.cloneElement(origin, { style: newStyle });
+    }
+    return origin;
+  };
+}
+// ---------------------------------
 
 function GlobalStateInitializer({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((state) => state.user);
@@ -91,11 +116,13 @@ function AppNavigator() {
 
 export default function RootLayout() {
   const isLoaded = useThemeStore((state) => state.isLoaded);
+  const { fontScale, boldText, isLoaded: accessLoaded } = useAccessibilityStore();
 
-  if (!isLoaded) return null;
+  if (!isLoaded || !accessLoaded) return null;
 
+  // Key forces re-render of entire app tree when text accessibility changes
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }} key={`access-${fontScale}-${boldText}`}>
       <StatusBar style="light" backgroundColor="transparent" translucent={true} />
       <GlobalStateInitializer>
         <AppNavigator />

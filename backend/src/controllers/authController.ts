@@ -1,13 +1,15 @@
 import { Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { query } from '../config/db';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const ANDROID_CLIENT_ID = process.env.ANDROID_CLIENT_ID; // We will add this to .env
 
 export const login = async (req: Request, res: Response) => {
-    const { email, password } = req.body;
+    const { email, password, deviceName, appVersion } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
 
     if (!email || !password) {
         res.status(400).json({ error: 'Email and password are required' });
@@ -44,15 +46,57 @@ export const login = async (req: Request, res: Response) => {
             }
         }
 
+        if (user.two_factor_enabled || user.sms_2fa_enabled) {
+            const tempToken = jwt.sign(
+                { id: user.id, email: user.email, role: user.role, isTemp: true },
+                process.env.JWT_SECRET || 'default_secret',
+                { expiresIn: '5m' }
+            );
+
+            let method = 'app';
+            if (user.sms_2fa_enabled && !user.two_factor_enabled) {
+                method = 'sms';
+                // Trigger SMS sending
+                const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                const expires = new Date(Date.now() + 5 * 60000);
+                await query('UPDATE users SET sms_otp = $1, sms_otp_expires = $2 WHERE id = $3', [otp, expires, user.id]);
+
+                if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER && user.phone_number) {
+                    const twilio = require('twilio');
+                    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+                    await client.messages.create({
+                        body: `Your SmartStay verification code is: ${otp}`,
+                        from: process.env.TWILIO_PHONE_NUMBER,
+                        to: user.phone_number
+                    }).catch((e: any) => console.error('Failed to send SMS OTP on login:', e));
+                } else {
+                    console.error('Twilio credentials missing. Printing OTP to console: ', otp);
+                }
+            } else if (user.sms_2fa_enabled && user.two_factor_enabled) {
+                method = 'both';
+                // Don't auto-send SMS, let the user choose in the UI.
+            }
+
+            return res.json({ requiresTwoFactor: true, method, tempToken, deviceName, appVersion });
+        }
+
         const userJwt = jwt.sign(
             { id: user.id, email: user.email, role: user.role },
             process.env.JWT_SECRET || 'default_secret',
             { expiresIn: '7d' }
         );
 
+        const refreshToken = crypto.randomBytes(40).toString('hex');
+        await query(
+            `INSERT INTO user_sessions (user_id, refresh_token, device_name, app_version, ip_address, is_current, last_active) 
+             VALUES ($1, $2, $3, $4, $5, true, NOW())`,
+            [user.id, refreshToken, deviceName || 'Unknown Device', appVersion || 'Unknown Version', ipAddress]
+        );
+
         res.json({
             user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
-            token: userJwt
+            token: userJwt,
+            refreshToken
         });
     } catch (error) {
         console.error('Login Error:', error);
@@ -61,7 +105,8 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const googleLogin = async (req: Request, res: Response) => {
-    const { token } = req.body;
+    const { token, deviceName, appVersion } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
 
     if (!token) {
         res.status(400).json({ error: 'Token is required' });
@@ -110,6 +155,38 @@ export const googleLogin = async (req: Request, res: Response) => {
             return;
         }
 
+        if (user.two_factor_enabled || user.sms_2fa_enabled) {
+            const tempToken = jwt.sign(
+                { id: user.id, email: user.email, role: user.role, isTemp: true },
+                process.env.JWT_SECRET || 'default_secret',
+                { expiresIn: '5m' }
+            );
+
+            let method = 'app';
+            if (user.sms_2fa_enabled && !user.two_factor_enabled) {
+                method = 'sms';
+                const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                const expires = new Date(Date.now() + 5 * 60000);
+                await query('UPDATE users SET sms_otp = $1, sms_otp_expires = $2 WHERE id = $3', [otp, expires, user.id]);
+
+                if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER && user.phone_number) {
+                    const twilio = require('twilio');
+                    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+                    await client.messages.create({
+                        body: `Your SmartStay verification code is: ${otp}`,
+                        from: process.env.TWILIO_PHONE_NUMBER,
+                        to: user.phone_number
+                    }).catch((e: any) => console.error('Failed to send SMS OTP on login:', e));
+                } else {
+                    console.error('Twilio credentials missing. Printing OTP to console: ', otp);
+                }
+            } else if (user.sms_2fa_enabled && user.two_factor_enabled) {
+                method = 'both';
+            }
+
+            return res.json({ requiresTwoFactor: true, method, tempToken, deviceName, appVersion });
+        }
+
         // Generate JWT
         const userJwt = jwt.sign(
             {
@@ -121,6 +198,13 @@ export const googleLogin = async (req: Request, res: Response) => {
             { expiresIn: '7d' }
         );
 
+        const refreshToken = crypto.randomBytes(40).toString('hex');
+        await query(
+            `INSERT INTO user_sessions (user_id, refresh_token, device_name, app_version, ip_address, is_current, last_active) 
+             VALUES ($1, $2, $3, $4, $5, true, NOW())`,
+            [user.id, refreshToken, deviceName || 'Unknown Device', appVersion || 'Unknown Version', ipAddress]
+        );
+
         res.status(200).json({
             user: {
                 id: user.id,
@@ -129,6 +213,7 @@ export const googleLogin = async (req: Request, res: Response) => {
                 role: user.role,
             },
             token: userJwt,
+            refreshToken
         });
     } catch (error: any) {
         console.error('Login Error:', error);
@@ -260,3 +345,116 @@ export const removePushToken = async (req: Request, res: Response) => {
     }
 };
 
+export const verifyTwoFactorLogin = async (req: Request, res: Response) => {
+    const { tempToken, token, deviceName, appVersion } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
+
+    if (!tempToken || !token) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET || 'default_secret') as any;
+        
+        if (!decoded.isTemp || !decoded.id) {
+            return res.status(400).json({ error: 'Invalid temporary token' });
+        }
+
+        const userId = decoded.id;
+        const userResult = await query('SELECT * FROM users WHERE id = $1', [userId]);
+        const user = userResult.rows[0];
+
+        let verified = false;
+
+        // Determine if they are verifying SMS or App
+        // If the token matches the SMS OTP, it's SMS. Otherwise, it's App.
+        if (user.sms_2fa_enabled && user.sms_otp && user.sms_otp_expires && new Date() <= new Date(user.sms_otp_expires) && token === user.sms_otp) {
+            verified = true;
+            await query('UPDATE users SET sms_otp = NULL, sms_otp_expires = NULL WHERE id = $1', [user.id]);
+        } else if (user.two_factor_enabled && user.two_factor_secret) {
+            const speakeasy = require('speakeasy');
+            verified = speakeasy.totp.verify({
+                secret: user.two_factor_secret,
+                encoding: 'base32',
+                token
+            });
+        }
+
+        if (!verified) {
+            return res.status(400).json({ error: 'Invalid verification code' });
+        }
+
+        // Generate final JWT
+        const userJwt = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET || 'default_secret',
+            { expiresIn: '7d' }
+        );
+
+        const refreshToken = crypto.randomBytes(40).toString('hex');
+        await query(
+            `INSERT INTO user_sessions (user_id, refresh_token, device_name, app_version, ip_address, is_current, last_active) 
+             VALUES ($1, $2, $3, $4, $5, true, NOW())`,
+            [user.id, refreshToken, deviceName || 'Unknown Device', appVersion || 'Unknown Version', ipAddress]
+        );
+
+        res.json({
+            user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
+            token: userJwt,
+            refreshToken
+        });
+
+    } catch (error) {
+        console.error('2FA Verify Error:', error);
+        res.status(401).json({ error: 'Invalid or expired temporary token' });
+    }
+};
+
+export const linkGoogle = async (req: Request, res: Response) => {
+    // @ts-ignore
+    const userId = req.currentUser?.id;
+    const { token } = req.body;
+
+    if (!userId || !token) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        const decodedToken = jwt.decode(token) as any;
+        if (!decodedToken || !decodedToken.email) {
+            return res.status(400).json({ error: 'Invalid Google Token' });
+        }
+
+        const email = decodedToken.email;
+
+        // Ensure this email isn't already linked to someone else's student profile
+        const existingStudent = await query('SELECT * FROM students WHERE google_email = $1 AND user_id != $2', [email, userId]);
+        if (existingStudent.rows.length > 0) {
+            return res.status(400).json({ error: 'This Google account is already linked to another student profile.' });
+        }
+
+        // Update student profile (assuming this is a student)
+        await query('UPDATE students SET google_email = $1 WHERE user_id = $2', [email, userId]);
+        res.json({ message: 'Google account linked successfully', email });
+    } catch (error) {
+        console.error('Link Google Error:', error);
+        res.status(500).json({ error: 'Failed to link Google account' });
+    }
+};
+
+export const unlinkGoogle = async (req: Request, res: Response) => {
+    // @ts-ignore
+    const userId = req.currentUser?.id;
+
+    if (!userId) {
+        return res.status(401).json({ error: 'Not authorized' });
+    }
+
+    try {
+        await query('UPDATE students SET google_email = NULL WHERE user_id = $1', [userId]);
+        res.json({ message: 'Google account unlinked successfully' });
+    } catch (error) {
+        console.error('Unlink Google Error:', error);
+        res.status(500).json({ error: 'Failed to unlink Google account' });
+    }
+};

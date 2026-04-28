@@ -2,6 +2,11 @@
 
 # dependencies
 node_modules/
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
 
 # Expo
 .expo/
@@ -17,6 +22,7 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+*.keystore
 
 # Metro
 .metro-health-check*
@@ -31,8 +37,10 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
 .env
+.env.local
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -48,7 +56,10 @@ app-example
 logs/
 backend/*.log
 
-# Database backups
+# Database
+*.db
+*.sqlite
+backend/src/database.db
 backend/backups/
 
 # Temporary files
@@ -57,12 +68,13 @@ disk_files.txt
 git_files.txt
 missing_files.txt
 
-# Firebase (legacy - now using PostgreSQL)
+# Firebase & Service Accounts
 google-services.json
 firestore.rules
 serviceAccountKey.json
 *firebase-adminsdk*.json
 firebase-service-account.json
+backend/firebase-service-account.json
 
 # IDE
 .vscode/
@@ -71,3 +83,4 @@ firebase-service-account.json
 # User uploads (contains PII)
 backend/uploads/
 uploads/
+backend/users_push_tokens.json

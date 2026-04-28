@@ -9,16 +9,16 @@ import {
     DeviceEventEmitter,
     KeyboardAvoidingView,
     Platform,
-    Pressable,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
+    TouchableOpacity
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
-import { API_BASE_URL } from '../utils/api';
+import api, { API_BASE_URL } from '../utils/api';
 import { getInitial } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
 
@@ -32,11 +32,9 @@ export default function EditProfile() {
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
 
-    // Profile Display Info
     const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
     const [fullName, setFullName] = useState<string>('Student');
 
-    // Form Data State
     const [formData, setFormData] = useState({
         phone: '',
         dob: '',
@@ -52,8 +50,6 @@ export default function EditProfile() {
     });
 
     const [initialData, setInitialData] = useState<any>(null);
-
-    // DatePicker State
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [dateValue, setDateValue] = useState(new Date(2000, 0, 1));
 
@@ -63,23 +59,12 @@ export default function EditProfile() {
 
     const loadProfileData = async () => {
         try {
-            const token = await import('@react-native-async-storage/async-storage').then(m => m.default.getItem('userToken'));
-            const response = await fetch(`${API_BASE_URL}/api/students/profile`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!response.ok) throw new Error('Failed to load profile');
-
-            const data = await response.json();
-
+            const response = await api.get('/students/profile');
+            const data = response.data;
             setProfilePhoto(data.profilePhoto || null);
             setFullName(data.fullName || 'Student');
-
             const dobString = data.dob ? new Date(data.dob).toISOString().split('T')[0] : '';
-            if (data.dob) {
-                setDateValue(new Date(data.dob));
-            }
-
+            if (data.dob) setDateValue(new Date(data.dob));
             const loadedFormData = {
                 phone: data.phone || '',
                 dob: dobString,
@@ -93,11 +78,10 @@ export default function EditProfile() {
                 emergencyContactName: data.emergencyContactName || '',
                 emergencyContactPhone: data.emergencyContactPhone || '',
             };
-
             setFormData(loadedFormData);
             setInitialData(loadedFormData);
-        } catch (error) {
-            console.error('Error loading profile:', error);
+        } catch (error: any) {
+            console.error('Error loading profile:', error.response?.data || error.message);
             showAlert('Error', 'Failed to load profile details.');
         } finally {
             setLoading(false);
@@ -113,10 +97,7 @@ export default function EditProfile() {
                 aspect: [1, 1],
                 quality: 0.5,
             });
-
-            if (!result.canceled && result.assets[0].uri) {
-                uploadImage(result.assets[0].uri);
-            }
+            if (!result.canceled && result.assets[0].uri) uploadImage(result.assets[0].uri);
         } catch (error) {
             console.error('Error picking image:', error);
             showAlert('Error', 'Failed to open image picker');
@@ -126,33 +107,17 @@ export default function EditProfile() {
     const uploadImage = async (uri: string) => {
         setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('profilePhoto', {
+            const formDataUpload = new FormData();
+            formDataUpload.append('profilePhoto', {
                 uri: uri,
                 name: 'profile_photo.jpg',
                 type: 'image/jpeg',
-                // @ts-ignore
             } as any);
-
-            const token = await import('@react-native-async-storage/async-storage').then(m => m.default.getItem('userToken'));
-
-            const response = await fetch(`${API_BASE_URL}/api/students/profile/photo`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                }
+            const response = await api.post('/students/profile/photo', formDataUpload, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Upload failed: ${errorText}`);
-            }
-
-            const result = await response.json();
-
-            if (result.success && result.profilePhoto) {
-                setProfilePhoto(result.profilePhoto);
+            if (response.data.success && response.data.profilePhoto) {
+                setProfilePhoto(response.data.profilePhoto);
                 DeviceEventEmitter.emit('profileUpdated');
                 showAlert('Success', 'Profile photo updated successfully!', [], 'success');
             }
@@ -169,31 +134,14 @@ export default function EditProfile() {
             showAlert('No Changes', 'You have not made any changes to your profile.', [], 'info');
             return;
         }
-
         setSaving(true);
         try {
-            const token = await import('@react-native-async-storage/async-storage').then(m => m.default.getItem('userToken'));
-
             if (!formData.phone || formData.phone.length < 10) {
                 showAlert('Validation Error', 'Please enter a valid phone number.');
                 setSaving(false);
                 return;
             }
-
-            const response = await fetch(`${API_BASE_URL}/api/students/profile`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to update profile');
-            }
-
+            await api.put('/students/profile', formData);
             DeviceEventEmitter.emit('profileUpdated');
             showAlert('Success', 'Profile updated successfully!', [], 'success');
             router.back();
@@ -205,34 +153,26 @@ export default function EditProfile() {
         }
     };
 
-    const handleChange = (key: string, value: string) => {
-        setFormData(prev => ({ ...prev, [key]: value }));
-    };
-
     const onDateChange = (event: any, selectedDate?: Date) => {
-        setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS, close on Android
+        setShowDatePicker(Platform.OS === 'ios');
         if (selectedDate) {
             setDateValue(selectedDate);
-            const year = selectedDate.getFullYear();
-            const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-            const day = String(selectedDate.getDate()).padStart(2, '0');
-            const formattedDate = `${year}-${month}-${day}`;
+            const formattedDate = selectedDate.toISOString().split('T')[0];
             setFormData(prev => ({ ...prev, dob: formattedDate }));
         }
     };
 
-    // UI Builders
     const renderInput = (label: string, key: keyof typeof formData, icon: any, placeholder: string, keyboardType: any = 'default', multiline = false) => (
         <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{label}</Text>
             <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: colors.border }]}>
-                <MaterialCommunityIcons name={icon} size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                <MaterialCommunityIcons name={icon} size={20} color={isDark ? '#60A5FA' : '#004e92'} style={styles.inputIcon} />
                 <TextInput
-                    style={[styles.input, { color: colors.text, height: multiline ? 80 : 48 }, multiline && { textAlignVertical: 'top', paddingTop: 12 }]}
+                    style={[styles.input, { color: colors.text, minHeight: multiline ? 80 : 48 }, multiline && { textAlignVertical: 'top', paddingTop: 12 }]}
                     placeholder={placeholder}
-                    placeholderTextColor={colors.textSecondary + '80'}
+                    placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
                     value={formData[key]}
-                    onChangeText={(val) => handleChange(key, val)}
+                    onChangeText={(val) => setFormData(prev => ({ ...prev, [key]: val }))}
                     keyboardType={keyboardType}
                     multiline={multiline}
                 />
@@ -240,99 +180,40 @@ export default function EditProfile() {
         </View>
     );
 
-    const renderDatePicker = () => (
-        <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
-            <Pressable
-                onPress={() => setShowDatePicker(true)}
-                style={[styles.inputContainer, { height: 48, backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: colors.border }]}
-            >
-                <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} style={styles.inputIcon} />
-                <Text style={[styles.input, { color: formData.dob ? colors.text : colors.textSecondary + '80', lineHeight: 48 }]}>
-                    {formData.dob || 'Select Date of Birth'}
-                </Text>
-            </Pressable>
-            {showDatePicker && (
-                <DateTimePicker
-                    value={dateValue}
-                    mode="date"
-                    display="default"
-                    onChange={onDateChange}
-                    maximumDate={new Date()}
-                />
-            )}
+    if (loading) return (
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+            <Stack.Screen options={{ headerShown: false }} />
+            <ActivityIndicator size="large" color="#004e92" />
+            <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Loading Details...</Text>
         </View>
     );
 
-    if (loading) {
-        return (
-            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-                <Stack.Screen options={{ headerShown: false }} />
-                <ActivityIndicator size="large" color="#004e92" />
-                <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Loading Details...</Text>
-            </View>
-        );
-    }
-
     return (
-        <KeyboardAvoidingView
-            style={{ flex: 1, backgroundColor: colors.background }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <Stack.Screen options={{ headerShown: false }} />
-
-            <ScrollView
-                contentContainerStyle={{ paddingBottom: 80 }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
-            >
-                {/* Premium Banner Header */}
+            <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.headerContainer}>
-                    <LinearGradient
-                        colors={['#000428', '#004e92']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={[styles.headerGradient, { paddingTop: insets.top + 20 }]}
-                    >
+                    <LinearGradient colors={['#000428', '#004e92']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.headerGradient, { paddingTop: insets.top + 10 }]}>
                         <View style={styles.headerContent}>
-                            <Pressable onPress={() => router.back()} style={styles.backButton}>
-                                <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
-                            </Pressable>
+                            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                                <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
+                            </TouchableOpacity>
                             <Text style={styles.headerTitle}>Edit Profile</Text>
                             <View style={{ width: 40 }} />
                         </View>
-
-                        {/* Profile Photo Editor */}
                         <View style={styles.profileCard}>
                             <View style={styles.avatarContainer}>
-                                <View style={styles.avatar}>
+                                <View style={[styles.avatar, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)' }]}>
                                     {profilePhoto ? (
-                                        <Image
-                                            source={{ uri: `${API_BASE_URL}${profilePhoto}` }}
-                                            style={{ width: '100%', height: '100%', borderRadius: 60 }}
-                                            contentFit="cover"
-                                            cachePolicy="none"
-                                        />
+                                        <Image source={{ uri: `${API_BASE_URL}${profilePhoto}` }} style={{ width: '100%', height: '100%', borderRadius: 60 }} contentFit="cover" cachePolicy="none" />
                                     ) : (
                                         <Text style={styles.avatarText}>{getInitial(fullName)}</Text>
                                     )}
-                                    {uploading && (
-                                        <View style={[styles.avatar, { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10 }]}>
-                                            <ActivityIndicator color="#fff" />
-                                        </View>
-                                    )}
+                                    {uploading && <View style={[styles.avatar, { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10, borderWidth: 0 }]}><ActivityIndicator color="#fff" /></View>}
                                 </View>
-                                {/* Camera Edit Button */}
-                                <Pressable
-                                    style={styles.cameraButton}
-                                    onPress={pickImage}
-                                    disabled={uploading}
-                                >
-                                    <View style={styles.cameraButtonInner}>
-                                        <MaterialCommunityIcons name="camera" size={20} color="#004e92" />
-                                    </View>
-                                </Pressable>
+                                <TouchableOpacity style={styles.cameraButton} onPress={pickImage} disabled={uploading} activeOpacity={0.8}>
+                                    <View style={styles.cameraButtonInner}><MaterialCommunityIcons name="camera" size={18} color="#004e92" /></View>
+                                </TouchableOpacity>
                             </View>
                             <Text style={styles.studentName}>{fullName}</Text>
                         </View>
@@ -341,245 +222,68 @@ export default function EditProfile() {
                 </View>
 
                 <View style={styles.scrollContent}>
-                    {/* Personal Section */}
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Details</Text>
-                        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            {renderInput('Phone Number', 'phone', 'phone', 'Enter your phone number', 'phone-pad')}
-                            {renderDatePicker()}
-                            {renderInput('Blood Group', 'bloodGroup', 'water', 'e.g., O+', 'default')}
-                            {renderInput('Permanent Address', 'address', 'map-marker', 'Enter full home address', 'default', true)}
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PERSONAL DETAILS</Text>
+                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        {renderInput('Phone Number', 'phone', 'phone-outline', 'Enter phone number', 'phone-pad')}
+                        <View style={styles.inputGroup}>
+                            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
+                            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.inputContainer, { height: 52, backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: colors.border }]}>
+                                <MaterialCommunityIcons name="calendar-outline" size={20} color={isDark ? '#60A5FA' : '#004e92'} style={styles.inputIcon} />
+                                <Text style={[styles.input, { color: formData.dob ? colors.text : (isDark ? '#64748b' : '#94a3b8'), lineHeight: 52 }]}>{formData.dob || 'Select Date'}</Text>
+                            </TouchableOpacity>
                         </View>
+                        {showDatePicker && <DateTimePicker value={dateValue} mode="date" display="default" onChange={onDateChange} maximumDate={new Date()} />}
+                        {renderInput('Blood Group', 'bloodGroup', 'water-outline', 'e.g., O+')}
+                        {renderInput('Permanent Address', 'address', 'map-marker-outline', 'Full home address', 'default', true)}
                     </View>
 
-                    {/* Family Section */}
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Family Details</Text>
-                        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            {renderInput("Father's Name", 'fatherName', 'account-tie', "Enter father's name")}
-                            {renderInput("Father's Phone", 'fatherPhone', 'phone', "Enter father's phone", 'phone-pad')}
-                            {renderInput("Mother's Name", 'motherName', 'face-woman', "Enter mother's name")}
-                            {renderInput("Mother's Phone", 'motherPhone', 'phone', "Enter mother's phone", 'phone-pad')}
-                        </View>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>FAMILY DETAILS</Text>
+                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        {renderInput("Father's Name", 'fatherName', 'account-outline', "Enter father's name")}
+                        {renderInput("Father's Phone", 'fatherPhone', 'phone-outline', "Enter father's phone", 'phone-pad')}
+                        {renderInput("Mother's Name", 'motherName', 'face-woman-outline', "Enter mother's name")}
+                        {renderInput("Mother's Phone", 'motherPhone', 'phone-outline', "Enter mother's phone", 'phone-pad')}
                     </View>
 
-                    {/* Emergency Section */}
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Medical & Emergency</Text>
-                        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            {renderInput("Emergency Contact Name", 'emergencyContactName', 'account-alert', "Name of contact person")}
-                            {renderInput("Emergency Phone", 'emergencyContactPhone', 'phone-alert', "Emergency phone number", 'phone-pad')}
-                            {renderInput('Medical History', 'medicalHistory', 'medical-bag', 'Any allergies or conditions?', 'default', true)}
-                        </View>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>MEDICAL & EMERGENCY</Text>
+                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        {renderInput("Emergency Contact", 'emergencyContactName', 'account-alert-outline', "Name of contact person")}
+                        {renderInput("Emergency Phone", 'emergencyContactPhone', 'phone-alert-outline', "Emergency phone number", 'phone-pad')}
+                        {renderInput('Medical History', 'medicalHistory', 'medical-bag', 'Any allergies or conditions?', 'default', true)}
                     </View>
 
-                    {/* Save Button */}
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.saveBtn,
-                            pressed && styles.saveBtnPressed,
-                            saving && styles.saveBtnDisabled
-                        ]}
-                        onPress={handleSave}
-                        disabled={saving}
-                    >
-                        {saving ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <>
-                                <MaterialCommunityIcons name="content-save" size={24} color="#fff" />
-                                <Text style={styles.saveBtnText}>Save All Changes</Text>
-                            </>
-                        )}
-                    </Pressable>
+                    <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={handleSave} disabled={saving} activeOpacity={0.8}>
+                        {saving ? <ActivityIndicator color="#fff" /> : <><MaterialCommunityIcons name="check-decagram-outline" size={22} color="#fff" /><Text style={styles.saveBtnText}>Save Profile Changes</Text></>}
+                    </TouchableOpacity>
                 </View>
-
             </ScrollView>
         </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerContainer: {
-        position: 'relative',
-        marginBottom: 10,
-    },
-    headerGradient: {
-        paddingBottom: 50,
-        alignItems: 'center',
-    },
-    headerContent: {
-        width: '100%',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        marginBottom: 20,
-    },
-    backButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#fff',
-        letterSpacing: 0.5,
-    },
-    profileCard: {
-        alignItems: 'center',
-        gap: 12,
-    },
-    avatarContainer: {
-        position: 'relative',
-        marginBottom: 4,
-    },
-    avatar: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: '#fff',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 4,
-        borderColor: 'rgba(255,255,255,0.3)',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 8,
-    },
-    avatarText: {
-        fontSize: 48,
-        fontWeight: '700',
-        color: '#004e92',
-    },
-    cameraButton: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#fff',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-        zIndex: 20,
-    },
-    cameraButtonInner: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#f1f5f9',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-    },
-    studentName: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: '#fff',
-        letterSpacing: 0.5,
-    },
-    curveBlock: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 40,
-        borderTopLeftRadius: 40,
-        borderTopRightRadius: 40,
-    },
-    scrollContent: {
-        paddingHorizontal: 20,
-    },
-    section: {
-        marginBottom: 28,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        marginBottom: 12,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        color: '#64748b',
-    },
-    card: {
-        borderRadius: 24,
-        padding: 24,
-        borderWidth: 1,
-        gap: 20,
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2,
-    },
-    inputGroup: {
-        gap: 8,
-    },
-    inputLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-    },
-    inputIcon: {
-        marginRight: 12,
-    },
-    input: {
-        flex: 1,
-        fontSize: 15,
-        fontWeight: '500',
-        fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    },
-    saveBtn: {
-        backgroundColor: '#004e92',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 18,
-        borderRadius: 100,
-        gap: 12,
-        marginTop: 10,
-        marginBottom: 20,
-        shadowColor: '#004e92',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 8,
-    },
-    saveBtnPressed: {
-        opacity: 0.8,
-        transform: [{ scale: 0.98 }],
-    },
-    saveBtnDisabled: {
-        opacity: 0.6,
-    },
-    saveBtnText: {
-        color: '#ffffff',
-        fontSize: 17,
-        fontWeight: '700',
-        letterSpacing: 0.5,
-    },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    headerContainer: { position: 'relative', marginBottom: 10 },
+    headerGradient: { paddingBottom: 60, alignItems: 'center', borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
+    headerContent: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+    headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
+    profileCard: { alignItems: 'center', gap: 10 },
+    avatarContainer: { position: 'relative' },
+    avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 8 },
+    avatarText: { fontSize: 48, fontWeight: '700', color: '#004e92' },
+    cameraButton: { position: 'absolute', bottom: 0, right: 0, width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5, zIndex: 20 },
+    cameraButtonInner: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+    studentName: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+    curveBlock: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 30, borderTopLeftRadius: 35, borderTopRightRadius: 35 },
+    scrollContent: { paddingHorizontal: 20 },
+    sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 1.2, marginBottom: 12, marginLeft: 4 },
+    card: { borderRadius: 24, padding: 20, borderWidth: 1, gap: 16, shadowColor: '#004e92', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    inputGroup: { gap: 6 },
+    inputLabel: { fontSize: 12, fontWeight: '700', marginLeft: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+    inputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16, paddingHorizontal: 14 },
+    inputIcon: { marginRight: 12 },
+    input: { flex: 1, fontSize: 15, fontWeight: '600' },
+    saveBtn: { backgroundColor: '#004e92', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 20, gap: 10, marginTop: 32, marginBottom: 20, shadowColor: '#004e92', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 0.5 },
 });

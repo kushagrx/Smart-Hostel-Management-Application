@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import InputField from '../../../components/InputField';
 import { createStudent, updateStudent } from '../../../utils/studentUtils';
 
@@ -24,7 +25,8 @@ export default function AddStudentForm({ colors, theme, showAlert, handleTabChan
     const [dob, setDob] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [room, setRoom] = useState('');
-    const [email, setEmail] = useState('');
+    const [emailUsername, setEmailUsername] = useState('');
+    const [emailDomain, setEmailDomain] = useState('');
     const [googleEmail, setGoogleEmail] = useState('');
     const [collegeEmail, setCollegeEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -66,6 +68,10 @@ export default function AddStudentForm({ colors, theme, showAlert, handleTabChan
     useEffect(() => {
         const pwd = Math.random().toString(36).slice(-8);
         setGeneratedPassword(pwd);
+
+        AsyncStorage.getItem('hostel_domain').then(d => {
+            if (d) setEmailDomain(d);
+        });
     }, []);
 
     const pickImage = async () => {
@@ -110,7 +116,11 @@ export default function AddStudentForm({ colors, theme, showAlert, handleTabChan
 
     const handleAllotmentSubmit = async () => {
         setHasSubmitted(true);
-        if (!fullName || !rollNo || !collegeName || !hostelName || !dob || !room || !email || !phone || !address || !fatherName || !fatherPhone || !motherName || !motherPhone || !totalFee) {
+
+        const domainStr = emailDomain.trim().startsWith('@') ? emailDomain.trim() : (emailDomain.trim() ? `@${emailDomain.trim()}` : '');
+        const finalEmail = emailUsername && domainStr ? `${emailUsername.trim()}${domainStr}` : '';
+
+        if (!fullName || !rollNo || !collegeName || !hostelName || !dob || !room || !finalEmail || !phone || !address || !fatherName || !fatherPhone || !motherName || !motherPhone || !totalFee) {
             showAlert('Missing details', 'Please fill all mandatory fields (marked red).', [], 'error');
             return;
         }
@@ -121,9 +131,13 @@ export default function AddStudentForm({ colors, theme, showAlert, handleTabChan
         }
 
         try {
+            if (emailDomain) {
+                await AsyncStorage.setItem('hostel_domain', emailDomain);
+            }
+
             const data = {
                 fullName,
-                email: email.toLowerCase().trim(),
+                email: finalEmail.toLowerCase().trim(),
                 password: generatedPassword,
                 rollNo,
                 collegeName,
@@ -183,7 +197,7 @@ export default function AddStudentForm({ colors, theme, showAlert, handleTabChan
                             onPress: () => {
                                 handleTabChange(0);
                                 // Reset form
-                                setFullName(''); setRollNo(''); setRoom(''); setEmail(''); setPhone(''); setDob('');
+                                setFullName(''); setRollNo(''); setRoom(''); setEmailUsername(''); setPhone(''); setDob('');
                                 setAddress(''); setFatherName(''); setFatherPhone(''); setMotherName(''); setMotherPhone('');
                                 setTotalFee(''); setFeeFrequency('Monthly'); setBloodGroup(''); setMedicalHistory(''); setEmergencyContactName('');
                                 setEmergencyContactPhone(''); setWifiSSID(''); setWifiPassword('');
@@ -335,7 +349,8 @@ export default function AddStudentForm({ colors, theme, showAlert, handleTabChan
                 <InputField label="Full Name" icon="account" value={fullName} onChangeText={setFullName} placeholder="e.g. John Doe" required hasSubmitted={hasSubmitted} />
                 <InputField label="Roll No" icon="identifier" value={rollNo} onChangeText={setRollNo} placeholder="e.g. CS-24-001" required hasSubmitted={hasSubmitted} />
                 <InputField label="Room" icon="door" value={room} onChangeText={setRoom} placeholder="e.g. 101" required hasSubmitted={hasSubmitted} />
-                <InputField label="Login Email (Auth ID)" icon="email-lock" value={email} onChangeText={setEmail} placeholder="student@college.edu" keyboardType="email-address" required hasSubmitted={hasSubmitted} />
+                <InputField label="Email Username" icon="email" value={emailUsername} onChangeText={setEmailUsername} placeholder="e.g. john" required hasSubmitted={hasSubmitted} />
+                <InputField label="Hostel Domain (Applies to all new students)" icon="domain" value={emailDomain} onChangeText={setEmailDomain} placeholder="e.g. @college.edu" required hasSubmitted={hasSubmitted} />
                 <InputField label="Google Mail (For Login Sync)" icon="google" value={googleEmail} onChangeText={setGoogleEmail} placeholder="student.google@gmail.com" keyboardType="email-address" hasSubmitted={hasSubmitted} />
                 <InputField label="College Email" icon="email" value={collegeEmail} onChangeText={setCollegeEmail} placeholder="student@college.edu" keyboardType="email-address" hasSubmitted={hasSubmitted} />
                 <InputField label="Phone Number" icon="phone" value={phone} onChangeText={setPhone} placeholder="10-digit mobile number" keyboardType="phone-pad" required hasSubmitted={hasSubmitted} />

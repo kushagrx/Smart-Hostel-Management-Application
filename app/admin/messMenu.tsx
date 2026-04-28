@@ -109,10 +109,22 @@ export default function ManageMessMenuPage() {
 
     // When selected day changes or fullMenu updates, sync local state
     const [dirtyMeals, setDirtyMeals] = useState<Set<string>>(new Set());
+    const prevSelectedDayRef = React.useRef(selectedDay);
 
     // When selected day changes or fullMenu updates, sync local state
     useEffect(() => {
-        setDirtyMeals(new Set()); // Reset dirty state on day change
+        const isDayChange = prevSelectedDayRef.current !== selectedDay;
+        prevSelectedDayRef.current = selectedDay;
+
+        // If not a day change and there are local edits, DO NOT overwrite with server updates
+        if (!isDayChange && dirtyMeals.size > 0) {
+            return;
+        }
+
+        if (isDayChange) {
+            setDirtyMeals(new Set()); // Reset dirty state on day change
+        }
+
         if (fullMenu[selectedDay]) {
             // Deep copy to avoid reference sharing with fullMenu
             const dayData = JSON.parse(JSON.stringify(fullMenu[selectedDay]));
@@ -172,6 +184,7 @@ export default function ManageMessMenuPage() {
                 dinner: { start: '08:30', startPeriod: 'PM', end: '09:30', endPeriod: 'PM' }
             });
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDay, fullMenu]);
 
     const handleAddItem = (mealType: string) => {

@@ -1,4 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -11,7 +11,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  TouchableOpacity
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
@@ -20,7 +21,7 @@ import { useTheme } from '../../utils/ThemeContext';
 export default function ChangePassword() {
   const router = useRouter();
   const { showAlert } = useAlert();
-  const { colors, theme, isDark } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -79,23 +80,23 @@ export default function ChangePassword() {
     placeholder: string,
     showPassword: boolean,
     setShowPassword: (val: boolean) => void,
-    icon: any = 'lock-outline'
+    icon: any
   ) => (
     <View style={styles.inputGroup}>
       <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{label}</Text>
       <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: colors.border }]}>
-        <MaterialIcons name={icon} size={20} color={colors.textSecondary} style={styles.inputIcon} />
+        <MaterialCommunityIcons name={icon} size={20} color={isDark ? '#60A5FA' : '#004e92'} style={styles.inputIcon} />
         <TextInput
           style={[styles.input, { color: colors.text }]}
           value={value}
           onChangeText={setValue}
           secureTextEntry={!showPassword}
           placeholder={placeholder}
-          placeholderTextColor={colors.textSecondary + '80'}
+          placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
         />
-        <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-          <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={20} color={colors.textSecondary} />
-        </Pressable>
+        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+          <MaterialCommunityIcons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -107,254 +108,155 @@ export default function ChangePassword() {
     >
       <Stack.Screen options={{ headerShown: false }} />
 
+      <LinearGradient
+        colors={['#000428', '#004e92']}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Change Password</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </LinearGradient>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
       >
-        {/* Premium Banner Header */}
-        <View style={styles.headerContainer}>
-          <LinearGradient
-            colors={['#000428', '#004e92']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.headerGradient, { paddingTop: insets.top + 20 }]}
-          >
-            <View style={styles.headerContent}>
-              <Pressable onPress={() => router.back()} style={styles.backButton}>
-                <MaterialIcons name="arrow-back" size={24} color="#fff" />
-              </Pressable>
-              <Text style={styles.headerTitle}>Change Password</Text>
-              <View style={{ width: 40 }} />
-            </View>
-
-            {/* Centered Graphic/Icon for Security */}
-            <View style={styles.securityIconContainer}>
-              <View style={styles.securityIconHero}>
-                <MaterialIcons name="shield" size={48} color="#004e92" />
-              </View>
-              <Text style={styles.securityTitle}>Secure Your Account</Text>
-            </View>
-          </LinearGradient>
-          <View style={[styles.curveBlock, { backgroundColor: colors.background }]} />
-        </View>
-
-        {/* Main Content Area */}
-        <View style={styles.scrollContent}>
-          <View style={styles.section}>
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={styles.helperText}>
-                Create a strong password with at least 6 characters. Use a combination of letters, numbers, and symbols.
-              </Text>
-
-              {renderInput(
-                "Current Password",
-                currentPassword,
-                setCurrentPassword,
-                "Enter current password",
-                showCurrent,
-                setShowCurrent,
-                "lock"
-              )}
-
-              {renderInput(
-                "New Password",
-                newPassword,
-                setNewPassword,
-                "Enter new password",
-                showNew,
-                setShowNew,
-                "lock-reset"
-              )}
-
-              {renderInput(
-                "Confirm New Password",
-                confirmPassword,
-                setConfirmPassword,
-                "Confirm new password",
-                showConfirm,
-                setShowConfirm,
-                "check-circle-outline"
-              )}
-
-            </View>
+        {/* Hero Section */}
+        <View style={styles.hero}>
+          <View style={[styles.heroIconWrap, { backgroundColor: isDark ? '#0F172A' : '#EFF6FF' }]}>
+            <LinearGradient colors={['#004e92', '#000428']} style={styles.heroIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+              <MaterialCommunityIcons name="lock-reset" size={32} color="#fff" />
+            </LinearGradient>
           </View>
-
-          {/* Change Password Button */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.saveBtn,
-              pressed && styles.saveBtnPressed,
-              isLoading && styles.saveBtnDisabled
-            ]}
-            onPress={handleChangePassword}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <MaterialIcons name="update" size={24} color="#fff" />
-                <Text style={styles.saveBtnText}>Update Password</Text>
-              </>
-            )}
-          </Pressable>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Update Security</Text>
+          <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
+            Ensure your account is protected by using a strong, unique password.
+          </Text>
         </View>
 
+        {/* Input Card */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {renderInput(
+            "Current Password",
+            currentPassword,
+            setCurrentPassword,
+            "Enter current password",
+            showCurrent,
+            setShowCurrent,
+            "lock-outline"
+          )}
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {renderInput(
+            "New Password",
+            newPassword,
+            setNewPassword,
+            "Enter new password",
+            showNew,
+            setShowNew,
+            "shield-lock-outline"
+          )}
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {renderInput(
+            "Confirm New Password",
+            confirmPassword,
+            setConfirmPassword,
+            "Confirm new password",
+            showConfirm,
+            setShowConfirm,
+            "check-decagram-outline"
+          )}
+        </View>
+
+        {/* Info Note */}
+        <View style={[styles.noteCard, {
+          backgroundColor: isDark ? '#0c2d48' : '#EFF6FF',
+          borderColor: isDark ? '#1e3a5f' : '#BFDBFE',
+          marginTop: 20
+        }]}>
+          <MaterialCommunityIcons name="information-outline" size={18} color={isDark ? '#93C5FD' : '#3B82F6'} />
+          <Text style={[styles.noteText, { color: isDark ? '#93C5FD' : '#1D4ED8' }]}>
+            Password must be at least 6 characters long and include a mix of letters and numbers.
+          </Text>
+        </View>
+
+        {/* Action Button */}
+        <TouchableOpacity
+          style={[styles.saveBtn, isLoading && { opacity: 0.7 }]}
+          onPress={handleChangePassword}
+          disabled={isLoading}
+          activeOpacity={0.8}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="shield-check-outline" size={22} color="#fff" />
+              <Text style={styles.saveBtnText}>Update Password</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  header: { paddingBottom: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  headerContainer: {
-    position: 'relative',
-    marginBottom: 10,
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
+  hero: { alignItems: 'center', marginBottom: 24, gap: 8 },
+  heroIconWrap: {
+    width: 80, height: 80, borderRadius: 24,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 4,
   },
-  headerGradient: {
-    paddingBottom: 50,
-    alignItems: 'center',
+  heroIcon: {
+    width: 64, height: 64, borderRadius: 20,
+    justifyContent: 'center', alignItems: 'center',
   },
-  headerContent: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-  securityIconContainer: {
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  securityIconHero: {
-    width: 100,
-    height: 100,
-    borderRadius: 32,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
-    transform: [{ rotate: '10deg' }]
-  },
-  securityTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.5,
-    marginTop: 8,
-  },
-  curveBlock: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
-  section: {
-    marginBottom: 28,
-  },
+  heroTitle: { fontSize: 22, fontWeight: '800', letterSpacing: 0.3 },
+  heroSub: { fontSize: 14, textAlign: 'center', lineHeight: 21, paddingHorizontal: 10 },
   card: {
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    gap: 20,
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    borderRadius: 24, borderWidth: 1, padding: 20,
+    shadowColor: '#004e92', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
   },
-  helperText: {
-    color: '#64748b',
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
+  inputGroup: { gap: 8, marginVertical: 8 },
+  inputLabel: { fontSize: 13, fontWeight: '700', marginLeft: 4, letterSpacing: 0.5, textTransform: 'uppercase' },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingLeft: 16,
-    paddingRight: 8,
-    height: 52,
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, height: 54,
   },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-  },
-  eyeBtn: {
-    padding: 8,
-  },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, fontSize: 16, fontWeight: '600' },
+  eyeBtn: { padding: 4 },
+  divider: { height: 1, marginVertical: 12, opacity: 0.5 },
   saveBtn: {
-    backgroundColor: '#004e92',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    borderRadius: 100,
-    gap: 12,
-    marginTop: 10,
-    shadowColor: '#004e92',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    backgroundColor: '#004e92', flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', padding: 18, borderRadius: 20, gap: 10,
+    marginTop: 32, shadowColor: '#004e92', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
-  saveBtnPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
+  saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 0.5 },
+  noteCard: {
+    borderRadius: 16, borderWidth: 1, padding: 14,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
   },
-  saveBtnDisabled: {
-    opacity: 0.6,
-  },
-  saveBtnText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  noteText: { fontSize: 13, lineHeight: 19, flex: 1 },
 });

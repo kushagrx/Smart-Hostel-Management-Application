@@ -3,7 +3,11 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from 'react-native';
+import * as Device from 'expo-device';
+import * as Application from 'expo-application';
+import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomAlert, { AlertType } from '../components/CustomAlert';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +23,10 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [show2FA, setShow2FA] = useState(false);
+  const [tempToken, setTempToken] = useState('');
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'app' | 'sms' | 'both'>('app');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   // Custom Alert State
   const [alertVisible, setAlertVisible] = useState(false);
@@ -33,13 +41,53 @@ export default function Login() {
     setAlertVisible(true);
   };
 
+  const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+
   useEffect(() => {
     console.log('📡 Google Sign-In Config:', process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ? 'Loaded' : 'MISSING');
     GoogleSignin.configure({
       webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
       offlineAccess: true,
     });
+    checkBiometric();
   }, []);
+
+  const checkBiometric = async () => {
+    try {
+      const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+      const enabled = await AsyncStorage.getItem('biometric_enabled');
+      if (enabled === 'true') {
+        const hasHardware = await LocalAuthentication.hasHardwareAsync();
+        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+        if (hasHardware && isEnrolled) {
+          setIsBiometricSupported(true);
+        }
+      }
+    } catch (e) {
+      console.log('Biometric check failed', e);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Login with Biometrics',
+      });
+      if (result.success) {
+        const savedEmail = await SecureStore.getItemAsync('saved_email');
+        const savedPassword = await SecureStore.getItemAsync('saved_password');
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          handleLogin(savedEmail, savedPassword);
+        } else {
+          showAlert('Error', 'No saved credentials found. Please login with password first.', 'warning');
+        }
+      }
+    } catch (e) {
+      console.log('Biometric login error', e);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -55,11 +103,24 @@ export default function Login() {
         const { default: api } = await import('../utils/api');
         const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
 
-        const response = await api.post('/auth/google', { token: idToken });
-        const { user, token } = response.data;
+        const response = await api.post('/auth/google', { 
+          token: idToken,
+          deviceName: Device.deviceName || Device.modelName || Platform.OS,
+          appVersion: Application.nativeApplicationVersion || '1.0.0'
+        });
+
+        if (response.data.requiresTwoFactor) {
+          setTempToken(response.data.tempToken);
+          setTwoFactorMethod(response.data.method || 'app');
+          setShow2FA(true);
+          return;
+        }
+
+        const { user, token, refreshToken } = response.data;
 
         // Store Token
         await AsyncStorage.setItem('userToken', token);
+        if (refreshToken) await AsyncStorage.setItem('refreshToken', refreshToken);
 
         // Store User Info
         await setStoredUser({
@@ -110,8 +171,8 @@ export default function Login() {
     }
   };
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+  const handleLogin = async (loginEmail = email, loginPassword = password) => {
+    if (!loginEmail.trim() || !loginPassword.trim()) {
       showAlert('Error', 'Please enter both email and password', 'warning');
       return;
     }
@@ -124,16 +185,26 @@ export default function Login() {
       const { setStoredUser } = await import('../utils/authUtils');
       const { getRoleFromEmail } = await import('../utils/roleUtils');
 
-      console.log('Attempting login with:', email);
+      console.log('Attempting login with:', loginEmail);
       const response = await api.post('/auth/login', {
-        email: email.trim().toLowerCase(),
-        password: password.trim()
+        email: loginEmail.trim().toLowerCase(),
+        password: loginPassword.trim(),
+        deviceName: Device.deviceName || Device.modelName || Platform.OS,
+        appVersion: Application.nativeApplicationVersion || '1.0.0'
       });
 
-      const { user, token } = response.data;
+      if (response.data.requiresTwoFactor) {
+        setTempToken(response.data.tempToken);
+        setTwoFactorMethod(response.data.method || 'app');
+        setShow2FA(true);
+        return;
+      }
+
+      const { user, token, refreshToken } = response.data;
 
       // Store Token
       await AsyncStorage.setItem('userToken', token);
+      if (refreshToken) await AsyncStorage.setItem('refreshToken', refreshToken);
 
       // Store User
       await setStoredUser({
@@ -141,6 +212,10 @@ export default function Login() {
         name: user.fullName || user.email,
         role: user.role
       });
+
+      // Save credentials for Biometrics
+      await SecureStore.setItemAsync('saved_email', loginEmail.trim().toLowerCase());
+      await SecureStore.setItemAsync('saved_password', loginPassword.trim());
 
       await refreshUser();
 
@@ -165,6 +240,64 @@ export default function Login() {
       console.error('Login Error:', e);
       const message = e.response?.data?.error || e.message || 'Login failed';
       showAlert('Error', message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async () => {
+    if (!twoFactorCode || twoFactorCode.length < 6) {
+      showAlert('Error', 'Please enter a valid 6-digit code', 'warning');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { default: api } = await import('../utils/api');
+      const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+      
+      const response = await api.post('/auth/login/verify-2fa', {
+        tempToken,
+        token: twoFactorCode,
+        deviceName: Device.deviceName || Device.modelName || Platform.OS,
+        appVersion: Application.nativeApplicationVersion || '1.0.0'
+      });
+
+      const { user, token, refreshToken } = response.data;
+
+      await AsyncStorage.setItem('userToken', token);
+      if (refreshToken) await AsyncStorage.setItem('refreshToken', refreshToken);
+
+      await setStoredUser({
+        id: user.id.toString(),
+        name: user.fullName || user.email,
+        role: user.role
+      });
+      
+      // Save credentials for Biometrics
+      await SecureStore.setItemAsync('saved_email', email.trim().toLowerCase());
+      await SecureStore.setItemAsync('saved_password', password.trim());
+
+      await refreshUser();
+
+      const { useSettingsStore } = await import('../store/useSettingsStore');
+      await useSettingsStore.getState().loadSettings();
+      const { onboardingCompleted } = useSettingsStore.getState();
+
+      setShow2FA(false);
+
+      if (!onboardingCompleted) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      if (user.role === 'admin') {
+        router.replace('/admin');
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (e: any) {
+      console.error('2FA Verify Error:', e);
+      showAlert('Error', e.response?.data?.error || 'Invalid 2FA Code', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -265,26 +398,34 @@ export default function Login() {
               </View>
             </View>
 
-            {/* Primary Login Button */}
-            <TouchableOpacity
-              style={styles.loginBtnContainer}
-              onPress={handleLogin}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#2CB4FF', '#2563EB']} // Cyan to Blue gradient
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.loginBtn}
+            {/* Primary Login Button + Biometric */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={[styles.loginBtnContainer, { flex: 1 }]}
+                onPress={() => handleLogin()}
+                disabled={isLoading}
+                activeOpacity={0.8}
               >
-                {isLoading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.loginBtnText}>Log In</Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={['#2CB4FF', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.loginBtn}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.loginBtnText}>Log In</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {isBiometricSupported && (
+                <TouchableOpacity style={styles.biometricBtn} onPress={handleBiometricLogin} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="fingerprint" size={30} color="#2CB4FF" />
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* Divider */}
             <View style={styles.dividerContainer}>
@@ -306,6 +447,43 @@ export default function Login() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 2FA Modal */}
+      <Modal visible={show2FA} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <MaterialCommunityIcons name={twoFactorMethod === 'sms' ? "message-processing-outline" : "shield-lock-outline"} size={48} color="#2CB4FF" style={{ marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Two-Factor Auth</Text>
+            <Text style={styles.modalDesc}>
+              {twoFactorMethod === 'sms' 
+                ? 'Enter the 6-digit code sent to your phone.' 
+                : twoFactorMethod === 'both' 
+                  ? 'Enter the 6-digit code from your authenticator app or phone.' 
+                  : 'Enter the 6-digit code from your authenticator app.'}
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="000000"
+              placeholderTextColor="#64748B"
+              keyboardType="number-pad"
+              maxLength={6}
+              value={twoFactorCode}
+              onChangeText={setTwoFactorCode}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShow2FA(false)}>
+                <Text style={styles.modalBtnTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnPrimary} onPress={handleVerify2FA} disabled={isLoading}>
+                {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnTextPrimary}>Verify</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -487,4 +665,86 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  biometricBtn: {
+    height: 56,
+    width: 56,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFF',
+    marginBottom: 8,
+  },
+  modalDesc: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  modalInput: {
+    width: '100%',
+    height: 56,
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    color: '#FFF',
+    fontSize: 24,
+    letterSpacing: 8,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalBtnCancel: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  modalBtnTextCancel: {
+    color: '#94A3B8',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalBtnPrimary: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+  },
+  modalBtnTextPrimary: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  }
 });

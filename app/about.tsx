@@ -140,17 +140,25 @@ export default function AboutPage() {
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Custom Hero Header */}
                 <View style={styles.heroContainer}>
-                    <Image
-                        source={{ uri: hostelInfo?.image_url || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80' }}
-                        style={styles.heroImage}
-                        resizeMode="cover"
-                    />
+                    {!loading ? (
+                        <Image
+                            source={{ uri: hostelInfo?.image_url || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80' }}
+                            style={styles.heroImage}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <View style={[styles.heroImage, { backgroundColor: theme === 'dark' ? '#1E293B' : '#E2E8F0' }]} />
+                    )}
                     <LinearGradient
                         colors={['transparent', 'rgba(0,0,0,0.8)']}
                         style={styles.heroOverlay}
                     >
-                        <Text style={styles.heroTitle}>{hostelInfo?.name || 'Smart Hostel'}</Text>
-                        <Text style={styles.heroSubtitle}>{hostelInfo?.subtitle || 'no detail added right now'}</Text>
+                        <Text style={styles.heroTitle}>
+                            {loading ? 'Loading...' : (hostelInfo?.name || 'Smart Hostel')}
+                        </Text>
+                        <Text style={styles.heroSubtitle}>
+                            {loading ? 'Please wait' : (hostelInfo?.subtitle || 'no detail added right now')}
+                        </Text>
                     </LinearGradient>
 
                     {/* Back Button Overlay */}
@@ -163,17 +171,17 @@ export default function AboutPage() {
                 </View>
 
                 <View style={styles.content}>
-                    {hostelInfo?.location && (
+                    {!loading && hostelInfo?.location && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, padding: 12, backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
                             <MaterialCommunityIcons name="map-marker" size={20} color={colors.primary} style={{ marginRight: 8 }} />
                             <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500', flex: 1 }}>
-                                {hostelInfo.location || 'no detail added right now'}
+                                {hostelInfo.location}
                             </Text>
                         </View>
                     )}
 
                     <Text style={styles.introText}>
-                        {hostelInfo?.description || 'no detail added right now'}
+                        {loading ? 'Loading description...' : (hostelInfo?.description || 'no detail added right now')}
                     </Text>
 
                     <Text style={styles.sectionTitle}>Our Facilities</Text>
@@ -225,7 +233,7 @@ export default function AboutPage() {
                         </Text>
                     )}
 
-                    {hostelInfo?.footer_text && (
+                    {!loading && hostelInfo?.footer_text && (
                         <View style={{ marginTop: 24, marginBottom: 40 }}>
                             <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 15, lineHeight: 24 }}>
                                 {hostelInfo.footer_text}
