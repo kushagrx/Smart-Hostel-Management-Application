@@ -59,6 +59,24 @@ const darkColors: ThemeColors = {
     shadow: '#000000',
 };
 
+const lightColorsHighContrast: ThemeColors = {
+    ...lightColors,
+    text: '#000000',
+    textSecondary: '#1C2433', // Darker gray
+    border: '#94A3B8', // More visible border
+    primary: '#002B5E', // Deeper primary
+};
+
+const darkColorsHighContrast: ThemeColors = {
+    ...darkColors,
+    background: '#000000',
+    card: '#0F172A',
+    text: '#FFFFFF',
+    textSecondary: '#E2E8F0', // Lighter gray
+    border: '#64748B', // More visible border
+    primary: '#60A5FA', 
+};
+
 interface ThemeState {
     theme: Theme;
     isDark: boolean;
@@ -77,12 +95,17 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
     setTheme: async (newTheme: Theme) => {
         const isDark = newTheme === 'dark';
-        const colors = isDark ? darkColors : lightColors;
+        const { useAccessibilityStore } = require('./useAccessibilityStore');
+        const isHighContrast = useAccessibilityStore.getState().highContrast;
+        
+        let colors = lightColors;
+        if (isDark) colors = isHighContrast ? darkColorsHighContrast : darkColors;
+        else colors = isHighContrast ? lightColorsHighContrast : lightColors;
+
         set({ theme: newTheme, isDark, colors });
 
         try {
             await AsyncStorage.setItem('app_theme', newTheme);
-            // Non-critical: may fail during rapid reloads if activity is not ready
             SystemUI.setBackgroundColorAsync(colors.background).catch(() => { });
         } catch (e) {
             console.error('Failed to save theme', e);
@@ -102,21 +125,37 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             const initialTheme = (storedTheme as Theme) || (systemScheme as Theme);
 
             const isDark = initialTheme === 'dark';
-            const colors = isDark ? darkColors : lightColors;
+            const { useAccessibilityStore } = require('./useAccessibilityStore');
+            const isHighContrast = useAccessibilityStore.getState().highContrast;
+            
+            let colors = lightColors;
+            if (isDark) colors = isHighContrast ? darkColorsHighContrast : darkColors;
+            else colors = isHighContrast ? lightColorsHighContrast : lightColors;
 
             set({ theme: initialTheme, isDark, colors, isLoaded: true });
 
-            // Non-critical: may fail during rapid reloads if activity is not ready
             SystemUI.setBackgroundColorAsync(colors.background).catch(() => { });
         } catch (e) {
             console.error('Failed to init theme', e);
             set({ isLoaded: true });
         }
+    },
+    
+    // Call this when high contrast changes
+    refreshColors: () => {
+        get().setTheme(get().theme);
     }
 }));
 
 // Initialize theme
 useThemeStore.getState().initTheme();
 
-// Listen for system theme changes if no stored preference?
-// For now, simple implementation.
+// Listen to accessibility store changes to refresh colors dynamically
+setTimeout(() => {
+    const { useAccessibilityStore } = require('./useAccessibilityStore');
+    useAccessibilityStore.subscribe((state: any, prevState: any) => {
+        if (state.highContrast !== prevState.highContrast) {
+            useThemeStore.getState().refreshColors();
+        }
+    });
+}, 0);

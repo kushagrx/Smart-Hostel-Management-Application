@@ -1,7 +1,8 @@
 @echo off
 echo Starting Smart Hostel Backend...
 start cmd /k "cd backend && npm run dev"
-
+echo Starting AI Microservice...
+start cmd /k "cd ai-service && venv\Scripts\uvicorn main:app --reload --host 0.0.0.0"
 @REM echo Starting Smart Hostel Frontend...
 @REM start cmd /k "npx expo start"
 

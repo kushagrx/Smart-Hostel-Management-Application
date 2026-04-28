@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api, { API_BASE_URL } from '../../utils/api';
 import { isAdmin, useUser } from '../../utils/authUtils';
@@ -29,6 +29,7 @@ export default function ChatIndex() {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Local state to track if we've finished checking the user from storage
     const [authChecking, setAuthChecking] = useState(true);
@@ -102,6 +103,10 @@ export default function ChatIndex() {
         fetchConversations();
     };
 
+    const filteredConversations = conversations.filter(c => 
+        c.studentName && c.studentName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     const renderItem = ({ item }: { item: Conversation }) => {
         const date = new Date(item.time);
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -120,11 +125,54 @@ export default function ChatIndex() {
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: theme === 'dark' ? '#0B1121' : '#F8FAFC' }]}><LinearGradient colors={['#1e3c72', '#2a5298']} style={[styles.header, { paddingTop: insets.top + 10 }]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}><View style={styles.headerContent}><TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><MaterialIcons name="chevron-left" size={32} color="#fff" /></TouchableOpacity><Text style={styles.headerTitle}>Messages</Text><View style={{ width: 44 }} /></View></LinearGradient>{loading ? (<View style={styles.centered}><ActivityIndicator size="large" color={colors.primary} /></View>) : (<FlatList data={conversations} renderItem={renderItem} keyExtractor={item => item.id.toString()} contentContainerStyle={{ padding: 16, gap: 12 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} ListEmptyComponent={<View style={styles.emptyContainer}><MaterialCommunityIcons name="chat-outline" size={64} color={colors.textSecondary} /><Text style={[styles.emptyText, { color: colors.textSecondary }]}>No conversations yet</Text></View>} />)}</View>
+        <View style={[styles.container, { backgroundColor: theme === 'dark' ? '#0B1121' : '#F8FAFC' }]}>
+            <LinearGradient colors={['#1e3c72', '#2a5298']} style={[styles.header, { paddingTop: insets.top + 10 }]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                <View style={styles.headerContent}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                        <MaterialIcons name="chevron-left" size={32} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Messages</Text>
+                    <TouchableOpacity onPress={() => router.push('/chat/new')} style={styles.backBtn}>
+                        <MaterialIcons name="add" size={28} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+                {/* Search Bar */}
+                <View style={[styles.searchContainer, { marginTop: 16 }]}>
+                    <MaterialCommunityIcons name="magnify" size={22} color="rgba(255,255,255,0.7)" style={{ marginRight: 8 }} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search students..."
+                        placeholderTextColor="rgba(255,255,255,0.5)"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                            <MaterialCommunityIcons name="close-circle" size={20} color="rgba(255,255,255,0.7)" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </LinearGradient>
+            {loading ? (
+                <View style={styles.centered}><ActivityIndicator size="large" color={colors.primary} /></View>
+            ) : (
+                <FlatList 
+                    data={filteredConversations} 
+                    renderItem={renderItem} 
+                    keyExtractor={item => item.id.toString()} 
+                    contentContainerStyle={{ padding: 16, gap: 12 }} 
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} 
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <MaterialCommunityIcons name={searchQuery ? "chat-alert-outline" : "chat-outline"} size={64} color={colors.textSecondary} />
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{searchQuery ? 'No students match search' : 'No conversations yet'}</Text>
+                        </View>
+                    } 
+                />
+            )}
+        </View>
     );
 }
-
-
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
@@ -158,6 +206,19 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#fff',
         letterSpacing: 0.5,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        height: 48,
+    },
+    searchInput: {
+        flex: 1,
+        color: '#fff',
+        fontSize: 16,
     },
     chatItem: {
         flexDirection: 'row',

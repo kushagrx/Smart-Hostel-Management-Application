@@ -620,7 +620,7 @@ export default function Index() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.premiumServiceCard,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' },
+                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0', paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' },
                     pressed && styles.premiumCardPressed
                   ]}
                   onPress={() => {
@@ -670,7 +670,7 @@ export default function Index() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.premiumServiceCard,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' },
+                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0', paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' },
                     pressed && styles.premiumCardPressed
                   ]}
                   onPress={() => router.push('/laundry-request')}
@@ -704,215 +704,67 @@ export default function Index() {
 
         {/* CAMPUS SERVICES - BLUE SPECTRUM */}
         <View style={styles.servicesSectionWrapper}>
-          <View style={styles.sectionHeaderContainer}>
-            <Text style={[styles.sectionHeader, {
-              backgroundColor: isDark ? '#0F172A' : '#1E40AF',
-              color: isDark ? '#60A5FA' : '#FFFFFF'
-            }]}>Campus Services</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 12, paddingHorizontal: 16 }}>
+            <View style={{ width: 4, height: 16, backgroundColor: isDark ? '#60A5FA' : '#1E40AF', borderRadius: 2, marginRight: 8 }} />
+            <Text style={{ fontSize: 16, fontWeight: '900', letterSpacing: 0.5, color: isDark ? '#F1F5F9' : '#0F172A', textTransform: 'uppercase' }}>
+              Campus Services
+            </Text>
           </View>
 
           <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
-            {/* Ultra-Clean Peak Bento Grid */}
-            <View style={{ flexDirection: 'column', gap: 12 }}>
-
-              {/* TOP ROW: Large Hero (Left) + Stacked Cards (Right) */}
-              <View style={{ flexDirection: 'row', gap: 12, height: 180 }}>
-                {/* Hero Block: Complaints */}
+            <View style={{ flexDirection: 'column', gap: 10 }}>
+              {/* ROW 1 */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
-                  style={({ pressed }) => [
-                    styles.premiumServiceCard,
-                    {
-                      flex: 1.2,
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      justifyContent: 'space-between',
-                      overflow: 'hidden'
-                    },
-                    pressed && styles.premiumCardPressed
-                  ]}
+                  style={({ pressed }) => [{ flex: 1, aspectRatio: 1, backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0', borderWidth: 1, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] }]}
                   onPress={() => router.push('/complaints')}
                 >
-                  {/* Background Watermark Icon (like Mess Menu) */}
-                  <MaterialCommunityIcons
-                    name="alert-circle-outline"
-                    size={110}
-                    color={isDark ? '#F43F5E' : '#E11D48'}
-                    style={{ position: 'absolute', right: -25, bottom: -25, opacity: isDark ? 0.08 : 0.06 }}
-                  />
-
-                  <View style={{ gap: 4, marginTop: 'auto' }}>
-                    <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 20, marginBottom: 0 }]}>Complaints</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                      {pendingComplaints > 0 ? (
-                        <Text style={[styles.modernBadgeText, { color: isDark ? '#F43F5E' : '#E11D48', fontSize: 10, fontWeight: '900' }]}>
-                          {pendingComplaints} ACTION REQ.
-                        </Text>
-                      ) : (
-                        <Text style={[styles.modernBadgeText, { color: isDark ? '#94A3B8' : '#64748B', fontSize: 10, fontWeight: '900' }]}>
-                          ALL CLEAR
-                        </Text>
-                      )}
-                    </View>
-                    <Text style={{ color: isDark ? '#CBD5E1' : '#475569', fontSize: 12, fontWeight: '600', lineHeight: 16 }}>
-                      {totalComplaints} total recorded
-                    </Text>
-                  </View>
+                  <MaterialCommunityIcons name="alert-circle-outline" size={80} color={isDark ? '#F43F5E' : '#E11D48'} style={{ position: 'absolute', right: -12, bottom: -12, opacity: isDark ? 0.08 : 0.06 }} />
+                  <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 14, fontWeight: '700' }}>Complaints</Text>
+                  <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '500', marginTop: 4 }}>{totalComplaints} total</Text>
                 </Pressable>
 
-                {/* Right Stack: Leaves & Visitors */}
-                <View style={{ flex: 1, gap: 12 }}>
-                  {/* Leaves */}
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.premiumServiceCard,
-                      {
-                        flex: 1,
-                        backgroundColor: isDark ? colors.card : '#FFFFFF',
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        justifyContent: 'center',
-                        overflow: 'hidden'
-                      },
-                      pressed && styles.premiumCardPressed
-                    ]}
-                    onPress={() => router.push('/leave-request')}
-                  >
-                    <MaterialCommunityIcons
-                      name="wallet-travel"
-                      size={60}
-                      color={isDark ? '#34D399' : '#10B981'}
-                      style={{ position: 'absolute', right: -10, bottom: -10, opacity: isDark ? 0.08 : 0.06 }}
-                    />
-                    <View style={{ gap: 2 }}>
-                      <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 16, marginBottom: 0 }]}>Leaves</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        {pendingLeaves > 0 ? (
-                          <Text style={[styles.modernBadgeText, { color: isDark ? '#34D399' : '#10B981', fontSize: 9, fontWeight: '900' }]}>
-                            {pendingLeaves} PENDING
-                          </Text>
-                        ) : (
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
-                            {totalLeaves} Total
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </Pressable>
+                <Pressable
+                  style={({ pressed }) => [{ flex: 1, aspectRatio: 1, backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0', borderWidth: 1, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] }]}
+                  onPress={() => router.push('/leave-request')}
+                >
+                  <MaterialCommunityIcons name="wallet-travel" size={80} color={isDark ? '#34D399' : '#10B981'} style={{ position: 'absolute', right: -12, bottom: -12, opacity: isDark ? 0.08 : 0.06 }} />
+                  <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 14, fontWeight: '700' }}>Leaves</Text>
+                  <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '500', marginTop: 4 }}>{totalLeaves} total</Text>
+                </Pressable>
 
-                  {/* Visitors */}
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.premiumServiceCard,
-                      {
-                        flex: 1,
-                        backgroundColor: isDark ? colors.card : '#FFFFFF',
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        justifyContent: 'center',
-                        overflow: 'hidden'
-                      },
-                      pressed && styles.premiumCardPressed
-                    ]}
-                    onPress={() => router.push('/my-visitors')}
-                  >
-                    <MaterialCommunityIcons
-                      name="account-group"
-                      size={60}
-                      color={isDark ? '#A78BFA' : '#8B5CF6'}
-                      style={{ position: 'absolute', right: -10, bottom: -10, opacity: isDark ? 0.08 : 0.06 }}
-                    />
-                    <View style={{ gap: 2 }}>
-                      <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 16, marginBottom: 0 }]}>Visitors</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        {pendingVisitors > 0 ? (
-                          <Text style={[styles.modernBadgeText, { color: isDark ? '#A78BFA' : '#8B5CF6', fontSize: 9, fontWeight: '900' }]}>
-                            {pendingVisitors} PENDING
-                          </Text>
-                        ) : (
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
-                            {totalVisitors} Total
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </Pressable>
-                </View>
+                <Pressable
+                  style={({ pressed }) => [{ flex: 1, aspectRatio: 1, backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0', borderWidth: 1, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] }]}
+                  onPress={() => router.push('/my-visitors')}
+                >
+                  <MaterialCommunityIcons name="account-group" size={80} color={isDark ? '#A78BFA' : '#8B5CF6'} style={{ position: 'absolute', right: -12, bottom: -12, opacity: isDark ? 0.08 : 0.06 }} />
+                  <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 14, fontWeight: '700' }}>Visitors</Text>
+                  <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '500', marginTop: 4 }}>{totalVisitors} total</Text>
+                </Pressable>
               </View>
 
-              {/* BOTTOM ROW: Services & About Hostel */}
-              <View style={{ flexDirection: 'row', gap: 12, height: 120 }}>
-                {/* Services */}
+              {/* ROW 2 */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
-                  style={({ pressed }) => [
-                    styles.premiumServiceCard,
-                    {
-                      flex: 1,
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      justifyContent: 'center',
-                      overflow: 'hidden'
-                    },
-                    pressed && styles.premiumCardPressed
-                  ]}
+                  style={({ pressed }) => [{ flex: 1, aspectRatio: 1, backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0', borderWidth: 1, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] }]}
                   onPress={() => router.push('/roomservice')}
                 >
-                  <MaterialCommunityIcons
-                    name="broom"
-                    size={80}
-                    color={isDark ? '#FBBF24' : '#F59E0B'}
-                    style={{ position: 'absolute', right: -15, bottom: -15, opacity: isDark ? 0.08 : 0.06 }}
-                  />
-                  <View style={{ gap: 4 }}>
-                    <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 17, marginBottom: 0 }]}>Services</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={[styles.modernBadgeText, { color: isDark ? '#FBBF24' : '#F59E0B', fontSize: 10, fontWeight: '900' }]}>
-                        {pendingRoomServices > 0 ? `${pendingRoomServices} PENDING` : 'ACTIVE'}
-                      </Text>
-                    </View>
-                    <Text style={{ color: isDark ? '#CBD5E1' : '#475569', fontSize: 12, fontWeight: '600', lineHeight: 16 }}>
-                      Room cleanup
-                    </Text>
-                  </View>
+                  <MaterialCommunityIcons name="broom" size={80} color={isDark ? '#FBBF24' : '#F59E0B'} style={{ position: 'absolute', right: -12, bottom: -12, opacity: isDark ? 0.08 : 0.06 }} />
+                  <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 14, fontWeight: '700' }}>Services</Text>
+                  <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '500', marginTop: 4 }}>Cleanup</Text>
                 </Pressable>
 
-                {/* About Hostel */}
                 <Pressable
-                  style={({ pressed }) => [
-                    styles.premiumServiceCard,
-                    {
-                      flex: 1,
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      justifyContent: 'center',
-                      overflow: 'hidden'
-                    },
-                    pressed && styles.premiumCardPressed
-                  ]}
+                  style={({ pressed }) => [{ flex: 1, aspectRatio: 1, backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0', borderWidth: 1, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] }]}
                   onPress={() => router.push('/about')}
                 >
-                  <MaterialCommunityIcons
-                    name="office-building"
-                    size={80}
-                    color={isDark ? '#60A5FA' : '#3B82F6'}
-                    style={{ position: 'absolute', right: -15, bottom: -15, opacity: isDark ? 0.08 : 0.06 }}
-                  />
-                  <View style={{ gap: 4 }}>
-                    <Text style={[styles.serviceLabel, { color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 17, marginBottom: 0 }]}>About</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={[styles.modernBadgeText, { color: isDark ? '#60A5FA' : '#3B82F6', fontSize: 10, fontWeight: '900' }]}>
-                        {totalFacilities} FACILITIES
-                      </Text>
-                    </View>
-                    <Text style={{ color: isDark ? '#CBD5E1' : '#475569', fontSize: 12, fontWeight: '600', lineHeight: 16 }}>
-                      Info & rules
-                    </Text>
-                  </View>
+                  <MaterialCommunityIcons name="office-building" size={80} color={isDark ? '#60A5FA' : '#3B82F6'} style={{ position: 'absolute', right: -12, bottom: -12, opacity: isDark ? 0.08 : 0.06 }} />
+                  <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 14, fontWeight: '700' }}>About</Text>
+                  <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '500', marginTop: 4 }}>{totalFacilities} facilities</Text>
                 </Pressable>
-              </View>
 
+                <View style={{ flex: 1 }} />
+              </View>
             </View>
           </View>
         </View>
@@ -921,6 +773,20 @@ export default function Index() {
       </ScrollView >
 
 
+
+      {/* Floating Action Button for AI Chat */}
+      <TouchableOpacity 
+        style={[styles.aiFab, { backgroundColor: isDark ? '#4F46E5' : '#4338CA' }]}
+        onPress={() => router.push('/ai-chat')}
+        activeOpacity={0.8}
+      >
+        <LinearGradient
+          colors={isDark ? ['#6366F1', '#4338CA'] : ['#818CF8', '#4F46E5']}
+          style={styles.aiFabGradient}
+        >
+          <MaterialCommunityIcons name="robot-outline" size={28} color="#FFFFFF" />
+        </LinearGradient>
+      </TouchableOpacity>
 
       <StudentNotificationOverlay
         visible={notificationVisible}
@@ -934,6 +800,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  aiFab: {
+    position: 'absolute',
+    bottom: 85,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    elevation: 8,
+    shadowColor: '#4338CA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  aiFabGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 30,
   },
   loadingContainer: {
     flex: 1,
@@ -1284,19 +1170,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   premiumServiceCard: {
-    flex: 1,
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0', // Visible border for white cards
-    // Modern Soft Shadow
     shadowColor: '#1E293B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-    justifyContent: 'center',
-    gap: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    minHeight: 110,
+    justifyContent: 'flex-start',
   },
   premiumCardPressed: {
     transform: [{ scale: 0.98 }],

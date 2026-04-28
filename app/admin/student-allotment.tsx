@@ -3,7 +3,7 @@ import { Picker } from '@react-native-picker/picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../../context/AlertContext';
@@ -60,7 +60,8 @@ export default function StudentAllotmentPage() {
   const [hostelName, setHostelName] = useState('');
   const [age, setAge] = useState('');
   const [room, setRoom] = useState('');
-  const [email, setEmail] = useState('');
+  const [emailUsername, setEmailUsername] = useState('');
+  const [emailDomain, setEmailDomain] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
   const [totalFee, setTotalFee] = useState('');
@@ -90,12 +91,19 @@ export default function StudentAllotmentPage() {
     // Generate a secure random password on mount
     const pwd = Math.random().toString(36).slice(-8); // 8 chars
     setGeneratedPassword(pwd);
+
+    AsyncStorage.getItem('hostel_domain').then(d => {
+      if (d) setEmailDomain(d);
+    });
   }, []);
 
   const handleSubmit = async () => {
     setHasSubmitted(true);
 
-    if (!fullName || !rollNo || !collegeName || !hostelName || !age || !room || !email || !phone) {
+    const domainStr = emailDomain.trim().startsWith('@') ? emailDomain.trim() : (emailDomain.trim() ? `@${emailDomain.trim()}` : '');
+    const finalEmail = emailUsername && domainStr ? `${emailUsername.trim()}${domainStr}` : '';
+
+    if (!fullName || !rollNo || !collegeName || !hostelName || !age || !room || !finalEmail || !phone) {
       showAlert('Missing details', 'Please fill all mandatory fields (marked red).', [], 'error');
       return;
     }
@@ -106,12 +114,16 @@ export default function StudentAllotmentPage() {
     }
 
     try {
+      if (emailDomain) {
+        await AsyncStorage.setItem('hostel_domain', emailDomain);
+      }
+
       const { default: api } = await import('../../utils/api');
 
 
       const data = {
         fullName,
-        email: email.trim(),
+        email: finalEmail,
         password: generatedPassword,
         rollNo,
         collegeName,
@@ -259,16 +271,30 @@ export default function StudentAllotmentPage() {
               </View>
             </View>
 
-            <InputField
-              label="Official Email"
-              icon="email-lock"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="student@college.edu"
-              keyboardType="email-address"
-              required
-              hasSubmitted={hasSubmitted}
-            />
+            <View style={styles.row}>
+              <View style={{ flex: 1.5, marginRight: 8 }}>
+                <InputField
+                  label="Email Username"
+                  icon="account"
+                  value={emailUsername}
+                  onChangeText={setEmailUsername}
+                  placeholder="e.g. john"
+                  required
+                  hasSubmitted={hasSubmitted}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <InputField
+                  label="Hostel Domain"
+                  icon="at"
+                  value={emailDomain}
+                  onChangeText={setEmailDomain}
+                  placeholder="@college.edu"
+                  required
+                  hasSubmitted={hasSubmitted}
+                />
+              </View>
+            </View>
 
             <InputField
               label="Phone Number"

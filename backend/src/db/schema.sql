@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     two_factor_temp_token VARCHAR(255),
     password_hash VARCHAR(255),
     notification_preferences JSONB DEFAULT '{"notices": true, "complaints": true, "leaves": true, "services": true, "payments": true, "mess": true, "laundry": true, "bus": true, "visitors": true}'::jsonb,
+    app_preferences JSONB DEFAULT '{"auto_download_wifi": true, "auto_download_mobile": false, "data_saver": false, "reduce_motion": false, "haptic_feedback": true, "high_contrast": false, "bold_text": false, "font_size": "default"}'::jsonb,
     last_notifications_cleared_at TIMESTAMPTZ DEFAULT to_timestamp(0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -301,12 +302,27 @@ CREATE TABLE IF NOT EXISTS visitors (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User Sessions Table
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    refresh_token VARCHAR(255) UNIQUE NOT NULL,
+    device_name VARCHAR(255),
+    app_version VARCHAR(50),
+    ip_address VARCHAR(45),
+    location VARCHAR(255),
+    is_current BOOLEAN DEFAULT false,
+    last_active TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Security (Row Level Security) ───────────────────────────────────────────
 -- Enable RLS for all tables to clear Supabase security warnings.
 -- Note: Your Node.js backend uses the 'postgres' superuser role, so it
 -- bypasses these policies and maintains full access automatically.
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE room_allocations ENABLE ROW LEVEL SECURITY;

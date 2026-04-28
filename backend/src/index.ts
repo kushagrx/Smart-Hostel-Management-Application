@@ -25,6 +25,10 @@ import searchRoutes from './routes/searchRoutes';
 import serviceRoutes from './routes/serviceRoutes';
 import studentRoutes from './routes/studentRoutes';
 import visitorRoutes from './routes/visitorRoutes';
+import aiRoutes from './routes/aiRoutes';
+import sessionRoutes from './routes/sessionRoutes';
+import preferenceRoutes from './routes/preferenceRoutes';
+import twoFactorRoutes from './routes/twoFactorRoutes';
 import { initSocket } from './socket';
 
 const app = express();
@@ -68,6 +72,10 @@ app.use('/api/mess', messAttendanceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/auth/sessions', sessionRoutes);
+app.use('/api/auth/2fa', twoFactorRoutes);
+app.use('/api/preferences', preferenceRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {
@@ -98,7 +106,11 @@ const startServer = async () => {
             
             ALTER TABLE users
             ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ DEFAULT NOW(),
-            ADD COLUMN IF NOT EXISTS push_token VARCHAR(255);
+            ADD COLUMN IF NOT EXISTS push_token VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS sms_2fa_enabled BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS sms_otp VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sms_otp_expires TIMESTAMPTZ;
             
             CREATE TABLE IF NOT EXISTS visitors (
                 id SERIAL PRIMARY KEY,

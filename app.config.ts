@@ -50,7 +50,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-font",
     "expo-notifications",
     "expo-web-browser",
-    "@react-native-google-signin/google-signin"
+    "@react-native-google-signin/google-signin",
+    "expo-secure-store",
+    "expo-local-authentication"
   ],
   experiments: {
     typedRoutes: true,
