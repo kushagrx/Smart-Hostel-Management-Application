@@ -89,19 +89,44 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 *   **Conflict-Free Allotments**: Fixed a race condition where room details (WiFi, Room Type) were being overwritten by `null` values during the subsequent profile photo upload.
 *   **Resilient Updates**: The `updateStudent` API now preserves existing database fields if new values aren't provided, ensuring data integrity across partial updates.
 
-## 🌟 Latest Major Enhancements (V3.5) - AI & Security
+## 🌟 Latest Major Enhancements (V3.5) - AI, Accessibility & Security
 
-### 1. AI Assistant Integration (`ai-service/`)
-*   **Dedicated Python AI**: Introduced a dedicated Python-based AI service using LangChain for handling chatbot queries and mutations.
-*   **Seamless App Integration**: Created `backend/src/routes/aiRoutes.ts` to proxy requests between the mobile app and the Python AI service. The AI can handle student queries, check complaint statuses, and process contextual requests.
+### 1. Phase 2 AI Assistant: "Action Takers" (`ai-service/`)
+*   **Dedicated Python AI Microservice**: Built a robust Uvicorn/Python service utilizing LangChain and OpenAI models to handle complex conversational logic.
+*   **Action & Mutation Tools**: The chatbot is no longer just informational. It can actively execute operations on behalf of the student:
+    *   **Log Complaints**: "My AC is broken" automatically triggers a facility complaint.
+    *   **Apply for Leave**: "I need to go home this weekend" drafts and submits a leave request.
+    *   **Register Visitors**: "My dad is visiting tomorrow" pre-fills and submits a visitor pass.
+*   **Contextual Intelligence**: Added support for relative date queries (e.g., "What's tomorrow's dinner?") and real-time personalized data retrieval (checking existing complaint statuses).
+*   **Seamless Bridge**: Developed `backend/src/routes/aiRoutes.ts` to proxy requests between the React Native app and the Python service with strict timeouts and error handling.
 
-### 2. Advanced Settings & Accessibility
-*   **Accessibility Engine**: Implemented global accessibility state management (`store/useAccessibilityStore.ts`), supporting high contrast, reduced motion, dynamic font sizing, and haptic feedback.
-*   **New Settings Architecture**: Completely redesigned the settings UI (`app/(tabs)/settings.tsx`) to look professional, adding modular sub-pages for Account, Privacy, Data & Storage, and Linked Accounts.
+### 2. Premium Settings Architecture & Neo-Bento UI
+*   **Unified Profile Hub**: Redesigned the settings screen (`app/(tabs)/settings.tsx`) into a WhatsApp/Telegram-style premium interface with a persistent top profile card.
+*   **Modular Sub-Pages**: Extracted massive configuration blocks into dedicated sub-menus for a cleaner UX:
+    *   `Privacy`: Manage profile visibility and read receipts.
+    *   `Data & Storage`: Options to auto-download media on WiFi/Mobile.
+    *   `Linked Accounts`: UI for managing active Google and Social logins.
+*   **Modern Campus Dashboard**: Updated the main dashboard grid to a sleek 3-column layout featuring subtle background watermark icons for a high-end visual aesthetic.
 
-### 3. Security Enhancements (Two-Factor Auth & Hardening)
-*   **2FA Backend Infrastructure**: Added backend support for Two-Factor Authentication (`backend/src/controllers/twoFactorController.ts`).
-*   **GitIgnore Fortification**: Massively updated `.gitignore` to rigorously exclude all sensitive files. Removed local databases, legacy service accounts, and hardcoded secrets from the Git tracking history to guarantee repository security.
+### 3. Comprehensive Accessibility Suite
+*   **Global State Management**: Introduced `store/useAccessibilityStore.ts` to track and instantly apply user preferences across the entire application without reloading.
+*   **Five-Pillar Implementation**:
+    *   **High Contrast Themes**: Drastically increases UI visibility for visually impaired users.
+    *   **Reduce Motion**: Disables intensive layout animations and transitions.
+    *   **Haptic Feedback**: Integrated tactical vibrations (`utils/haptics.ts`) for buttons, toggles, and critical actions.
+    *   **Dynamic Font Sizing**: Overrides standard text scaling.
+    *   **Bold Text Support**: Applies heavier font weights system-wide.
+
+### 4. Optimized Admin Allotment Workflow
+*   **Automated Domain Formatting**: Added a persistent, configurable hostel domain field in the Admin Dashboard's student allotment system.
+*   **Frictionless Onboarding**: Automatically affixes the configured prefix/suffix to emails when admins are registering new students, dramatically speeding up the data entry process.
+
+### 5. Security Hardening & Codebase Cleansing
+*   **GitIgnore Fortification**: Massively updated `.gitignore` to rigorously exclude all sensitive files, Python virtual environments (`venv`), and build caches.
+*   **Database Safety**: Removed `backend/src/database.db` from Git tracking to ensure the production/local SQLite database is never accidentally pushed.
+*   **Removed PII & Credentials**: Stopped tracking user upload folders (`backend/uploads/`), deleted tracked user profiles, and untracked legacy service accounts (`firebase-service-account.json`).
+*   **Hardcoded Secret Eradication**: Found and fixed a hardcoded Supabase database connection string in `backend/scripts/migrate_settings.js` to securely use `process.env.DATABASE_URL`.
+*   **Temporary Script Purge**: Cleaned out dummy databases, prototype backend scripts (`test_db.js`, `migrate-notifs.ts`), and legacy reorder tests.
 
 ## 🌟 Legacy Enhancements (V2)
 *   **Optimal Display**: Fully optimized for Android 8.0+ adaptive icons using foreground/background layers to prevent stretching or cropping.
