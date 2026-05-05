@@ -11,7 +11,8 @@ import {
     searchStudents,
     updateStudent,
     updateStudentProfilePhoto,
-    updateStudentSelfProfile
+    updateStudentSelfProfile,
+    exportStudentData
 } from '../controllers/studentController';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { logUpload, upload } from '../middleware/uploadMiddleware';
@@ -28,6 +29,8 @@ router.post('/profile/photo', requireAuth, logUpload, upload.single('profilePhot
 router.post('/profile/notifications/clear', requireAuth, clearNotifications);
 // Student Update Profile (Self)
 router.put('/profile', requireAuth, updateStudentSelfProfile);
+// Student Request Data Export
+router.post('/export-data', requireAuth, exportStudentData);
 
 // Admin Routes
 router.get('/all', requireAuth, requireAdmin, getAllStudents);

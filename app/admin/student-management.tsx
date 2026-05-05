@@ -2,11 +2,12 @@ import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, FlatList, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isAdmin, useUser } from '../../utils/authUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import AppText from '../../components/AppText';
 
 const { width } = Dimensions.get('window');
 const COLUMN_count = 2;
@@ -47,7 +48,7 @@ export default function StudentManagementPage() {
     if (!isAdmin(user)) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text>Access denied.</Text>
+                <AppText>Access denied.</AppText>
             </View>
         );
     }
@@ -167,7 +168,7 @@ export default function StudentManagementPage() {
                     >
                         <MaterialIcons name="arrow-left" size={24} color="#fff" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Student Management</Text>
+                    <AppText style={styles.headerTitle}>Student Management</AppText>
                 </View>
 
                 <View style={styles.searchContainer}>
@@ -204,14 +205,14 @@ export default function StudentManagementPage() {
                             <View style={[styles.iconBox, { backgroundColor: item.color + '15' }]}>
                                 <MaterialIcons name={item.icon as any} size={26} color={item.color} />
                             </View>
-                            <Text style={styles.cardTitle}>{item.label}</Text>
-                            <Text style={styles.cardDesc} numberOfLines={2}>{item.desc}</Text>
+                            <AppText style={styles.cardTitle}>{item.label}</AppText>
+                            <AppText style={styles.cardDesc} numberOfLines={2}>{item.desc}</AppText>
                         </View>
                     </TouchableOpacity>
                 )}
                 ListEmptyComponent={
                     <View style={{ alignItems: 'center', marginTop: 40 }}>
-                        <Text style={{ color: colors.textSecondary }}>No results found.</Text>
+                        <AppText style={{ color: colors.textSecondary }}>No results found.</AppText>
                     </View>
                 }
             />

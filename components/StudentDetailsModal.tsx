@@ -171,19 +171,19 @@ export default function StudentDetailsModal({ visible, student, onClose, onEdit,
                         <View style={{ alignItems: 'center', marginBottom: 20 }}>
                             {student.profilePhoto ? (
                                 <Image
-                                    source={{ uri: `${API_BASE_URL}${student.profilePhoto}` }}
+                                    source={{ uri: student.profilePhoto.startsWith('http') ? student.profilePhoto : `${API_BASE_URL}${student.profilePhoto}` }}
                                     style={{ width: 100, height: 100, borderRadius: 50, marginBottom: 8 }}
                                     contentFit="cover"
                                 />
                             ) : (
                                 <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                                     <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
-                                        {student.name ? student.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '?'}
+                                        {(student.name || student.fullName) ? (student.name || student.fullName).split(' ').map((n: string) => n[0]).join('').toUpperCase() : '?'}
                                     </Text>
                                 </View>
                             )}
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 4 }}>{student.name}</Text>
-                            <Text style={{ fontSize: 14, color: colors.textSecondary }}>{student.rollNo} • Room {student.room}</Text>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 4 }}>{student.name || student.fullName}</Text>
+                            <Text style={{ fontSize: 14, color: colors.textSecondary }}>{student.rollNo} • Room {student.room || student.roomNo}</Text>
 
                             {viewMode === 'full' && (
                                 <>

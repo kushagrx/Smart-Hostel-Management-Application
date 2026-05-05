@@ -3,7 +3,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
 import { useRefresh } from '../hooks/useRefresh';
@@ -11,6 +11,7 @@ import { createLeaveRequest, getStudentLeaves, LeaveRequest } from '../utils/lea
 import { fetchUserData } from '../utils/nameUtils';
 import { useTheme } from '../utils/ThemeContext';
 import { formatUniversalTime } from '../utils/timeUtils';
+import AppText from '../components/AppText';
 
 export default function LeaveRequestPage() {
     const router = useRouter();
@@ -139,8 +140,8 @@ export default function LeaveRequestPage() {
                             <MaterialIcons name="arrow-back" size={24} color="#fff" />
                         </Pressable>
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.headerTitle}>Apply for Leave</Text>
-                            <Text style={styles.headerSubtitle}>Request Time Off</Text>
+                            <AppText style={styles.headerTitle}>Apply for Leave</AppText>
+                            <AppText style={styles.headerSubtitle}>Request Time Off</AppText>
                         </View>
 
                     </View>
@@ -154,14 +155,14 @@ export default function LeaveRequestPage() {
                 <View style={{ padding: 24 }}>
                     {/* Form Section */}
                     <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>NEW REQUEST</Text>
+                        <AppText style={[styles.sectionTitle, { color: colors.textSecondary }]}>NEW REQUEST</AppText>
 
                         <View style={styles.dateRow}>
                             <View style={styles.dateField}>
-                                <Text style={[styles.label, { color: colors.textSecondary }]}>From Date</Text>
+                                <AppText style={[styles.label, { color: colors.textSecondary }]}>From Date</AppText>
                                 <Pressable onPress={() => setShowStartPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
                                     <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
-                                    <Text style={[styles.dateText, { color: colors.text }]}>{formatUniversalTime(startDate, { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                                    <AppText style={[styles.dateText, { color: colors.text }]}>{formatUniversalTime(startDate, { day: 'numeric', month: 'short', year: 'numeric' })}</AppText>
                                 </Pressable>
                                 {showStartPicker && (
                                     <DateTimePicker
@@ -175,10 +176,10 @@ export default function LeaveRequestPage() {
                             </View>
 
                             <View style={styles.dateField}>
-                                <Text style={[styles.label, { color: colors.textSecondary }]}>To Date</Text>
+                                <AppText style={[styles.label, { color: colors.textSecondary }]}>To Date</AppText>
                                 <Pressable onPress={() => setShowEndPicker(true)} style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
                                     <MaterialCommunityIcons name="calendar" size={20} color={colors.textSecondary} />
-                                    <Text style={[styles.dateText, { color: colors.text }]}>{formatUniversalTime(endDate, { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                                    <AppText style={[styles.dateText, { color: colors.text }]}>{formatUniversalTime(endDate, { day: 'numeric', month: 'short', year: 'numeric' })}</AppText>
                                 </Pressable>
                                 {showEndPicker && (
                                     <DateTimePicker
@@ -192,7 +193,7 @@ export default function LeaveRequestPage() {
                             </View>
                         </View>
 
-                        <Text style={[styles.label, { marginTop: 16, color: colors.textSecondary }]}>Reason</Text>
+                        <AppText style={[styles.label, { marginTop: 16, color: colors.textSecondary }]}>Reason</AppText>
                         <TextInput
                             style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                             placeholder="e.g. Visiting home for festival..."
@@ -214,20 +215,20 @@ export default function LeaveRequestPage() {
                                 style={styles.btnGradient}
                             >
                                 {loading ? (
-                                    <Text style={styles.btnText}>Submitting...</Text>
+                                    <AppText style={styles.btnText}>Submitting...</AppText>
                                 ) : (
-                                    <Text style={styles.btnText}>Submit Request</Text>
+                                    <AppText style={styles.btnText}>Submit Request</AppText>
                                 )}
                             </LinearGradient>
                         </Pressable>
                     </View>
 
                     {/* History Section */}
-                    <Text style={[styles.sectionTitle, { marginTop: 24, marginLeft: 4, color: colors.textSecondary }]}>PAST REQUESTS</Text>
+                    <AppText style={[styles.sectionTitle, { marginTop: 24, marginLeft: 4, color: colors.textSecondary }]}>PAST REQUESTS</AppText>
                     {history.length === 0 ? (
                         <View style={styles.emptyState}>
                             <MaterialCommunityIcons name="calendar-blank-outline" size={48} color={colors.textSecondary} />
-                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No leave history found</Text>
+                            <AppText style={[styles.emptyText, { color: colors.textSecondary }]}>No leave history found</AppText>
                         </View>
                     ) : (
                         <View style={styles.historyList}>
@@ -235,22 +236,22 @@ export default function LeaveRequestPage() {
                                 <View key={item.id} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                                     <View style={styles.historyHeader}>
                                         <View style={styles.dateInfo}>
-                                            <Text style={[styles.historyDate, { color: colors.text }]}>
+                                            <AppText style={[styles.historyDate, { color: colors.text }]}>
                                                 {formatUniversalTime(item.startDate, { day: 'numeric', month: 'short', year: 'numeric' })}
-                                            </Text>
+                                            </AppText>
                                             <MaterialCommunityIcons name="arrow-right" size={16} color={colors.textSecondary} />
-                                            <Text style={[styles.historyDate, { color: colors.text }]}>
+                                            <AppText style={[styles.historyDate, { color: colors.text }]}>
                                                 {formatUniversalTime(item.endDate, { day: 'numeric', month: 'short', year: 'numeric' })}
-                                            </Text>
+                                            </AppText>
                                         </View>
                                         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                                            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                                            <AppText style={[styles.statusText, { color: getStatusColor(item.status) }]}>
                                                 {item.status.toUpperCase()}
-                                            </Text>
+                                            </AppText>
                                         </View>
                                     </View>
-                                    <Text style={[styles.historyReason, { color: colors.textSecondary }]}>{item.reason}</Text>
-                                    <Text style={[styles.durationText, { color: colors.textSecondary }]}>{item.days} days</Text>
+                                    <AppText style={[styles.historyReason, { color: colors.textSecondary }]}>{item.reason}</AppText>
+                                    <AppText style={[styles.durationText, { color: colors.textSecondary }]}>{item.days} days</AppText>
                                 </View>
                             ))}
                         </View>

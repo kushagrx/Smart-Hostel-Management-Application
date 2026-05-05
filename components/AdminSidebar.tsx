@@ -2,7 +2,7 @@ import { MaterialCommunityIcons as MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, {
   SharedValue,
   interpolate,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAlert } from '../context/AlertContext';
 import { setStoredUser } from '../utils/authUtils';
 import { useTheme } from '../utils/ThemeContext';
+import AppText from './AppText';
 
 
 
@@ -146,12 +147,12 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
               color={isActive ? item.color : colors.textSecondary}
             />
           </View>
-          <Text style={[
+          <AppText style={[
             styles.navText,
             { color: isActive ? item.color : colors.textSecondary, fontWeight: isActive ? '700' : '600', flex: 1 }
           ]}>
             {item.label}
-          </Text>
+          </AppText>
         </TouchableOpacity>
       </View>
     );
@@ -172,7 +173,7 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
               style={{ width: 40, height: 40, borderRadius: 10 }}
               resizeMode="contain"
             />
-            <Text style={styles.sidebarTitle}>SmartStay</Text>
+            <AppText style={styles.sidebarTitle}>SmartStay</AppText>
           </View>
           <TouchableOpacity onPress={onClose}>
             <MaterialIcons name="close" size={24} color="#fff" />
@@ -185,7 +186,7 @@ export default function AdminSidebar({ onClose, activeNav, drawerProgress, visib
 
         <TouchableOpacity style={[styles.logoutBtn, { borderTopColor: colors.border }]} onPress={handleLogout}>
           <MaterialIcons name="logout" size={20} color="#EF4444" />
-          <Text style={styles.logoutText}>Log Out</Text>
+          <AppText style={styles.logoutText}>Log Out</AppText>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>

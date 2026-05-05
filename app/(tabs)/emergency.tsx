@@ -2,12 +2,13 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../../utils/authUtils';
 import { EmergencyContact, subscribeToContacts } from '../../utils/emergencySyncUtils';
 import { fetchUserData, StudentData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import AppText from '../../components/AppText';
 
 export default function Emergency() {
   const { colors, isDark } = useTheme();
@@ -45,8 +46,8 @@ export default function Emergency() {
         <SafeAreaView edges={['top', 'left', 'right']}>
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.headerTitle}>Emergency</Text>
-              <Text style={styles.headerSubtitle}>24/7 Support & Help</Text>
+              <AppText style={styles.headerTitle}>Emergency</AppText>
+              <AppText style={styles.headerSubtitle}>24/7 Support & Help</AppText>
             </View>
             <View style={styles.sosIconContainer}>
               <MaterialCommunityIcons name="alarm-light" size={28} color="#EF4444" />
@@ -67,9 +68,9 @@ export default function Emergency() {
             borderColor: isDark ? colors.border : '#DBEAFE'
           }]}>
             <MaterialCommunityIcons name="information-outline" size={24} color={isDark ? colors.primary : "#004e92"} />
-            <Text style={[styles.bannerText, { color: isDark ? colors.text : '#1E40AF' }]}>
+            <AppText style={[styles.bannerText, { color: isDark ? colors.text : '#1E40AF' }]}>
               Tap on any contact card below to initiate an immediate call.
-            </Text>
+            </AppText>
           </View>
 
           {/* Support Chat Card */}
@@ -87,8 +88,8 @@ export default function Emergency() {
                 <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
               </View>
               <View style={styles.contactInfo}>
-                <Text style={[styles.contactName, { color: colors.text }]}>Admin Support Chat</Text>
-                <Text style={[styles.contactNumber, { color: colors.textSecondary }]}>Direct Message to Hostel Admin</Text>
+                <AppText style={[styles.contactName, { color: colors.text }]}>Admin Support Chat</AppText>
+                <AppText style={[styles.contactNumber, { color: colors.textSecondary }]}>Direct Message to Hostel Admin</AppText>
               </View>
               <View style={[styles.callBtn, { backgroundColor: '#25D366' }]}>
                 <MaterialCommunityIcons name="message-text" size={20} color="#fff" />
@@ -101,9 +102,9 @@ export default function Emergency() {
             <View style={{ marginBottom: 24 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
                 <MaterialCommunityIcons name="medical-bag" size={20} color={isDark ? colors.text : '#1E293B'} />
-                <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.text : '#1E293B', marginLeft: 8 }}>
+                <AppText style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.text : '#1E293B', marginLeft: 8 }}>
                   My Medical Profile
-                </Text>
+                </AppText>
               </View>
 
               <View style={[styles.contactCard, styles.shadowProp, { backgroundColor: colors.card, borderColor: colors.border, padding: 16 }]}>
@@ -117,19 +118,19 @@ export default function Emergency() {
                     borderWidth: 1, borderColor: '#FECACA'
                   }}>
                     <MaterialIcons name="water" size={24} color="#EF4444" />
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#B91C1C', marginTop: 2 }}>
+                    <AppText style={{ fontSize: 14, fontWeight: '800', color: '#B91C1C', marginTop: 2 }}>
                       {userData.bloodGroup || 'N/A'}
-                    </Text>
+                    </AppText>
                   </View>
 
                   <View style={{ flex: 1, justifyContent: 'center' }}>
                     <View style={{ marginBottom: 8 }}>
-                      <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 2 }}>Specific Emergency Contact</Text>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{userData.emergencyContactName || 'Not set'}</Text>
+                      <AppText style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 2 }}>Specific Emergency Contact</AppText>
+                      <AppText style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{userData.emergencyContactName || 'Not set'}</AppText>
                       {userData.emergencyContactPhone && userData.emergencyContactPhone !== 'N/A' && (
-                        <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }} onPress={() => handleCall(userData.emergencyContactPhone!)}>
+                        <AppText style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }} onPress={() => handleCall(userData.emergencyContactPhone!)}>
                           {userData.emergencyContactPhone}
-                        </Text>
+                        </AppText>
                       )}
                     </View>
                   </View>
@@ -137,10 +138,10 @@ export default function Emergency() {
 
                 {(userData.medicalHistory && userData.medicalHistory !== 'None') && (
                   <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
-                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 4 }}>Medical History / Allergies</Text>
-                    <Text style={{ fontSize: 14, color: colors.text, lineHeight: 20 }}>
+                    <AppText style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 4 }}>Medical History / Allergies</AppText>
+                    <AppText style={{ fontSize: 14, color: colors.text, lineHeight: 20 }}>
                       {userData.medicalHistory}
-                    </Text>
+                    </AppText>
                   </View>
                 )}
               </View>
@@ -164,8 +165,8 @@ export default function Emergency() {
                   </View>
 
                   <View style={styles.contactInfo}>
-                    <Text style={[styles.contactName, { color: colors.text }]}>{contact.title} {contact.name ? `• ${contact.name}` : ''}</Text>
-                    <Text style={[styles.contactNumber, { color: colors.textSecondary }]}>{contact.number}</Text>
+                    <AppText style={[styles.contactName, { color: colors.text }]}>{contact.title} {contact.name ? `• ${contact.name}` : ''}</AppText>
+                    <AppText style={[styles.contactNumber, { color: colors.textSecondary }]}>{contact.number}</AppText>
                   </View>
 
                   <View style={[styles.callBtn, { backgroundColor: index === 0 ? '#EF4444' : '#10B981' }]}>

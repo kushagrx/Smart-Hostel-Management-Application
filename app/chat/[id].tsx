@@ -3,17 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient'; // Added LinearGradient
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import StudentDetailsModal from '../../components/StudentDetailsModal';
 import { useAlert } from '../../context/AlertContext';
@@ -23,6 +13,7 @@ import { isAdmin, useUser } from '../../utils/authUtils';
 import { ChatMessage, emitStopTyping, emitTyping, sendMessage, subscribeToMessages } from '../../utils/chatUtils';
 import { deleteStudent } from '../../utils/studentUtils';
 import { useTheme } from '../../utils/ThemeContext';
+import AppText from '../../components/AppText';
 
 export default function ChatScreen() {
     const { id, name } = useLocalSearchParams<{ id: string, name?: string }>();
@@ -200,7 +191,7 @@ export default function ChatScreen() {
         if (item.type === 'day') {
             return (
                 <View style={[styles.dateSeparator, { marginVertical: 16 }]}>
-                    <Text style={[
+                    <AppText style={[
                         styles.dateText,
                         {
                             color: theme === 'dark' ? '#94A3B8' : '#64748B',
@@ -208,7 +199,7 @@ export default function ChatScreen() {
                         }
                     ]}>
                         {item.date}
-                    </Text>
+                    </AppText>
                 </View>
             );
         }
@@ -231,12 +222,12 @@ export default function ChatScreen() {
                     <View style={styles.messageAvatar}>
                         {item.user.avatar ? (
                             <Image
-                                source={{ uri: `${API_BASE_URL}${item.user.avatar}` }}
+                                source={{ uri: item.user.avatar.startsWith('http') ? item.user.avatar : `${API_BASE_URL}${item.user.avatar}` }}
                                 style={{ width: 36, height: 36, borderRadius: 18 }}
                                 contentFit="cover"
                             />
                         ) : (
-                            <Text style={styles.avatarLetter}>{chatTitle.charAt(0)}</Text>
+                            <AppText style={styles.avatarLetter}>{chatTitle.charAt(0)}</AppText>
                         )}
                     </View>
                 )}
@@ -255,19 +246,19 @@ export default function ChatScreen() {
                         borderColor: theme === 'dark' ? '#334155' : 'transparent',
                     }
                 ]}>
-                    <Text style={[
+                    <AppText style={[
                         styles.messageText,
                         { color: isMe ? '#ffffff' : (theme === 'dark' ? '#F8FAFC' : '#0F172A') }
                     ]}>
                         {item.text}
-                    </Text>
+                    </AppText>
                     <View style={styles.timeContainer}>
-                        <Text style={[
+                        <AppText style={[
                             styles.timeText,
                             { color: isMe ? 'rgba(255,255,255,0.85)' : (theme === 'dark' ? '#94A3B8' : '#64748B') }
                         ]}>
                             {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                        </Text>
+                        </AppText>
                         {isMe && (
                             <MaterialCommunityIcons
                                 name={item.read ? "check-all" : "check"}
@@ -314,20 +305,20 @@ export default function ChatScreen() {
                         <View style={styles.headerAvatar}>
                             {partnerDetails?.profilePhoto ? (
                                 <Image
-                                    source={{ uri: `${API_BASE_URL}${partnerDetails.profilePhoto}` }}
+                                    source={{ uri: partnerDetails.profilePhoto.startsWith('http') ? partnerDetails.profilePhoto : `${API_BASE_URL}${partnerDetails.profilePhoto}` }}
                                     style={{ width: 44, height: 44, borderRadius: 22 }}
                                     contentFit="cover"
                                 />
                             ) : (
-                                <Text style={styles.headerAvatarText}>{chatTitle.charAt(0).toUpperCase()}</Text>
+                                <AppText style={styles.headerAvatarText}>{chatTitle.charAt(0).toUpperCase()}</AppText>
                             )}
                             {partnerStatus.online && <View style={styles.onlineDot} />}
                         </View>
                         <View>
-                            <Text style={styles.headerName}>{chatTitle}</Text>
-                            <Text style={[styles.headerStatus, { color: partnerStatus.online ? '#4ADE80' : 'rgba(255,255,255,0.7)' }]}>
+                            <AppText style={styles.headerName}>{chatTitle}</AppText>
+                            <AppText style={[styles.headerStatus, { color: partnerStatus.online ? '#4ADE80' : 'rgba(255,255,255,0.7)' }]}>
                                 {getStatusText()}
-                            </Text>
+                            </AppText>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -363,9 +354,9 @@ export default function ChatScreen() {
                     {isPartnerTyping && (
                         <View style={styles.typingIndicatorContainer}>
                             <View style={[styles.typingBubble, { backgroundColor: theme === 'dark' ? '#1E293B' : '#E2E8F0' }]}>
-                                <Text style={[styles.typingIndicatorText, { color: theme === 'dark' ? '#94A3B8' : '#64748B' }]}>
+                                <AppText style={[styles.typingIndicatorText, { color: theme === 'dark' ? '#94A3B8' : '#64748B' }]}>
                                     {chatTitle} is typing...
-                                </Text>
+                                </AppText>
                             </View>
                         </View>
                     )}

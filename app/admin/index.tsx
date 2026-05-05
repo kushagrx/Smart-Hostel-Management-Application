@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolate,
@@ -29,6 +29,7 @@ import { LeaveRequest, subscribeToPendingLeaves, updateLeaveStatus } from '../..
 import { subscribeToNotifications } from '../../utils/notificationUtils';
 import { useTheme } from '../../utils/ThemeContext';
 import { formatUniversalTime } from '../../utils/timeUtils';
+import AppText from '../../components/AppText';
 
 // debounce import moved to require to avoid type issues if needed, or keep as is.
 const debounce = require('lodash.debounce');
@@ -125,7 +126,7 @@ const GridAction = ({ icon, label, route, iconColor, isDark, onPress }: GridActi
         }}>
           <MaterialIcons name={icon} size={28} color={iconColor} />
         </View>
-        <Text style={{
+        <AppText style={{
           color: isDark ? 'rgba(255,255,255,0.9)' : '#334155',
           fontSize: 11,
           fontWeight: '700',
@@ -133,7 +134,7 @@ const GridAction = ({ icon, label, route, iconColor, isDark, onPress }: GridActi
           marginTop: 2,
         }} numberOfLines={2}>
           {label}
-        </Text>
+        </AppText>
       </TouchableOpacity>
     </View>
   );
@@ -663,7 +664,7 @@ export default function AdminDashboard() {
   if (!isAdmin(user)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontSize: 16 }}>Access denied. Admins only.</Text>
+        <AppText style={{ fontSize: 16 }}>Access denied. Admins only.</AppText>
       </View>
     );
   }
@@ -743,10 +744,10 @@ export default function AdminDashboard() {
                     <MaterialIcons name="menu" size={24} color="#fff" />
                   </TouchableOpacity>
                   <View style={styles.headerTextContainer}>
-                    <Text style={styles.headerBarTitle}>Admin Portal</Text>
-                    <Text style={styles.headerBarSubtitle}>
+                    <AppText style={styles.headerBarTitle}>Admin Portal</AppText>
+                    <AppText style={styles.headerBarSubtitle}>
                       {user?.name ? `Hi, ${user.name.split(' ')[0]}` : 'Welcome back'}
-                    </Text>
+                    </AppText>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <AnimatedThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
@@ -764,9 +765,9 @@ export default function AdminDashboard() {
                             borderWidth: 2, borderColor: '#004e92',
                             paddingHorizontal: 4,
                           }}>
-                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#fff' }}>
+                            <AppText style={{ fontSize: 10, fontWeight: 'bold', color: '#fff' }}>
                               {unreadCount > 9 ? '9+' : unreadCount}
-                            </Text>
+                            </AppText>
                           </View>
                         )}
                       </View>
@@ -813,8 +814,8 @@ export default function AdminDashboard() {
                           />
                         </View>
                         <View style={styles.resultInfo}>
-                          <Text style={styles.resultTitle}>{result.title}</Text>
-                          <Text style={styles.resultSubtitle}>{result.subtitle}</Text>
+                          <AppText style={styles.resultTitle}>{result.title}</AppText>
+                          <AppText style={styles.resultSubtitle}>{result.subtitle}</AppText>
                         </View>
                         <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.3)" />
                       </TouchableOpacity>
@@ -829,7 +830,7 @@ export default function AdminDashboard() {
                 {/* Quick Actions */}
                 <View style={[styles.section, { marginBottom: 16, marginTop: 0, marginHorizontal: -24 }]}>
                   <View style={[styles.sectionHeader, { paddingHorizontal: 28, marginTop: 22, marginBottom: 22 }]}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
+                    <AppText style={styles.sectionTitle}>Quick Actions</AppText>
                   </View>
                   <View style={{
                     paddingVertical: 12,
@@ -905,9 +906,9 @@ export default function AdminDashboard() {
                 {/* Recent Complaints */}
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Recent Complaints</Text>
+                    <AppText style={styles.sectionTitle}>Recent Complaints</AppText>
                     <TouchableOpacity onPress={() => handleNavPress('complaints')}>
-                      <Text style={styles.seeAllLink}>See All</Text>
+                      <AppText style={styles.seeAllLink}>See All</AppText>
                     </TouchableOpacity>
                   </View>
 
@@ -933,26 +934,26 @@ export default function AdminDashboard() {
                             <View style={styles.cardHeader}>
                               <View style={styles.studentInfoRow}>
                                 <Image
-                                  source={{ uri: c.studentProfilePhoto ? `${API_BASE_URL}${c.studentProfilePhoto}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.studentName || 'S')}&background=E2E8F0&color=64748B` }}
+                                  source={{ uri: c.studentProfilePhoto ? (c.studentProfilePhoto.startsWith('http') ? c.studentProfilePhoto : `${API_BASE_URL}${c.studentProfilePhoto}`) : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.studentName || 'S')}&background=E2E8F0&color=64748B` }}
                                   style={styles.studentAvatar}
                                   contentFit="cover"
                                 />
                                 <View>
-                                  <Text style={styles.studentName} numberOfLines={1}>{c.studentName || 'Unknown Student'}</Text>
+                                  <AppText style={styles.studentName} numberOfLines={1}>{c.studentName || 'Unknown Student'}</AppText>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <Text style={styles.studentRoomText}>Room {c.studentRoom || (c as any).roomNo || (c as any).room_number || (c as any).room || 'N/A'}</Text>
+                                    <AppText style={styles.studentRoomText}>Room {c.studentRoom || (c as any).roomNo || (c as any).room_number || (c as any).room || 'N/A'}</AppText>
                                     {c.priority && (
                                       <View style={[styles.statusBadge, {
                                         backgroundColor: c.priority === 'high' || c.priority === 'emergency' ? '#FEF2F2' : (c.priority === 'medium' ? '#FFF7ED' : isDark ? 'rgba(56, 189, 248, 0.1)' : '#E0F2FE'),
                                         paddingHorizontal: 6,
                                         paddingVertical: 2
                                       }]}>
-                                        <Text style={[styles.statusText, {
+                                        <AppText style={[styles.statusText, {
                                           fontSize: 10,
                                           color: c.priority === 'high' || c.priority === 'emergency' ? '#EF4444' : (c.priority === 'medium' ? '#F97316' : isDark ? '#38BDF8' : '#0284C7')
                                         }]}>
                                           Priority: {c.priority.toUpperCase()}
-                                        </Text>
+                                        </AppText>
                                       </View>
                                     )}
                                   </View>
@@ -963,24 +964,24 @@ export default function AdminDashboard() {
                                 <View style={[styles.statusBadge, {
                                   backgroundColor: c.status === 'resolved' ? '#DCFCE7' : c.status === 'inProgress' ? '#DBEAFE' : c.status === 'open' ? '#FEF9C3' : (isDark ? 'rgba(255,255,255,0.1)' : '#F1F5F9')
                                 }]}>
-                                  <Text style={[styles.statusText, {
+                                  <AppText style={[styles.statusText, {
                                     color: c.status === 'resolved' ? '#166534' : c.status === 'inProgress' ? '#1E40AF' : c.status === 'open' ? '#854D0E' : (isDark ? '#E2E8F0' : '#475569')
                                   }]}>
                                     {c.status?.toUpperCase() || 'OPEN'}
-                                  </Text>
+                                  </AppText>
                                 </View>
-                                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
+                                <AppText style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
                                   {c.createdAt ? formatUniversalTime(c.createdAt, { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
-                                </Text>
+                                </AppText>
                               </View>
                             </View>
 
                             {/* Massive Details Block */}
                             <View style={styles.cardContentDetailed}>
-                              <Text style={styles.cardTitle} numberOfLines={2}>
-                                {c.status === 'resolved' ? <Text style={{ textDecorationLine: 'line-through' }}>{c.title}</Text> : c.title}
-                              </Text>
-                              <Text style={styles.cardSubtitle} numberOfLines={3}>{c.description || 'No additional details provided.'}</Text>
+                              <AppText style={styles.cardTitle} numberOfLines={2}>
+                                {c.status === 'resolved' ? <AppText style={{ textDecorationLine: 'line-through' }}>{c.title}</AppText> : c.title}
+                              </AppText>
+                              <AppText style={styles.cardSubtitle} numberOfLines={3}>{c.description || 'No additional details provided.'}</AppText>
                             </View>
                           </TouchableOpacity>
 
@@ -1000,9 +1001,9 @@ export default function AdminDashboard() {
                                   disabled={!!loadingActions[`complaint-${c.id}`]}
                                   onPress={() => handleComplaintAction(c.id, 'inProgress')}
                                 >
-                                  <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 13 }}>
+                                  <AppText style={{ color: '#3B82F6', fontWeight: '700', fontSize: 13 }}>
                                     {loadingActions[`complaint-${c.id}`] === 'inProgress' ? 'Marking...' : 'Mark In-Progress'}
-                                  </Text>
+                                  </AppText>
                                 </TouchableOpacity>
                               )}
                               <TouchableOpacity
@@ -1017,9 +1018,9 @@ export default function AdminDashboard() {
                                 disabled={!!loadingActions[`complaint-${c.id}`]}
                                 onPress={() => handleComplaintAction(c.id, 'resolved')}
                               >
-                                <Text style={{ color: '#22C55E', fontWeight: '700', fontSize: 13 }}>
+                                <AppText style={{ color: '#22C55E', fontWeight: '700', fontSize: 13 }}>
                                   {loadingActions[`complaint-${c.id}`] === 'resolved' ? 'Resolving...' : 'Resolve Issue'}
-                                </Text>
+                                </AppText>
                               </TouchableOpacity>
                             </View>
                           )}
@@ -1028,7 +1029,7 @@ export default function AdminDashboard() {
                     </ScrollView>
                   ) : (
                     <View style={styles.emptyStateContainer}>
-                      <Text style={styles.emptyStateText}>No recent complaints.</Text>
+                      <AppText style={styles.emptyStateText}>No recent complaints.</AppText>
                     </View>
                   )}
                 </View>
@@ -1036,9 +1037,9 @@ export default function AdminDashboard() {
                 {/* Pending Leaves */}
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Recent Leaves</Text>
+                    <AppText style={styles.sectionTitle}>Recent Leaves</AppText>
                     <TouchableOpacity onPress={() => handleNavPress('leaves')}>
-                      <Text style={styles.seeAllLink}>See All</Text>
+                      <AppText style={styles.seeAllLink}>See All</AppText>
                     </TouchableOpacity>
                   </View>
 
@@ -1064,39 +1065,39 @@ export default function AdminDashboard() {
                             <View style={styles.cardHeader}>
                               <View style={styles.studentInfoRow}>
                                 <Image
-                                  source={{ uri: l.studentProfilePhoto ? `${API_BASE_URL}${l.studentProfilePhoto}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(l.studentName || 'S')}&background=E2E8F0&color=64748B` }}
+                                  source={{ uri: l.studentProfilePhoto ? (l.studentProfilePhoto.startsWith('http') ? l.studentProfilePhoto : `${API_BASE_URL}${l.studentProfilePhoto}`) : `https://ui-avatars.com/api/?name=${encodeURIComponent(l.studentName || 'S')}&background=E2E8F0&color=64748B` }}
                                   style={styles.studentAvatar}
                                   contentFit="cover"
                                 />
                                 <View>
-                                  <Text style={styles.studentName} numberOfLines={1}>{l.studentName || 'Student'}</Text>
-                                  <Text style={styles.studentRoomText}>Room {l.studentRoom || (l as any).roomNo || (l as any).room_number || 'N/A'}</Text>
+                                  <AppText style={styles.studentName} numberOfLines={1}>{l.studentName || 'Student'}</AppText>
+                                  <AppText style={styles.studentRoomText}>Room {l.studentRoom || (l as any).roomNo || (l as any).room_number || 'N/A'}</AppText>
                                 </View>
                               </View>
                               <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                 <View style={[styles.statusBadge, {
                                   backgroundColor: l.status === 'approved' ? '#DCFCE7' : l.status === 'rejected' ? '#FEF2F2' : '#FEF9C3'
                                 }]}>
-                                  <Text style={[styles.statusText, {
+                                  <AppText style={[styles.statusText, {
                                     color: l.status === 'approved' ? '#166534' : l.status === 'rejected' ? '#DC2626' : '#854D0E'
                                   }]}>
                                     {l.status?.toUpperCase() || 'PENDING'}
-                                  </Text>
+                                  </AppText>
                                 </View>
-                                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
+                                <AppText style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
                                   {l.createdAt ? formatUniversalTime(l.createdAt, { hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
-                                </Text>
+                                </AppText>
                               </View>
                             </View>
 
                             {/* Leave Details */}
                             <View style={styles.cardContentDetailed}>
-                              <Text style={styles.cardTitle} numberOfLines={1}>{l.reason || 'Leave Request'}</Text>
+                              <AppText style={styles.cardTitle} numberOfLines={1}>{l.reason || 'Leave Request'}</AppText>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                                 <MaterialIcons name="calendar-range" size={14} color={colors.textSecondary} />
-                                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>
+                                <AppText style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>
                                   {l.startDate ? formatUniversalTime(l.startDate, { month: 'short', day: 'numeric' }) : '—'} → {l.endDate ? formatUniversalTime(l.endDate, { month: 'short', day: 'numeric' }) : '—'}  •  {l.days} day{l.days !== 1 ? 's' : ''}
-                                </Text>
+                                </AppText>
                               </View>
                             </View>
                           </TouchableOpacity>
@@ -1116,9 +1117,9 @@ export default function AdminDashboard() {
                                 disabled={!!loadingActions[`leave-${l.id}`]}
                                 onPress={() => handleLeaveAction(l.id, 'rejected')}
                               >
-                                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>
+                                <AppText style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>
                                   {loadingActions[`leave-${l.id}`] === 'rejected' ? 'Rejecting...' : 'Reject'}
-                                </Text>
+                                </AppText>
                               </TouchableOpacity>
                               <TouchableOpacity
                                 style={{
@@ -1132,9 +1133,9 @@ export default function AdminDashboard() {
                                 disabled={!!loadingActions[`leave-${l.id}`]}
                                 onPress={() => handleLeaveAction(l.id, 'approved')}
                               >
-                                <Text style={{ color: '#22C55E', fontWeight: '700', fontSize: 13 }}>
+                                <AppText style={{ color: '#22C55E', fontWeight: '700', fontSize: 13 }}>
                                   {loadingActions[`leave-${l.id}`] === 'approved' ? 'Approving...' : 'Approve'}
-                                </Text>
+                                </AppText>
                               </TouchableOpacity>
                             </View>
                           )}
@@ -1143,7 +1144,7 @@ export default function AdminDashboard() {
                     </ScrollView>
                   ) : (
                     <View style={styles.emptyStateContainer}>
-                      <Text style={styles.emptyStateText}>No pending leaves.</Text>
+                      <AppText style={styles.emptyStateText}>No pending leaves.</AppText>
                     </View>
                   )}
                 </View>

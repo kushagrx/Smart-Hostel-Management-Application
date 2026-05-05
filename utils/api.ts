@@ -9,8 +9,10 @@ const getApiUrl = () => {
         const ip = debuggerHost.split(':')[0];
         return `http://${ip}:5000`;
     }
-    // 2. Fallback to the last known working IP
-    return "http://10.102.116.195:5000";
+    // 2. Read from .env (set EXPO_PUBLIC_API_URL in root .env)
+    //    - Emulator: http://10.0.2.2:5000
+    //    - Physical device: http://<your-lan-ip>:5000
+    return process.env.EXPO_PUBLIC_API_URL || "http://10.0.2.2:5000";
 };
 
 export const API_BASE_URL = getApiUrl();
@@ -40,16 +42,23 @@ api.interceptors.response.use(
         return response;
     },
     error => {
+        const { useAlertStore } = require('../store/useAlertStore');
+        
         if (error.code === 'ECONNABORTED') {
             console.error('Request Timed Out:', error.config.url);
+            useAlertStore.getState().showAlert('Connection Timeout', 'The server took too long to respond. Please check your connection.', [], 'warning');
         } else if (error.response) {
-            // Suppress 401/403 errors as they are handled by auth redirect/logic
-            if (error.response.status !== 401 && error.response.status !== 403) {
+            // Suppress 400/401/403 as they are usually handled by the calling page (e.g. login validation)
+            if (error.response.status !== 400 && error.response.status !== 401 && error.response.status !== 403) {
                 console.error('API Error Response:', error.response.status, error.response.data);
+                // For 500 errors, show a generic server error popup
+                if (error.response.status >= 500) {
+                    useAlertStore.getState().showAlert('Server Error', 'Our servers are having a moment. Please try again later.', [], 'error');
+                }
             }
         } else if (error.request) {
             console.error('Network Error (No Response):', error.message);
-            console.error('Target URL:', error.config.url);
+            useAlertStore.getState().showAlert('Network Error', 'Could not reach the server. Please check your internet connection.', [], 'error');
         } else {
             console.error('API Setup Error:', error.message);
         }
@@ -70,8 +79,6 @@ api.interceptors.request.use(
 
         if (token) {
             config.headers.set('Authorization', `Bearer ${token}`);
-        } else {
-            // No token found, proceed without it
         }
 
         // Handle FormData uploads
@@ -83,17 +90,15 @@ api.interceptors.request.use(
                 (config.data._parts && Array.isArray(config.data._parts))
             )
         ) {
-
             console.log('📸 Uploading FormData with file');
-
-            if (config.headers instanceof axios.AxiosHeaders) {
-                config.headers.delete('Content-Type');
-            } else {
-                delete (config.headers as any)['Content-Type'];
+            
+            // In React Native + Axios >= 1.0, do NOT delete the Content-Type.
+            // Axios will automatically set the boundary.
+            if (!config.headers.get('Content-Type')) {
+                config.headers.set('Content-Type', 'multipart/form-data');
             }
 
-            config.timeout = 80000;
-            config.transformRequest = (data) => data;
+            config.timeout = 120000; // Increase timeout for large uploads
         }
 
         return config;

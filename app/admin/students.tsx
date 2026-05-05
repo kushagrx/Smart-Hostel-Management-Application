@@ -2,7 +2,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Dimensions, KeyboardAvoidingView, Platform, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, KeyboardAvoidingView, Platform, RefreshControl, SectionList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,6 +22,7 @@ import EditStudentModal from './components/EditStudentModal';
 import FilterHeader from './components/FilterHeader';
 import StatsGrid from './components/StatsGrid';
 import StudentCard from './components/StudentCard';
+import AppText from '../../components/AppText';
 
 export default function StudentsPage() {
   const { colors, theme } = useTheme();
@@ -786,7 +787,7 @@ export default function StudentsPage() {
   if (!isAdmin(user)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Access denied.</Text>
+        <AppText>Access denied.</AppText>
       </View>
     );
   }
@@ -804,7 +805,7 @@ export default function StudentsPage() {
             <MaterialIcons name="chevron-left" size={32} color="#fff" />
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.headerTitle}>{activeTab === 0 ? 'Manage Students' : 'Student Allotment'}</Text>
+            <AppText style={styles.headerTitle}>{activeTab === 0 ? 'Manage Students' : 'Student Allotment'}</AppText>
           </View>
           <TouchableOpacity onPress={() => setExportModalVisible(true)} style={styles.backButton}>
             <MaterialIcons name="download" size={22} color="#fff" />
@@ -814,11 +815,11 @@ export default function StudentsPage() {
         <View style={styles.navBar}>
           <TouchableOpacity style={[styles.navItem, activeTab === 0 && styles.navItemActive]} onPress={() => handleTabChange(0)}>
             <MaterialIcons name="account-group" size={20} color={activeTab === 0 ? colors.primary : colors.textSecondary} />
-            <Text style={[styles.navItemLabel, activeTab === 0 && styles.navItemLabelActive]}>Manage Students</Text>
+            <AppText style={[styles.navItemLabel, activeTab === 0 && styles.navItemLabelActive]}>Manage Students</AppText>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.navItem, activeTab === 1 && styles.navItemActive]} onPress={() => handleTabChange(1)}>
             <MaterialIcons name="account-plus" size={20} color={activeTab === 1 ? colors.primary : colors.textSecondary} />
-            <Text style={[styles.navItemLabel, activeTab === 1 && styles.navItemLabelActive]}>Student Allotment</Text>
+            <AppText style={[styles.navItemLabel, activeTab === 1 && styles.navItemLabelActive]}>Student Allotment</AppText>
           </TouchableOpacity>
         </View>
 
@@ -842,7 +843,7 @@ export default function StudentsPage() {
                 showsVerticalScrollIndicator={false}
                 renderSectionHeader={({ section: { title } }) => (
                   <View style={{ backgroundColor: colors.background, paddingVertical: 8, paddingHorizontal: 20 }}>
-                    <Text style={{ fontWeight: 'bold', color: colors.primary }}>{title}</Text>
+                    <AppText style={{ fontWeight: 'bold', color: colors.primary }}>{title}</AppText>
                   </View>
                 )}
                 ListHeaderComponent={
