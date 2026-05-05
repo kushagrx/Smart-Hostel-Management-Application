@@ -1,6 +1,6 @@
 # 🏠 SmartStay - Smart Hostel Management Application
 
-A comprehensive full-stack mobile application for managing hostel operations, built with React Native (Expo), Node.js, Python AI, and PostgreSQL. SmartStay streamlines hostel administration with features for student management, attendance tracking, facility management, AI-powered assistance, and real-time communication — with **cross-platform iOS & Android** support.
+A comprehensive full-stack mobile application for managing hostel operations, built with React Native (Expo), Node.js, Python AI, and PostgreSQL. SmartStay streamlines hostel administration with features for student management, attendance tracking, facility management, AI-powered assistance, and real-time communication.
 
 ## 📑 Table of Contents
 
@@ -59,30 +59,26 @@ A comprehensive full-stack mobile application for managing hostel operations, bu
 - 💳 **Payment Verification** - Real-time processing via Razorpay with automated dues updating
 - 🔐 **Security Hub** - Enforce Two-Factor Authentication (2FA) and monitor active device sessions with heartbeat tracking
 
-## 🌟 Latest Enhancements (V3.6) — Cross-Platform, Data Privacy & Stability
+## 🌟 Latest Enhancements (V3.5 Updated) — Data Privacy, Accessibility & Stability
 
-### 1. Cross-Platform iOS + Android Support
-*   **iOS Build Pipeline**: Added Xcode & CocoaPods prerequisites, `npx expo run:ios` commands, and iOS-specific OAuth whitelisting via `GoogleService-Info.plist` + Bundle ID registration.
-*   **Team Onboarding**: Updated `TEAM_ONBOARDING.txt` with parallel iOS/Android setup instructions across all phases.
-
-### 2. Cloudinary CDN Image Handling
+### 1. Cloudinary CDN Image Handling
 *   **Universal URI Resolution**: Fixed profile photo rendering across the entire app — Student Details Modal, Chat message avatars, Attendance Details, and Admin views now properly handle absolute Cloudinary URLs instead of incorrectly prepending the backend base URL.
 *   **Privacy-Safe Data Export**: The PDF data export now strips `profilePhoto` / `profile_photo` fields to prevent Cloudinary URLs from leaking into downloaded files.
 
-### 3. Global AppText Accessibility Component
+### 2. Global AppText Accessibility Component
 *   **`components/AppText.tsx`**: A new drop-in replacement for React Native's `<Text>` that automatically respects the user's accessibility preferences (dynamic font size, bold text) from the Zustand accessibility store.
 *   **Codebase-Wide Migration**: All 90+ screens and components now use `<AppText>` instead of raw `<Text>`, ensuring consistent accessibility across the entire application.
 
-### 4. Session Heartbeat & Device Management
+### 3. Session Heartbeat & Device Management
 *   **`utils/useSessionHeartbeat.ts`**: New hook that pings the backend at regular intervals to track online device status.
 *   **Active Sessions**: The "Manage Devices" panel now shows only genuinely online sessions, with proper logout cleanup that deletes database records.
 
-### 5. Firebase Admin SDK Centralization
+### 4. Firebase Admin SDK Centralization
 *   **`backend/src/config/firebase.ts`**: Consolidated Firebase initialization into a single shared module, replacing scattered inline initialization across push service and auth controllers.
 
-### 6. Cloudinary Upload Migration & Security Hardening
+### 5. Cloudinary Upload Migration & Security Hardening
 *   **Backend `uploadMiddleware.ts`**: Migrated profile photo uploads from local disk storage to Cloudinary CDN.
-*   **`.gitignore` Fortification**: Added `GoogleService-Info.plist`, `debug.keystore` for iOS credential safety.
+*   **`.gitignore` Fortification**: Added credential patterns for enhanced security.
 *   **Environment Templates**: `.env.example` files updated across all three services (root, backend, ai-service).
 *   **`start-dev.sh`**: Added macOS/Linux development launcher alongside existing `start-dev.bat`.
 
