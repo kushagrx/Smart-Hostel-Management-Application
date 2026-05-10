@@ -24,7 +24,7 @@ const api = axios.create({
         'Content-Type': 'application/json',
         'Bypass-Tunnel-Reminder': 'true',
     },
-    timeout: 10000,
+    timeout: 20000,
 });
 
 
@@ -45,23 +45,19 @@ api.interceptors.response.use(
         const { useAlertStore } = require('../store/useAlertStore');
         
         if (error.code === 'ECONNABORTED') {
-            console.error('Request Timed Out:', error.config.url);
+            // Timeout — just show popup, no noisy log
             useAlertStore.getState().showAlert('Connection Timeout', 'The server took too long to respond. Please check your connection.', [], 'warning');
         } else if (error.response) {
-            // Suppress 400/401/403 as they are usually handled by the calling page (e.g. login validation)
-            if (error.response.status !== 400 && error.response.status !== 401 && error.response.status !== 403) {
-                console.error('API Error Response:', error.response.status, error.response.data);
-                // For 500 errors, show a generic server error popup
-                if (error.response.status >= 500) {
-                    useAlertStore.getState().showAlert('Server Error', 'Our servers are having a moment. Please try again later.', [], 'error');
-                }
+            // Server responded with error status
+            if (error.response.status >= 500) {
+                useAlertStore.getState().showAlert('Server Error', 'Our servers are having a moment. Please try again later.', [], 'error');
             }
+            // 400/401/403/404 are handled silently by calling pages
         } else if (error.request) {
-            console.error('Network Error (No Response):', error.message);
+            // No response at all (network unreachable)
             useAlertStore.getState().showAlert('Network Error', 'Could not reach the server. Please check your internet connection.', [], 'error');
-        } else {
-            console.error('API Setup Error:', error.message);
         }
+        // Silently reject — no console.error (prevents noisy call stacks in Metro)
         return Promise.reject(error);
     }
 );

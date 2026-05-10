@@ -325,6 +325,10 @@ export default function LeaveRequestsPage() {
                 <AppText style={styles.detailValue}>{item.studentRoom}</AppText>
               </View>
               <View style={styles.detailRow}>
+                <AppText style={styles.detailLabel}>Going to:</AppText>
+                <AppText style={[styles.detailValue, { flex: 1, textAlign: 'right' }]}>{item.category || 'General'}</AppText>
+              </View>
+              <View style={styles.detailRow}>
                 <AppText style={styles.detailLabel}>Reason:</AppText>
                 <AppText style={[styles.detailValue, { flex: 1, textAlign: 'right' }]}>{item.reason}</AppText>
               </View>

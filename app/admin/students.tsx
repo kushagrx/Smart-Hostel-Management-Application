@@ -1,4 +1,4 @@
-﻿import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
@@ -12,7 +12,7 @@ import StudentDetailsModal from '../../components/StudentDetailsModal';
 import { useAlert } from '../../context/AlertContext';
 import { useRefresh } from '../../hooks/useRefresh';
 import { API_BASE_URL } from '../../utils/api';
-import { isAdmin, useUser } from '../../utils/authUtils';
+import { isAdmin, useUser, isWardenOrOwner } from '../../utils/authUtils';
 import { deleteStudent, getAllStudents, subscribeToStudents } from '../../utils/studentUtils';
 import { useTheme } from '../../utils/ThemeContext';
 
@@ -817,10 +817,12 @@ export default function StudentsPage() {
             <MaterialIcons name="account-group" size={20} color={activeTab === 0 ? colors.primary : colors.textSecondary} />
             <AppText style={[styles.navItemLabel, activeTab === 0 && styles.navItemLabelActive]}>Manage Students</AppText>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.navItem, activeTab === 1 && styles.navItemActive]} onPress={() => handleTabChange(1)}>
+          {isWardenOrOwner(user) && (
+            <TouchableOpacity style={[styles.navItem, activeTab === 1 && styles.navItemActive]} onPress={() => handleTabChange(1)}>
             <MaterialIcons name="account-plus" size={20} color={activeTab === 1 ? colors.primary : colors.textSecondary} />
             <AppText style={[styles.navItemLabel, activeTab === 1 && styles.navItemLabelActive]}>Student Allotment</AppText>
           </TouchableOpacity>
+          )}
         </View>
 
         <PagerView
@@ -875,7 +877,8 @@ export default function StudentsPage() {
           </View>
 
           {/* PAGE 1: STUDENT ALLOTMENT FORM */}
-          <View key="1" style={{ flex: 1 }}>
+          {isWardenOrOwner(user) ? (
+            <View key="1" style={{ flex: 1 }}>
             <AddStudentForm
               colors={colors}
               theme={theme}
@@ -884,6 +887,11 @@ export default function StudentsPage() {
               onSuccess={fetchStudents}
             />
           </View>
+          ) : (
+            <View key="1" style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <AppText>Access Restricted</AppText>
+            </View>
+          )}
         </PagerView>
       </KeyboardAvoidingView>
 

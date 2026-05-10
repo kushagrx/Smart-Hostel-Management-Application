@@ -16,12 +16,14 @@ interface StudentDetailsModalProps {
 
 import { API_BASE_URL } from '../utils/api';
 import AttendanceHistory from './AttendanceHistory';
+import { isWardenOrOwner, useUser } from '../utils/authUtils';
 
 
 export default function StudentDetailsModal({ visible, student, onClose, onEdit, onDelete, viewMode = 'full' }: StudentDetailsModalProps & { viewMode?: 'full' | 'attendance' }) {
     const { colors, theme } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const user = useUser();
 
     if (!visible || !student) return null;
 
@@ -187,27 +189,29 @@ export default function StudentDetailsModal({ visible, student, onClose, onEdit,
 
                             {viewMode === 'full' && (
                                 <>
-                                    <View style={[styles.actionButtons, { marginTop: 16, width: '100%' }]}>
-                                        <TouchableOpacity
-                                            style={[styles.actionBtn, styles.editBtn]}
-                                            onPress={() => {
-                                                onClose();
-                                                onEdit(student);
-                                            }}
-                                        >
-                                            <MaterialCommunityIcons name="pencil" size={16} color="#fff" />
-                                            <Text style={styles.actionBtnText}>Edit</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[styles.actionBtn, styles.deleteBtn]}
-                                            onPress={() => {
-                                                onDelete(student.id || student._id, student.name, student.room);
-                                            }}
-                                        >
-                                            <MaterialCommunityIcons name="delete" size={16} color="#fff" />
-                                            <Text style={styles.actionBtnText}>Delete</Text>
-                                        </TouchableOpacity>
-                                    </View>
+                                    {isWardenOrOwner(user) && (
+                                        <View style={[styles.actionButtons, { marginTop: 16, width: '100%' }]}>
+                                            <TouchableOpacity
+                                                style={[styles.actionBtn, styles.editBtn]}
+                                                onPress={() => {
+                                                    onClose();
+                                                    onEdit(student);
+                                                }}
+                                            >
+                                                <MaterialCommunityIcons name="pencil" size={16} color="#fff" />
+                                                <Text style={styles.actionBtnText}>Edit</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.actionBtn, styles.deleteBtn]}
+                                                onPress={() => {
+                                                    onDelete(student.id || student._id, student.name, student.room);
+                                                }}
+                                            >
+                                                <MaterialCommunityIcons name="delete" size={16} color="#fff" />
+                                                <Text style={styles.actionBtnText}>Delete</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
 
                                     <TouchableOpacity
                                         style={[styles.actionBtn, { backgroundColor: '#8B5CF6', marginTop: 12, width: '100%' }]}

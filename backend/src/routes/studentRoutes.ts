@@ -14,7 +14,7 @@ import {
     updateStudentSelfProfile,
     exportStudentData
 } from '../controllers/studentController';
-import { requireAdmin, requireAuth } from '../middleware/auth';
+import { requireStaffOrHigher, requireWardenOrOwner, requireAuth } from '../middleware/auth';
 import { logUpload, upload } from '../middleware/uploadMiddleware';
 
 const router = Router();
@@ -33,8 +33,8 @@ router.put('/profile', requireAuth, updateStudentSelfProfile);
 router.post('/export-data', requireAuth, exportStudentData);
 
 // Admin Routes
-router.get('/all', requireAuth, requireAdmin, getAllStudents);
-router.post('/allot', requireAuth, requireAdmin, logUpload, (req, res, next) => {
+router.get('/all', requireAuth, requireStaffOrHigher, getAllStudents);
+router.post('/allot', requireAuth, requireWardenOrOwner, logUpload, (req, res, next) => {
     upload.single('profilePhoto')(req, res, (err: any) => {
         if (err) {
             console.error('Multer Error:', err);
@@ -43,9 +43,9 @@ router.post('/allot', requireAuth, requireAdmin, logUpload, (req, res, next) => 
         next();
     });
 }, createStudent);
-router.get('/:id', requireAuth, requireAdmin, getStudentById);
-router.delete('/:id', requireAuth, requireAdmin, deleteStudent);
-router.put('/:id', requireAuth, requireAdmin, logUpload, upload.single('profilePhoto'), updateStudent);
-router.post('/search', requireAuth, requireAdmin, searchStudents);
+router.get('/:id', requireAuth, requireStaffOrHigher, getStudentById);
+router.delete('/:id', requireAuth, requireWardenOrOwner, deleteStudent);
+router.put('/:id', requireAuth, requireWardenOrOwner, logUpload, upload.single('profilePhoto'), updateStudent);
+router.post('/search', requireAuth, requireStaffOrHigher, searchStudents);
 
 export default router;

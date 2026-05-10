@@ -58,6 +58,7 @@ async function registerForPushNotificationsAsync() {
 
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
+import { isAdmin } from './authUtils';
 
 export const deregisterPushToken = async () => {
     try {
@@ -117,7 +118,7 @@ export const usePushNotifications = () => {
 
         // Small delay to ensure navigation is ready and layout is stable
         setTimeout(() => {
-            if (userRole === 'admin') {
+            if (isAdmin({ role: userRole })) {
                 console.log(`📍 [Push] Admin navigating to: ${type}`);
                 switch (type) {
                     case 'message':

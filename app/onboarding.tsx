@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { Language, useSettingsStore } from '../store/useSettingsStore';
 import { useThemeStore } from '../store/useThemeStore';
 import AppText from '../components/AppText';
+import { isAdmin } from '../utils/authUtils';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,7 +40,7 @@ export default function Onboarding() {
 
             // Navigate based on role
             const user = useAuthStore.getState().user;
-            if (user?.role === 'admin') {
+            if (isAdmin(user)) {
                 router.replace('/admin');
             } else {
                 router.replace('/(tabs)');

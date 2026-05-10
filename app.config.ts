@@ -52,7 +52,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-web-browser",
     "@react-native-google-signin/google-signin",
     "expo-secure-store",
-    "expo-local-authentication"
+    "expo-local-authentication",
+    [
+      "expo-camera",
+      {
+        "cameraPermission": "Allow SmartStay to access your camera to scan student leave QR codes."
+      }
+    ]
   ],
   experiments: {
     typedRoutes: true,

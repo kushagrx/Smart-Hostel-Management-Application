@@ -10,7 +10,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomAlert, { AlertType } from '../components/CustomAlert';
 import { useAuth } from '../context/AuthContext';
-import { setStoredUser } from '../utils/authUtils';
+import { setStoredUser, isAdmin } from '../utils/authUtils';
 import AppText from '../components/AppText';
 
 
@@ -110,7 +110,7 @@ export default function Login() {
         }
 
         // Navigate based on role
-        if (user.role === 'admin') {
+        if (isAdmin({ role: user.role })) {
           router.replace('/admin');
         } else {
           router.replace('/(tabs)');
@@ -193,7 +193,7 @@ export default function Login() {
       }
 
       // Navigate
-      if (user.role === 'admin') {
+      if (isAdmin({ role: user.role })) {
         router.replace('/admin');
       } else {
         router.replace('/(tabs)');
@@ -249,7 +249,7 @@ export default function Login() {
         return;
       }
 
-      if (user.role === 'admin') {
+      if (isAdmin({ role: user.role })) {
         router.replace('/admin');
       } else {
         router.replace('/(tabs)');

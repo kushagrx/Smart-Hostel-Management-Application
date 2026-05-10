@@ -2,20 +2,24 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../../utils/authUtils';
 import { EmergencyContact, subscribeToContacts } from '../../utils/emergencySyncUtils';
 import { fetchUserData, StudentData } from '../../utils/nameUtils';
 import { useTheme } from '../../utils/ThemeContext';
 import AppText from '../../components/AppText';
+import api from '../../utils/api';
+
 
 export default function Emergency() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const user = useUser();
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+  const [wardens, setWardens] = useState<any[]>([]);
   const [userData, setUserData] = useState<StudentData | null>(null);
+  const [loadingWardens, setLoadingWardens] = useState(true);
 
   useEffect(() => {
     const unsubscribe = subscribeToContacts((data) => {
@@ -25,8 +29,47 @@ export default function Emergency() {
     // Fetch user data for medical info
     fetchUserData().then(setUserData);
 
+    // Fetch Wardens
+    fetchWardens();
+
     return () => unsubscribe();
   }, []);
+
+  const fetchWardens = async () => {
+    try {
+      const res = await api.get('/team/wardens');
+      setWardens(res.data);
+    } catch (error) {
+      console.error('Error fetching wardens:', error);
+    } finally {
+      setLoadingWardens(false);
+    }
+  };
+
+  const isOnline = (lastSeen: string | null) => {
+    if (!lastSeen) return false;
+    const lastSeenDate = new Date(lastSeen);
+    const now = new Date();
+    // Consider online if seen in the last 5 minutes
+    return (now.getTime() - lastSeenDate.getTime()) < 5 * 60 * 1000;
+  };
+
+  const getStatusColor = (lastSeen: string | null) => {
+    return isOnline(lastSeen) ? '#10B981' : '#94A3B8';
+  };
+
+  const handleMessage = (warden?: any) => {
+    if (warden?.id) {
+      // Private chat with specific warden
+      router.push({
+        pathname: `/chat/${user?.uid || user?.email || 'guest'}`,
+        params: { staffId: warden.id.toString(), name: warden.fullName }
+      });
+    } else {
+      // General Admin Support
+      router.push(`/chat/${user?.uid || user?.email || 'guest'}`);
+    }
+  };
 
   const handleCall = (phoneNumber: string) => {
     Linking.openURL(`tel:${phoneNumber}`);
@@ -69,33 +112,103 @@ export default function Emergency() {
           }]}>
             <MaterialCommunityIcons name="information-outline" size={24} color={isDark ? colors.primary : "#004e92"} />
             <AppText style={[styles.bannerText, { color: isDark ? colors.text : '#1E40AF' }]}>
-              Tap on any contact card below to initiate an immediate call.
+              {wardens.length > 0 ? "Message our wardens directly for immediate assistance." : "Tap on any contact card below to initiate an immediate call."}
             </AppText>
           </View>
 
           {/* Support Chat Card */}
-          <Pressable
-            style={[styles.contactCard, styles.shadowProp, {
-              backgroundColor: isDark ? colors.card : '#FFFFFF',
-              borderColor: colors.border,
-              marginBottom: 24
-            }]}
-            // @ts-ignore
-            onPress={() => router.push(`/chat/${user?.uid || user?.email || 'guest'}`)}
-          >
-            <View style={styles.cardInner}>
-              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
-                <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
-              </View>
-              <View style={styles.contactInfo}>
-                <AppText style={[styles.contactName, { color: colors.text }]}>Admin Support Chat</AppText>
-                <AppText style={[styles.contactNumber, { color: colors.textSecondary }]}>Direct Message to Hostel Admin</AppText>
-              </View>
-              <View style={[styles.callBtn, { backgroundColor: '#25D366' }]}>
-                <MaterialCommunityIcons name="message-text" size={20} color="#fff" />
-              </View>
+          {/* Wardens Section */}
+          <View style={{ marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 }}>
+              <MaterialCommunityIcons name="shield-account" size={22} color={colors.primary} />
+              <AppText style={{ fontSize: 18, fontWeight: '800', color: colors.text, marginLeft: 10 }}>
+                Wardens on Duty
+              </AppText>
             </View>
-          </Pressable>
+
+            {loadingWardens ? (
+              <ActivityIndicator color={colors.primary} size="small" />
+            ) : wardens.length > 0 ? (
+              <View style={{ gap: 12 }}>
+                {wardens.map((warden) => (
+                  <Pressable
+                    key={warden.id}
+                    style={[styles.contactCard, styles.shadowProp, {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    }]}
+                    onPress={() => handleMessage(warden)}
+                  >
+                    <View style={styles.cardInner}>
+                      <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : '#F1F5F9' }]}>
+                        <MaterialCommunityIcons name="account" size={26} color={colors.primary} />
+                        <View style={[styles.onlineIndicator, { backgroundColor: getStatusColor(warden.lastSeen) }]} />
+                      </View>
+                      
+                      <View style={styles.contactInfo}>
+                        <AppText style={[styles.contactName, { color: colors.text }]}>{warden.fullName}</AppText>
+                        <AppText style={[styles.contactNumber, { color: colors.textSecondary, fontSize: 12, textTransform: 'capitalize' }]}>
+                          {warden.role} • {isOnline(warden.lastSeen) ? 'Active Now' : 'Away'}
+                        </AppText>
+                      </View>
+
+                      <TouchableOpacity 
+                        style={[styles.callBtn, { backgroundColor: colors.primary }]}
+                        onPress={() => handleMessage(warden)}
+                      >
+                        <MaterialCommunityIcons name="message-text" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Pressable
+                style={[styles.contactCard, styles.shadowProp, {
+                  backgroundColor: isDark ? colors.card : '#FFFFFF',
+                  borderColor: colors.border,
+                }]}
+                onPress={() => handleMessage()}
+              >
+                <View style={styles.cardInner}>
+                  <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
+                    <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
+                  </View>
+                  <View style={styles.contactInfo}>
+                    <AppText style={[styles.contactName, { color: colors.text }]}>Admin Support Chat</AppText>
+                    <AppText style={[styles.contactNumber, { color: colors.textSecondary }]}>Direct Message to Hostel Admin</AppText>
+                  </View>
+                  <View style={[styles.callBtn, { backgroundColor: '#25D366' }]}>
+                    <MaterialCommunityIcons name="message-text" size={20} color="#fff" />
+                  </View>
+                </View>
+              </Pressable>
+            )}
+          </View>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
           {/* Medical Profile Card */}
           {userData && (
@@ -149,6 +262,11 @@ export default function Emergency() {
           )}
 
           <View style={styles.contactsContainer}>
+            <View style={{ paddingHorizontal: 4, marginBottom: 4 }}>
+              <AppText style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.text : '#1E293B' }}>
+                Quick Support
+              </AppText>
+            </View>
             {contacts.map((contact, index) => (
               <Pressable
                 key={contact.id}
@@ -258,6 +376,25 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   iconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative'
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#fff'
+  },
+  // Removed old iconBox
+  dummyIconBox: {
     width: 50,
     height: 50,
     borderRadius: 14,
